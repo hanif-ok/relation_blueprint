@@ -15,7 +15,12 @@ import { registerPwa } from '@/app/pwa';
 import { installTestBridge } from '@/db/testBridge';
 
 // Expose the repository + db on window.__rb so E2E specs seed the real Dexie database.
-installTestBridge();
+// Gated behind a build-time flag so the bridge (which hands full read/write/delete over the
+// user's local DB to any script on the page) is tree-shaken out of production bundles and only
+// present in the dedicated E2E preview build (`vite build --mode e2e`, sets VITE_E2E=true) — WR-01.
+if (import.meta.env.VITE_E2E === 'true') {
+  installTestBridge();
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

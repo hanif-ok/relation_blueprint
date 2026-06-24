@@ -18,7 +18,9 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run build && npm run preview',
+    // The E2E build uses `--mode e2e` (VITE_E2E=true) so the window.__rb test bridge is present
+    // in this preview only; the default production build ships without it (WR-01).
+    command: 'npm run build:e2e && npm run preview',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
