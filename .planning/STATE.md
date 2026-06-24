@@ -99,7 +99,7 @@ Recent decisions affecting current work:
 
 [From .planning/todos/pending/ — ideas captured during sessions]
 
-None yet.
+- (ui) Map-editor & profile-media UX enhancements deferred from Phase 1 UAT — resizable markers, image/marker transform handles, photo lightbox, gallery sort/reorder. See `.planning/todos/pending/2026-06-24-map-editor-and-profile-media-ux-enhancements-deferred-from-p.md`
 
 ### Blockers/Concerns
 
