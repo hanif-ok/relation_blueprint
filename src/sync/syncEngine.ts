@@ -234,6 +234,16 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
  */
 export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
   const metaKey = (type: EntityType) => `shardMeta:${type}`;
+  // Tracks which content-addressed media hashes have already been pushed to the cloud, so
+  // `getNewMedia` only returns blobs the provider hasn't seen. Content addressing means the
+  // upload is idempotent regardless, but skipping already-synced hashes avoids re-uploading
+  // the entire media library on every push (matters as the gallery grows — STOR-04 / scale).
+  const SYNCED_MEDIA_KEY = 'syncedMediaHashes';
+
+  async function getSyncedMediaHashes(): Promise<Set<string>> {
+    const row = await db.meta.get(SYNCED_MEDIA_KEY);
+    return new Set(Array.isArray(row?.value) ? (row.value as string[]) : []);
+  }
 
   return {
     async getEntities(): Promise<EntitySet> {
@@ -255,18 +265,34 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
     },
 
     async getNewMedia(): Promise<Record<string, Blob>> {
-      // Media is content-addressed and idempotent on the provider; uploading the full set is
-      // safe (re-writes are deduped by hash on the Drive adapter). The skeleton uploads media
-      // referenced by entities. For Phase 1 the reconcile/atomicity tests carry no media, so
-      // an empty set keeps the commit minimal; Plan 06 wires real media diffing.
-      return {};
+      // Return every stored media blob whose content hash has NOT yet been pushed to the
+      // cloud. Media is content-addressed (Plan 04: the hash IS the cloud filename `media/<hash>`),
+      // so the upload is idempotent; the synced-hash watermark just avoids re-sending blobs the
+      // provider already has. After a successful commit `markSynced` records these hashes.
+      const synced = await getSyncedMediaHashes();
+      const records = await db.media.toArray();
+      const out: Record<string, Blob> = {};
+      for (const record of records) {
+        if (synced.has(record.hash)) continue;
+        out[record.hash] = new Blob([record.bytes], { type: record.mime });
+      }
+      return out;
     },
 
     async markSynced(): Promise<void> {
-      await db.transaction('rw', db.people, db.maps, db.markers, async () => {
+      // Snapshot the media hashes BEFORE the entity transaction so the synced-media watermark
+      // reflects exactly what this commit pushed (getNewMedia ran against the same set).
+      const allHashes = (await db.media.toArray()).map((m) => m.hash);
+      await db.transaction('rw', db.people, db.maps, db.markers, db.meta, async () => {
         await db.people.filter((p) => p.dirty).modify({ dirty: false });
         await db.maps.filter((m) => m.dirty).modify({ dirty: false });
         await db.markers.filter((m) => m.dirty).modify({ dirty: false });
+        // Union the previously-synced hashes with everything currently stored (this commit
+        // uploaded any that were new). Content addressing makes the union safe and stable.
+        const prior = await db.meta.get(SYNCED_MEDIA_KEY);
+        const merged = new Set<string>(Array.isArray(prior?.value) ? (prior.value as string[]) : []);
+        for (const hash of allHashes) merged.add(hash);
+        await db.meta.put({ key: SYNCED_MEDIA_KEY, value: [...merged] });
       });
     },
 
