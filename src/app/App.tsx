@@ -1,5 +1,6 @@
 import styles from './App.module.css';
 import { UpdateToast } from '@/features/pwa/UpdateToast';
+import { InstallPrompt } from '@/features/pwa/InstallPrompt';
 
 /**
  * Walking-skeleton app shell.
@@ -18,6 +19,7 @@ export function App() {
       </header>
       <main className={styles.surface} />
       <UpdateToast />
+      <InstallPrompt />
     </div>
   );
 }
