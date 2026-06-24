@@ -36,12 +36,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
 
-**Plans**: 8 plans
+**Plans**: 1/8 plans executed
 Plans:
 **Wave 1**
 
 - [ ] 01-01-PLAN.md — Scaffold (React/Vite/TS) + test harness (Vitest/Playwright/fake-indexeddb) + blocking Google OAuth Client ID prerequisite
-- [ ] 01-02-PLAN.md — Domain model + zod schemas + StorageProvider interface (locked vs InMemoryProvider) + Dexie schema + offline repository
+- [x] 01-02-PLAN.md — Domain model + zod schemas + StorageProvider interface (locked vs InMemoryProvider) + Dexie schema + offline repository
 - [ ] 01-03-PLAN.md — Walking Skeleton slice: image-map + round avatar marker + person form + profile sidebar (edit/delete)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 0/8 | Not started | - |
+| 1. Storage Spine & First Person on a Map | 1/8 | In Progress|  |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |

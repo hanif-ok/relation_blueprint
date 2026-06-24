@@ -6,14 +6,14 @@ current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
 stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-24T10:52:05.870Z"
+last_updated: "2026-06-24T14:03:23.583Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 01
+Plan: 2 of 8
+Status: Ready to execute
 Last activity: 2026-06-24 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01 P02 | 6 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Roadmap]: Export/restore pulled into Phase 1 (the cloud is the only copy; tested restore must exist before real data)
 - [Roadmap]: Mega.nz deferred to Phase 6 (second-class/opt-in; Drive proves the abstraction first)
 - [Roadmap]: Typed custom fields (Phase 2) are the keystone that search, profiles, and relationships depend on
+- [Phase ?]: Media stored as ArrayBuffer+mime (not Blob) in Dexie for structured-clone portability across browser and fake-indexeddb; repository converts at the boundary
+- [Phase ?]: StorageProvider interface locked against an InMemoryProvider conformance fake before any real backend exists (Plan 05/06 target a stable seam)
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24
+Last session: 2026-06-24T14:02:57.654Z
 Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
 Resume file: None

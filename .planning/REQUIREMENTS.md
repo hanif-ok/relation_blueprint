@@ -11,7 +11,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **STOR-01**: User can connect their own Google Drive and authorize the app to store data in a visible, named app folder (`drive.file` scope)
 - [ ] **STOR-02**: App persists the entire database to the connected cloud as a sharded manifest + per-type entity files + media blobs
-- [ ] **STOR-03**: App works fully offline against a local IndexedDB store treated as the source of truth
+- [x] **STOR-03**: App works fully offline against a local IndexedDB store treated as the source of truth
 - [ ] **STOR-04**: App syncs local changes to the connected cloud in the background (single-curator, last-write-wins)
 - [ ] **STOR-05**: App writes atomically with rolling versioned cloud backups so a failed write cannot corrupt the database
 - [ ] **STOR-06**: User can install the app as a PWA, and the app requests persistent local storage
@@ -20,9 +20,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Entities & Custom Fields
 
 - [ ] **DATA-01**: User can create four first-class object types — People, Locations/Maps, Groups, and Relationship-links
-- [ ] **DATA-02**: A Person ships with out-of-the-box fields: name, photo, phone, description, tags, notes
+- [x] **DATA-02**: A Person ships with out-of-the-box fields: name, photo, phone, description, tags, notes
 - [ ] **DATA-03**: User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type
-- [ ] **DATA-04**: User can edit and delete any entity
+- [x] **DATA-04**: User can edit and delete any entity
 
 ### Profiles & Media
 
@@ -109,15 +109,15 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | STOR-01 | Phase 1 | Pending |
 | STOR-02 | Phase 1 | Pending |
-| STOR-03 | Phase 1 | Pending |
+| STOR-03 | Phase 1 | Complete |
 | STOR-04 | Phase 1 | Pending |
 | STOR-05 | Phase 1 | Pending |
 | STOR-06 | Phase 1 | Pending |
 | STOR-07 | Phase 6 | Pending |
 | DATA-01 | Phase 2 | Pending |
-| DATA-02 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 2 | Pending |
-| DATA-04 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Complete |
 | PROF-01 | Phase 1 | Pending |
 | PROF-02 | Phase 1 | Pending |
 | PROF-03 | Phase 1 | Pending |
@@ -140,11 +140,13 @@ Which phases cover which requirements. Populated during roadmap creation.
 | EXPT-02 | Phase 1 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 31 total
 - Mapped to phases: 31 ✓
 - Unmapped: 0 ✓
 
 **Phase distribution:**
+
 - Phase 1 (Storage Spine & First Person on a Map): 15 reqs — STOR-01..06, DATA-02, DATA-04, PROF-01..03, MAP-01, MAP-04, EXPT-01, EXPT-02
 - Phase 2 (Custom Fields & Full Entity Model): 4 reqs — DATA-01, DATA-03, BRWS-01, BRWS-02
 - Phase 3 (Map Editor — Spaces & Navigation): 5 reqs — MAP-02, MAP-03, MAP-05, MAP-06, MAP-07
