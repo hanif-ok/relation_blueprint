@@ -1,0 +1,40 @@
+/*
+ * Walking-skeleton shell styling. Tokens (the full token system in tokens.css /
+ * tokens.ts) are seeded in Plan 03; here we hardcode only the paper background
+ * (#F4F1EA), ink (#26211A), warm hairline (#D8D2C4), and the fixed 56px top-bar
+ * height called out in the UI-SPEC.
+ */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f4f1ea;
+  color: #26211a;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+.topBar {
+  height: 56px;
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background-color: #f4f1ea;
+  border-bottom: 1px solid #d8d2c4;
+  box-shadow: 0 1px 2px rgba(38, 33, 26, 0.06);
+}
+
+.wordmark {
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+}
+
+.surface {
+  flex: 1 1 auto;
+}
