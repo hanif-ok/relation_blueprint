@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Storage Spine & First Person on a Map
-**Goal**: A user can connect their own Google Drive, create a person, place them on a map built from an uploaded image, open their profile, and export then restore the entire database — proving the serverless storage/offline/atomic-write spine works end-to-end.
+**Goal**: As a single curator of a private people-and-places dataset, I want to connect my own Google Drive, create a person, place them on an image-map, open their profile, and export then restore my whole database, so that I own my entire database in my own cloud with no server and can trust the storage spine before I put real data in it.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: STOR-01, STOR-02, STOR-03, STOR-04, STOR-05, STOR-06, DATA-02, DATA-04, PROF-01, PROF-02, PROF-03, MAP-01, MAP-04, EXPT-01, EXPT-02
@@ -32,7 +32,16 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can click the person to open a sidebar profile showing all their data plus a thumbnail and photo gallery, and can edit or delete the person
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold (React/Vite/TS) + test harness (Vitest/Playwright/fake-indexeddb) + blocking Google OAuth Client ID prerequisite
+- [ ] 01-02-PLAN.md — Domain model + zod schemas + StorageProvider interface (locked vs InMemoryProvider) + Dexie schema + offline repository
+- [ ] 01-03-PLAN.md — Walking Skeleton slice: image-map + round avatar marker + person form + profile sidebar (edit/delete)
+- [ ] 01-04-PLAN.md — Content-addressed media + client-side thumbnails + multi-photo gallery
+- [ ] 01-05-PLAN.md — Sharded serializer + atomic manifest-swap sync engine + atomicity failure-injection test (STOR-05)
+- [ ] 01-06-PLAN.md — Drive provider: GIS auth (in-memory token, drive.file) + REST v3 + connect/reconnect/status UI
+- [ ] 01-07-PLAN.md — Export/restore + round-trip property test (EXPT-02)
+- [ ] 01-08-PLAN.md — PWA shell: install + persistent storage + controlled service-worker update
 **Research flag:** NEEDS DEEPER RESEARCH — Drive OAuth token lifecycle crossing ~1hr expiry, GIS token-client behavior on a static site, atomic temp-then-swap write pattern for Drive REST v3, and sharded manifest sync reconciliation. Spike the full auth + read/write + token-expiry cycle before committing to PLAN. Lock in: `drive.file` scope only, visible named folder (never `appDataFolder`), sharded manifest + StorageProvider abstraction, `navigator.storage.persist()`, controlled service-worker update flow.
 **UI hint**: yes
 
@@ -111,7 +120,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 0/TBD | Not started | - |
+| 1. Storage Spine & First Person on a Map | 0/8 | Not started | - |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
