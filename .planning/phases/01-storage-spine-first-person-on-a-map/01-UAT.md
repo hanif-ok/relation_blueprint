@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-storage-spine-first-person-on-a-map
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md]
 mode: mvp
@@ -102,17 +102,35 @@ notes: 5   # passing tests with out-of-scope/minor observations: T4 (marker resi
   reason: "User reported: 'sync failed, please retry message on chip'. Later clarified: the error is triggered by EMPTY STATE — the first sync before any person/map exists fails with 'sync failed, please retry'. Connect / drive.file consent / folder-creation all work; sync succeeds once data exists (Test 7 passed). Likely defect in the empty / first-sync bootstrap push path (Plan 01-05 SyncEngine.bootstrap/push or DriveProvider handling of empty/zero-entity shards), NOT auth."
   severity: major
   test: 2
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "useSyncEngine.onConnected calls engine.reconcileOnOpen() WITHOUT first bootstrapping or locating the manifest. reconcileOnOpen() → manifestFileId() throws 'SyncEngine: manifest not initialized — call bootstrap() first' because _manifestFileId is null; the catch maps it to markError → 'error' phase → 'sync failed, please retry' on the chip. bootstrap() (writes the v0 manifest + empty shards) only runs inside push(), which is only triggered by a LATER edit's onChange — so the empty first connect throws BEFORE any Drive REST call. Once the user creates data, onChange→push()→bootstrap() initializes the manifest and every later sync succeeds (why Test 7 passed)."
+  artifacts:
+    - path: "src/features/connect/useSyncEngine.ts"
+      issue: "onConnected (lines 119-137) calls reconcileOnOpen() without bootstrap()/manifest discovery first"
+    - path: "src/sync/syncEngine.ts"
+      issue: "manifestFileId() (89-90) throws when _manifestFileId is null; bootstrap() only reachable via push() (125)"
+    - path: "tests/connect/useSyncEngine.test.tsx"
+      issue: "weak assertion (call-count only, ~line 52) let the empty-first-connect error ship green"
+  missing:
+    - "In onConnected, establish the manifest BEFORE reconcileOnOpen() — minimally await engine.bootstrap() (idempotent; empty DB → writes v0 manifest, reconcile becomes a clean no-op → chip reaches 'synced')"
+    - "Better: discover an existing manifest.json via provider.list(folderId) and only bootstrap when none exists (enables silent re-adoption of an existing cloud DB on a 2nd device)"
+    - "Harden tests/connect/useSyncEngine.test.tsx to assert no markError and phase==='synced' on an empty-DB connect"
+  debug_session: ".planning/debug/empty-state-first-sync.md"
 
 - truth: "After a page refresh, Drive stays connected without a manual reconnect — the app silently re-acquires a token on load (no popup) when a Google session exists."
   status: failed
   reason: "User reported during an otherwise-passing offline test: 'on refresh, drive gets unconnected'. By design the GIS access token is in-memory only and never persisted (token-never-persisted invariant), so reload drops it. The app currently requires a manual Reconnect click after every refresh instead of attempting a silent re-acquire (GIS prompt:''). UX papercut, not a security defect. Fix = silent re-acquisition on load; MUST NOT persist the token."
   severity: minor
   test: 11
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "No silent token re-acquire on load. The GIS access token is in-memory only (token-never-persisted invariant), so every reload starts with token=null and status resolves to not-connected. The silent primitive EXISTS in auth.ts (connect({silent:true}) → requestAccessToken({prompt:''})) but is never invoked at startup — runConnect() calls driveConnect() with no args (interactive popup) and only on user gestures (StatusPill onAction, ReconnectBanner onReconnect). No mount-time effect attempts a restore. Missing-capability-invocation, not a defect in auth."
+  artifacts:
+    - path: "src/features/connect/ConnectDrive.tsx"
+      issue: "runConnect() calls driveConnect() non-silent and is wired only to click gestures"
+    - path: "src/app/App.tsx"
+      issue: "no on-mount useEffect attempts a silent re-acquire/restore"
+    - path: "src/storage/drive/auth.ts"
+      issue: "silent primitive connect({silent:true}) already exists; just never called on load"
+  missing:
+    - "Add one on-load silent re-acquire (useEffect on mount, or inside useConnectDrive): driveConnect({silent:true}) → ensureFolder → onConnected(folderId), gated behind isConfigured()"
+    - "On failure (no active grant / no token), fall back to not-connected/reconnect WITHOUT showing the error pill"
+    - "MUST NOT persist the token — keep tests/storage/auth.test.ts (token-never-persisted) green"
+  debug_session: ".planning/debug/drive-reconnect-on-refresh.md"
