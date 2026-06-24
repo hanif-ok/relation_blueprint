@@ -1,0 +1,87 @@
+/* Overflow (⋯) menu + backup toast/error chrome. Paper menu over the dark canvas,
+ * matching the shell tokens (UI-SPEC S5 / accessibility). */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  color: var(--ink, #26211a);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--amber, #c8742b);
+  outline-offset: 2px;
+}
+
+.menu {
+  min-width: 200px;
+  background: var(--paper, #f4f1ea);
+  border: var(--border-hairline, 1px solid #d8d2c4);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--elevation-2, 0 8px 24px rgba(27, 34, 48, 0.18));
+  padding: 6px;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  z-index: 1000;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--ink, #26211a);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.item[data-highlighted] {
+  background: var(--paper-shade, #ece7db);
+}
+
+.item[data-disabled] {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.spinner {
+  font-size: 13px;
+  color: var(--ink-muted, #6b6358);
+  margin-left: auto;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1100;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 14px 18px;
+  background: var(--paper, #f4f1ea);
+  color: var(--ink, #26211a);
+  border: var(--border-hairline, 1px solid #d8d2c4);
+  border-radius: 10px;
+  box-shadow: var(--elevation-2, 0 8px 24px rgba(27, 34, 48, 0.18));
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  font-size: 14px;
+}
+
+/* The restore-invalid error reuses the ConfirmDialog card; this is the error line inside it. */
+.dialogError {
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--brick, #a23b2d);
+  margin: 0;
+}

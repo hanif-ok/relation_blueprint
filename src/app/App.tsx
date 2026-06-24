@@ -11,6 +11,7 @@ import { UpdateToast } from '@/features/pwa/UpdateToast';
 import { InstallPrompt } from '@/features/pwa/InstallPrompt';
 import { ConnectDrive, useConnectDrive } from '@/features/connect/ConnectDrive';
 import { ReconnectBanner } from '@/features/connect/ReconnectBanner';
+import { BackupMenu } from '@/features/backup/BackupMenu';
 
 /**
  * Walking-skeleton app shell — full Task 2 wiring.
@@ -82,14 +83,7 @@ export function App() {
           >
             + Person
           </button>
-          <button
-            type="button"
-            className={styles.overflow}
-            aria-label="More actions"
-            data-testid="overflow-menu"
-          >
-            ⋯
-          </button>
+          <BackupMenu />
         </div>
       </header>
 
