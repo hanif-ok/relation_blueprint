@@ -10,6 +10,7 @@ import { ProfileSidebar } from '@/features/profile/ProfileSidebar';
 import { UpdateToast } from '@/features/pwa/UpdateToast';
 import { InstallPrompt } from '@/features/pwa/InstallPrompt';
 import { ConnectDrive, useConnectDrive } from '@/features/connect/ConnectDrive';
+import { useSyncEngine } from '@/features/connect/useSyncEngine';
 import { ReconnectBanner } from '@/features/connect/ReconnectBanner';
 import { BackupMenu } from '@/features/backup/BackupMenu';
 
@@ -27,10 +28,16 @@ export function App() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
 
-  // Drive connect/reconnect/status chrome (Plan 06). The SyncEngine boot on connect is wired
-  // here via onConnected once the live OAuth credential is configured (SETUP.md); until then
-  // the chrome surfaces the "not configured" state and the app stays fully usable offline.
-  const drive = useConnectDrive();
+  // Drive connect/reconnect/status chrome (Plan 06) wired to the atomic SyncEngine. On a
+  // successful connect, `useSyncEngine` boots the engine, reconciles cloud→local, and pushes
+  // local changes to Drive after every repository write (debounced). Until the live OAuth
+  // credential is configured (SETUP.md) the chrome surfaces the "not configured" state and the
+  // app stays fully usable offline — a sync failure never blocks the IndexedDB source of truth.
+  const sync = useSyncEngine();
+  const drive = useConnectDrive({
+    onConnected: sync.onConnected,
+    onDisconnected: sync.onDisconnected,
+  });
 
   const map = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
   const editingPerson = useLiveQuery<Person | undefined>(
