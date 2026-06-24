@@ -14,7 +14,12 @@
 // rest of the app stays fully usable offline (RESEARCH ## Pitfall 4).
 
 import { useCallback } from 'react';
-import { connect as driveConnect, isConfigured, revoke as driveRevoke } from '@/storage/drive/auth';
+import {
+  connect as driveConnect,
+  isConfigured,
+  revoke as driveRevoke,
+  TokenExpiredError,
+} from '@/storage/drive/auth';
 import { getActiveProvider } from '@/storage/providerFactory';
 import { StatusPill } from './StatusPill';
 import { useSyncStatus, type SyncStatus } from './useSyncStatus';
@@ -27,6 +32,23 @@ import {
 
 /** The visible app-data folder name (SETUP.md / STOR-01). */
 export const APP_FOLDER_NAME = 'Relation Blueprint';
+
+/**
+ * True when the error represents the user cancelling/dismissing the consent popup (a normal,
+ * non-fault auth affordance) rather than a genuine failure. GIS surfaces these as messages/types
+ * containing "popup_closed", "popup_failed_to_open", "cancel", or "access token granted" (the
+ * no-grant rejection from `connect()`); they should route to Reconnect, not the error pill (WR-05).
+ */
+function isAuthAffordanceError(err: unknown): boolean {
+  const text = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    text.includes('popup') ||
+    text.includes('cancel') ||
+    text.includes('dismiss') ||
+    text.includes('access token granted') ||
+    text.includes('access token')
+  );
+}
 
 export interface UseConnectDriveOptions {
   /** Called after a successful connect with the ensured app-folder id (App boots the SyncEngine). */
@@ -58,9 +80,17 @@ export function useConnectDrive(options: UseConnectDriveOptions = {}): ConnectDr
       const folderId = await provider.ensureFolder(APP_FOLDER_NAME);
       markConnected();
       onConnected?.(folderId);
-    } catch {
-      // A cancelled popup / failed grant is non-fatal — surface as needs-reconnect, stay usable.
-      markNeedsReconnect();
+    } catch (err) {
+      // Distinguish "click to reconnect" from "something actually went wrong" (WR-05):
+      //   - an expired/invalid token (TokenExpiredError) or a cancelled/dismissed consent popup
+      //     is an auth-affordance state -> markNeedsReconnect() (re-pop consent on next click).
+      //   - a real fault (ensureFolder 5xx, network failure, any other error) -> markError() so
+      //     the UI shows the error pill instead of looping the user through a useless reconnect.
+      if (err instanceof TokenExpiredError || isAuthAffordanceError(err)) {
+        markNeedsReconnect();
+      } else {
+        markError(err instanceof Error ? err.message : 'Drive connection failed');
+      }
     }
   }, [onConnected]);
 
