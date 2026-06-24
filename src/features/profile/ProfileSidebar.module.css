@@ -1,0 +1,175 @@
+/* Profile sidebar — docked right, lifted paper over the dark canvas (UI-SPEC S4).
+ * Edit is neutral; Delete is brick text. Amber is NOT used here (reserved). */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.panel {
+  position: fixed;
+  top: var(--top-bar-height);
+  right: 0;
+  height: calc(100vh - var(--top-bar-height));
+  width: min(360px, 100vw);
+  background: var(--paper);
+  box-shadow: var(--elevation-2);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-bottom: var(--border-hairline);
+}
+
+.thumb {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--paper-shade);
+  border: 2px solid var(--paper);
+  box-shadow: var(--elevation-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbInitials {
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.name {
+  flex: 1 1 auto;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0;
+  word-break: break-word;
+}
+
+.close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 24px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.rowLabel {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.rowValue {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.chip {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-top: var(--border-hairline);
+}
+
+/* Edit — neutral paper button (amber reserved). */
+.edit {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+/* Delete — brick text button (destructive). */
+.delete {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--brick);
+  background: transparent;
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+}
+
+.edit:focus-visible,
+.delete:focus-visible,
+.close:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

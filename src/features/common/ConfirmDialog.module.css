@@ -1,0 +1,75 @@
+/* Destructive confirmation dialog — lifted paper card over a dim scrim. The confirm
+ * button is brick (--brick), reserved for destructive actions only. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.45);
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 2 * var(--space-lg)));
+  background: var(--paper);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.title {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0;
+}
+
+.body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.cancel,
+.confirm {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.cancel {
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+}
+
+.confirm {
+  color: var(--paper);
+  background: var(--brick);
+  border: 1px solid var(--brick);
+}
+
+.cancel:focus-visible,
+.confirm:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

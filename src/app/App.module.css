@@ -30,9 +30,55 @@
 }
 
 .wordmark {
+  font-family: var(--font-display, 'Fraunces', serif);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 20px;
   letter-spacing: 0.01em;
+  flex: 1 1 auto;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md, 16px);
+}
+
+/* + Person — the one amber action in the shell (UI-SPEC A8). */
+.addPerson {
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--paper, #f4f1ea);
+  background: var(--amber, #c8742b);
+  border: 1px solid var(--amber, #c8742b);
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-sm, 8px) var(--space-lg, 24px);
+  cursor: pointer;
+}
+
+.addPerson:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  color: var(--ink, #26211a);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+
+.addPerson:focus-visible,
+.overflow:focus-visible {
+  outline: 2px solid var(--amber, #c8742b);
+  outline-offset: 2px;
 }
 
 .surface {
