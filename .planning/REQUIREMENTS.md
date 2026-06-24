@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Storage & Sync
 
-- [ ] **STOR-01**: User can connect their own Google Drive and authorize the app to store data in a visible, named app folder (`drive.file` scope)
+- [x] **STOR-01**: User can connect their own Google Drive and authorize the app to store data in a visible, named app folder (`drive.file` scope)
 - [x] **STOR-02**: App persists the entire database to the connected cloud as a sharded manifest + per-type entity files + media blobs
 - [x] **STOR-03**: App works fully offline against a local IndexedDB store treated as the source of truth
 - [x] **STOR-04**: App syncs local changes to the connected cloud in the background (single-curator, last-write-wins)
@@ -107,7 +107,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STOR-01 | Phase 1 | Pending |
+| STOR-01 | Phase 1 | Complete |
 | STOR-02 | Phase 1 | Complete |
 | STOR-03 | Phase 1 | Complete |
 | STOR-04 | Phase 1 | Complete |

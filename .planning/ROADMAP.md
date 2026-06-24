@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
 
-**Plans**: 5/8 plans executed
+**Plans**: 6/8 plans executed
 Plans:
 **Wave 1**
 
@@ -48,7 +48,7 @@ Plans:
 
 - [x] 01-04-PLAN.md — Content-addressed media + client-side thumbnails + multi-photo gallery
 - [x] 01-05-PLAN.md — Sharded serializer + atomic manifest-swap sync engine + atomicity failure-injection test (STOR-05)
-- [ ] 01-06-PLAN.md — Drive provider: GIS auth (in-memory token, drive.file) + REST v3 + connect/reconnect/status UI
+- [x] 01-06-PLAN.md — Drive provider: GIS auth (in-memory token, drive.file) + REST v3 + connect/reconnect/status UI
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 5/8 | In Progress|  |
+| 1. Storage Spine & First Person on a Map | 6/8 | In Progress|  |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
