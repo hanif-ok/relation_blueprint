@@ -33,10 +33,22 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
     async getNewMedia(): Promise<Record<string, Blob>> {
       return {};
     },
-    async markSynced(): Promise<void> {
-      for (const e of set.people) e.dirty = false;
-      for (const e of set.maps) e.dirty = false;
-      for (const e of set.markers) e.dirty = false;
+    async markSynced(synced: EntitySet): Promise<void> {
+      // Mirror the production port (CR-01): clear `dirty` only where the live record still
+      // matches the serialized snapshot by (id, updatedAt). A record edited after the snapshot
+      // has a newer updatedAt, so it stays dirty and is pushed on the next commit.
+      const clearMatching = <T extends { id: string; updatedAt: number; dirty: boolean }>(
+        live: T[],
+        snap: T[],
+      ) => {
+        const snapBy = new Map(snap.map((e) => [e.id, e.updatedAt]));
+        for (const e of live) {
+          if (e.dirty && snapBy.get(e.id) === e.updatedAt) e.dirty = false;
+        }
+      };
+      clearMatching(set.people, synced.people);
+      clearMatching(set.maps, synced.maps);
+      clearMatching(set.markers, synced.markers);
     },
     async upsert(incoming: Partial<EntitySet>): Promise<void> {
       if (incoming.people) set.people = structuredClone(incoming.people);

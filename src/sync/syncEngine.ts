@@ -45,8 +45,14 @@ export interface RepositoryPort {
   getDirtyTypes(): Promise<EntityType[]>;
   /** New media blobs to upload this commit, keyed by content hash. */
   getNewMedia(): Promise<Record<string, Blob>>;
-  /** Clear the dirty flag on all records after a successful commit. */
-  markSynced(): Promise<void>;
+  /**
+   * Clear the dirty flag ONLY on records whose content was actually serialized in this commit.
+   * `synced` is the exact snapshot the shards were built from; a record is cleared only when it
+   * is still dirty AND its `updatedAt` still matches the snapshot. An edit made after the
+   * snapshot but before this call bumps `updatedAt`, so it stays dirty and is pushed next time
+   * (prevents silent edit loss — CR-01).
+   */
+  markSynced(synced: EntitySet): Promise<void>;
   /** Upsert pulled entities (reconcile-on-open). Only provided types are touched. */
   upsert(entities: Partial<EntitySet>): Promise<void>;
   /** The local `updatedAt` watermark for a shard type (0 if never reconciled). */
@@ -170,7 +176,9 @@ export class SyncEngine {
       // --- Past the commit point: the durable DB is now `next`. Failures below are recoverable. ---
 
       // Step 5: mark local records synced, advance shard watermarks, then GC orphans + backups.
-      await this.repo.markSynced();
+      // Pass the exact snapshot the shards were serialized from so markSynced only clears the
+      // dirty flag on records whose serialized content was actually uploaded this commit (CR-01).
+      await this.repo.markSynced(entities);
       for (const type of dirtyTypes) {
         await this.repo.setShardMeta(type, now);
       }
@@ -279,14 +287,33 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
       return out;
     },
 
-    async markSynced(): Promise<void> {
+    async markSynced(synced: EntitySet): Promise<void> {
       // Snapshot the media hashes BEFORE the entity transaction so the synced-media watermark
       // reflects exactly what this commit pushed (getNewMedia ran against the same set).
       const allHashes = (await db.media.toArray()).map((m) => m.hash);
       await db.transaction('rw', db.people, db.maps, db.markers, db.meta, async () => {
-        await db.people.filter((p) => p.dirty).modify({ dirty: false });
-        await db.maps.filter((m) => m.dirty).modify({ dirty: false });
-        await db.markers.filter((m) => m.dirty).modify({ dirty: false });
+        // Clear `dirty` ONLY where the record's content was actually serialized in this commit.
+        // We match on (id, updatedAt) against the snapshot: if the user edited a record AFTER the
+        // snapshot but BEFORE this runs, its `updatedAt` was bumped, so it no longer matches and
+        // stays dirty — that newer content was never uploaded and must push next time (CR-01).
+        for (const p of synced.people) {
+          const cur = await db.people.get(p.id);
+          if (cur && cur.dirty && cur.updatedAt === p.updatedAt) {
+            await db.people.update(p.id, { dirty: false });
+          }
+        }
+        for (const m of synced.maps) {
+          const cur = await db.maps.get(m.id);
+          if (cur && cur.dirty && cur.updatedAt === m.updatedAt) {
+            await db.maps.update(m.id, { dirty: false });
+          }
+        }
+        for (const mk of synced.markers) {
+          const cur = await db.markers.get(mk.id);
+          if (cur && cur.dirty && cur.updatedAt === mk.updatedAt) {
+            await db.markers.update(mk.id, { dirty: false });
+          }
+        }
         // Union the previously-synced hashes with everything currently stored (this commit
         // uploaded any that were new). Content addressing makes the union safe and stable.
         const prior = await db.meta.get(SYNCED_MEDIA_KEY);
