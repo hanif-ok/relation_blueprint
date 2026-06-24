@@ -9,6 +9,8 @@ import { PersonForm } from '@/features/person-form/PersonForm';
 import { ProfileSidebar } from '@/features/profile/ProfileSidebar';
 import { UpdateToast } from '@/features/pwa/UpdateToast';
 import { InstallPrompt } from '@/features/pwa/InstallPrompt';
+import { ConnectDrive, useConnectDrive } from '@/features/connect/ConnectDrive';
+import { ReconnectBanner } from '@/features/connect/ReconnectBanner';
 
 /**
  * Walking-skeleton app shell — full Task 2 wiring.
@@ -23,6 +25,11 @@ export function App() {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+
+  // Drive connect/reconnect/status chrome (Plan 06). The SyncEngine boot on connect is wired
+  // here via onConnected once the live OAuth credential is configured (SETUP.md); until then
+  // the chrome surfaces the "not configured" state and the app stays fully usable offline.
+  const drive = useConnectDrive();
 
   const map = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
   const editingPerson = useLiveQuery<Person | undefined>(
@@ -64,6 +71,7 @@ export function App() {
       <header className={styles.topBar}>
         <span className={styles.wordmark}>Relation Blueprint</span>
         <div className={styles.actions}>
+          <ConnectDrive status={drive.status} onAction={drive.connect} />
           <button
             type="button"
             className={styles.addPerson}
@@ -84,6 +92,8 @@ export function App() {
           </button>
         </div>
       </header>
+
+      <ReconnectBanner visible={drive.status.phase === 'reconnect'} onReconnect={drive.connect} />
 
       <main className={styles.surface}>
         <MapView

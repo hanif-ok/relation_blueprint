@@ -18,6 +18,29 @@ import {
   upsertMarker,
 } from './repository';
 import { storeMedia } from './media';
+import {
+  markConnected,
+  markSyncing,
+  markSynced,
+  markNeedsReconnect,
+  markError,
+  markDisconnected,
+} from '@/features/connect/syncStatusStore';
+
+/**
+ * Drive-connect state transitions exposed to E2E. Because a LIVE Drive connect needs the human
+ * OAuth Client ID (absent in CI — see SETUP.md), the connect E2E drives these store transitions
+ * to exercise the chrome (pill states + Reconnect banner) deterministically. The real connect
+ * path (driveAuth.connect) is unit-tested with a mocked GIS in tests/storage/auth.test.ts.
+ */
+export interface ConnectTestBridge {
+  markConnected: typeof markConnected;
+  markSyncing: typeof markSyncing;
+  markSynced: typeof markSynced;
+  markNeedsReconnect: typeof markNeedsReconnect;
+  markError: typeof markError;
+  markDisconnected: typeof markDisconnected;
+}
 
 export interface TestBridge {
   db: typeof db;
@@ -29,6 +52,7 @@ export interface TestBridge {
   createMap: typeof createMap;
   upsertMarker: typeof upsertMarker;
   storeMedia: typeof storeMedia;
+  connect: ConnectTestBridge;
 }
 
 declare global {
@@ -53,5 +77,13 @@ export function installTestBridge(): void {
     createMap,
     upsertMarker,
     storeMedia,
+    connect: {
+      markConnected,
+      markSyncing,
+      markSynced,
+      markNeedsReconnect,
+      markError,
+      markDisconnected,
+    },
   };
 }

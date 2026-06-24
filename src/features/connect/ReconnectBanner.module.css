@@ -1,0 +1,57 @@
+/* Reconnect-to-Drive banner (UI-SPEC S8) — caution-ochre left edge, paper bg, non-blocking. */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 24px;
+  background: var(--paper, #f4f1ea);
+  border-bottom: 1px solid var(--hairline, #d8d2c4);
+  border-left: 4px solid #c2922a; /* caution ochre */
+  color: var(--ink, #26211a);
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 14px;
+}
+
+.message {
+  flex: 1 1 auto;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.reconnect {
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper, #f4f1ea);
+  background: #c2922a;
+  border: 1px solid #c2922a;
+  border-radius: var(--radius-sm, 6px);
+  padding: 6px 16px;
+  cursor: pointer;
+}
+
+.dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 14px;
+  color: var(--ink-muted, #6b6358);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.reconnect:focus-visible,
+.dismiss:focus-visible {
+  outline: 2px solid var(--amber, #c8742b);
+  outline-offset: 2px;
+}
