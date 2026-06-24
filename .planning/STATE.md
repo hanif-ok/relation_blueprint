@@ -6,14 +6,14 @@ current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
 stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-24T14:15:44.315Z"
+last_updated: "2026-06-24T14:36:47.789Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 01 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01 P02 | 6 | 2 tasks | 10 files |
 | Phase 01 P08 | 14 | 2 tasks | 14 files |
+| Phase 01 P03 | 15 | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [Phase ?]: StorageProvider interface locked against an InMemoryProvider conformance fake before any real backend exists (Plan 05/06 target a stable seam)
 - [Phase ?]: [Phase 01 P08]: PWA SW uses registerType:'prompt' — a new worker waits and activates only on user Reload when no write is in flight (never blind skipWaiting)
 - [Phase ?]: [Phase 01 P08]: src/sync/writeStatus.ts is the in-flight-write seam — Plan 05 sync engine MUST call beginWrite()/endWrite() so the SW update guard sees active Drive writes
+- [Phase ?]: [Phase 01 P03]: Konva marker reads shared tokens.ts constants (canvas) while DOM reads tokens.css vars — one source of truth prevents marker/chrome color drift (UI-SPEC A5)
+- [Phase ?]: [Phase 01 P03]: Content-addressed media via crypto.subtle SHA-256 (db/media.ts) builds the MediaRef before putMedia — idempotent, deduped uploads for map backgrounds and avatars
+- [Phase ?]: [Phase 01 P03]: On person CREATE the new person is auto-placed as a marker at map center (resolves UI-SPEC A12 place-vs-create ordering); window.__rb test bridge seeds the real repository for E2E
 
 ### Pending Todos
 
@@ -98,6 +102,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T14:15:36.568Z
+Last session: 2026-06-24T14:36:06.197Z
 Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
 Resume file: None

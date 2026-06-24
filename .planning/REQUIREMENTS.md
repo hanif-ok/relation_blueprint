@@ -26,16 +26,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Profiles & Media
 
-- [ ] **PROF-01**: User can click any person or location to open a sidebar profile showing all of its data
+- [x] **PROF-01**: User can click any person or location to open a sidebar profile showing all of its data
 - [ ] **PROF-02**: Each entity can have a thumbnail and a multi-photo gallery
 - [ ] **PROF-03**: Photos are thumbnailed client-side and stored as media blobs in the user's own cloud
 
 ### Maps & Editor
 
-- [ ] **MAP-01**: User can create a map using an uploaded image as the background
+- [x] **MAP-01**: User can create a map using an uploaded image as the background
 - [ ] **MAP-02**: User can draw shapes, lines, and zones on a map to mark rooms/areas
 - [ ] **MAP-03**: User can organize map content into layers
-- [ ] **MAP-04**: User can place a person on a map as a round photo-avatar marker
+- [x] **MAP-04**: User can place a person on a map as a round photo-avatar marker
 - [ ] **MAP-05**: A single person can be placed on multiple maps at once
 - [ ] **MAP-06**: User can place a location-link marker with a distinctive unique shape that navigates ("portals") to another map
 - [ ] **MAP-07**: User can nest maps into spatial map-groups (floor → building → street) and navigate the hierarchy
@@ -118,13 +118,13 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 2 | Pending |
 | DATA-04 | Phase 1 | Complete |
-| PROF-01 | Phase 1 | Pending |
+| PROF-01 | Phase 1 | Complete |
 | PROF-02 | Phase 1 | Pending |
 | PROF-03 | Phase 1 | Pending |
-| MAP-01 | Phase 1 | Pending |
+| MAP-01 | Phase 1 | Complete |
 | MAP-02 | Phase 3 | Pending |
 | MAP-03 | Phase 3 | Pending |
-| MAP-04 | Phase 1 | Pending |
+| MAP-04 | Phase 1 | Complete |
 | MAP-05 | Phase 3 | Pending |
 | MAP-06 | Phase 3 | Pending |
 | MAP-07 | Phase 3 | Pending |
