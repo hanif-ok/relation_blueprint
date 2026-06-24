@@ -107,43 +107,51 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STOR-01 | TBD | Pending |
-| STOR-02 | TBD | Pending |
-| STOR-03 | TBD | Pending |
-| STOR-04 | TBD | Pending |
-| STOR-05 | TBD | Pending |
-| STOR-06 | TBD | Pending |
-| STOR-07 | TBD | Pending |
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
-| DATA-03 | TBD | Pending |
-| DATA-04 | TBD | Pending |
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| MAP-01 | TBD | Pending |
-| MAP-02 | TBD | Pending |
-| MAP-03 | TBD | Pending |
-| MAP-04 | TBD | Pending |
-| MAP-05 | TBD | Pending |
-| MAP-06 | TBD | Pending |
-| MAP-07 | TBD | Pending |
-| REL-01 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| REL-03 | TBD | Pending |
-| REL-04 | TBD | Pending |
-| SRCH-01 | TBD | Pending |
-| SRCH-02 | TBD | Pending |
-| BRWS-01 | TBD | Pending |
-| BRWS-02 | TBD | Pending |
-| EXPT-01 | TBD | Pending |
-| EXPT-02 | TBD | Pending |
+| STOR-01 | Phase 1 | Pending |
+| STOR-02 | Phase 1 | Pending |
+| STOR-03 | Phase 1 | Pending |
+| STOR-04 | Phase 1 | Pending |
+| STOR-05 | Phase 1 | Pending |
+| STOR-06 | Phase 1 | Pending |
+| STOR-07 | Phase 6 | Pending |
+| DATA-01 | Phase 2 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 2 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| PROF-01 | Phase 1 | Pending |
+| PROF-02 | Phase 1 | Pending |
+| PROF-03 | Phase 1 | Pending |
+| MAP-01 | Phase 1 | Pending |
+| MAP-02 | Phase 3 | Pending |
+| MAP-03 | Phase 3 | Pending |
+| MAP-04 | Phase 1 | Pending |
+| MAP-05 | Phase 3 | Pending |
+| MAP-06 | Phase 3 | Pending |
+| MAP-07 | Phase 3 | Pending |
+| REL-01 | Phase 4 | Pending |
+| REL-02 | Phase 4 | Pending |
+| REL-03 | Phase 4 | Pending |
+| REL-04 | Phase 4 | Pending |
+| SRCH-01 | Phase 5 | Pending |
+| SRCH-02 | Phase 5 | Pending |
+| BRWS-01 | Phase 2 | Pending |
+| BRWS-02 | Phase 2 | Pending |
+| EXPT-01 | Phase 1 | Pending |
+| EXPT-02 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 31 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 31 ⚠️ (resolved when roadmap is created)
+- Mapped to phases: 31 ✓
+- Unmapped: 0 ✓
+
+**Phase distribution:**
+- Phase 1 (Storage Spine & First Person on a Map): 15 reqs — STOR-01..06, DATA-02, DATA-04, PROF-01..03, MAP-01, MAP-04, EXPT-01, EXPT-02
+- Phase 2 (Custom Fields & Full Entity Model): 4 reqs — DATA-01, DATA-03, BRWS-01, BRWS-02
+- Phase 3 (Map Editor — Spaces & Navigation): 5 reqs — MAP-02, MAP-03, MAP-05, MAP-06, MAP-07
+- Phase 4 (Relationships & Graph): 4 reqs — REL-01, REL-02, REL-03, REL-04
+- Phase 5 (Field-Scoped Search): 2 reqs — SRCH-01, SRCH-02
+- Phase 6 (Mega.nz Provider): 1 req — STOR-07
 
 ---
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-24 after initial definition*
+*Last updated: 2026-06-24 after roadmap creation (traceability mapped)*
