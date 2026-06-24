@@ -89,7 +89,6 @@ describe('readManifest (zod-validated, STOR-02 / T-05-02)', () => {
         maps: { fileId: 'f-maps', hash: 'hm', updatedAt: 100 },
         markers: { fileId: 'f-markers', hash: 'hk', updatedAt: 100 },
       },
-      backups: [],
     };
   }
 
@@ -133,7 +132,6 @@ describe('writeManifestWithBackup + rollBackups (rolling backup before commit)',
         maps: { fileId: 'f-maps', hash: 'hm', updatedAt: version },
         markers: { fileId: 'f-markers', hash: 'hk', updatedAt: version },
       },
-      backups: [],
     };
   }
 

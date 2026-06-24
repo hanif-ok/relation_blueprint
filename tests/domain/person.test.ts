@@ -27,7 +27,6 @@ function validManifest(): Manifest {
     version: 1,
     updatedAt: 1,
     shards: { people: pointer, maps: pointer, markers: pointer },
-    backups: [],
   };
 }
 

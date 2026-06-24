@@ -43,7 +43,6 @@ function localManifest(now: number): Manifest {
       maps: { ...emptyPointer },
       markers: { ...emptyPointer },
     },
-    backups: [],
   };
 }
 

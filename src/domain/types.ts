@@ -95,13 +95,16 @@ export interface ShardPointer {
 /**
  * The single always-loaded file describing the cloud database. Swapping its shard
  * pointers is the only commit point — everything else is additive and discardable.
+ *
+ * Rolling manifest backups are NOT tracked here: they are discovered by listing the
+ * `backups/` folder (`rollBackups`), which is the single source of truth. A manifest field
+ * could never be kept consistent within the one-write commit point, so it was removed rather
+ * than left permanently empty and misleading (WR-03).
  */
 export interface Manifest {
   version: number;
   updatedAt: number;
   shards: Record<EntityType, ShardPointer>;
-  /** File ids of rolling manifest backups (newest last). */
-  backups: string[];
 }
 
 /**

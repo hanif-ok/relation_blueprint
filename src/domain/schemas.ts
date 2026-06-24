@@ -66,7 +66,9 @@ export const ManifestSchema = z.object({
     maps: ShardPointerSchema,
     markers: ShardPointerSchema,
   }),
-  backups: z.array(z.string()),
+  // No `backups` field: rolling backups are discovered by listing the `backups/` folder, the
+  // single source of truth. Zod ignores unknown keys, so older on-disk manifests that still
+  // carry `backups` continue to validate (WR-03).
 });
 
 export const BackupSchema = z.object({

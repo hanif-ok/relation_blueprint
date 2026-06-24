@@ -108,7 +108,7 @@ export class SyncEngine {
       shards[type] = { fileId, hash: '', updatedAt: 0 };
     }
 
-    const manifest: Manifest = { version: 0, updatedAt: 0, shards, backups: [] };
+    const manifest: Manifest = { version: 0, updatedAt: 0, shards };
     this._manifestFileId = await this.provider.writeFile(
       MANIFEST_NAME,
       this.folderId,
@@ -166,7 +166,6 @@ export class SyncEngine {
         version: current.version + 1,
         updatedAt: now,
         shards,
-        backups: current.backups,
       };
 
       // Step 4: THE COMMIT — rolling backup of the current manifest, then overwrite in place.
