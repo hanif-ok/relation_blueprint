@@ -55,7 +55,14 @@ export async function importDb(file: Blob): Promise<void> {
 
   // STEP 2 — atomic replace-all. Clear then bulkPut every table in ONE rw transaction; if any
   // write throws, Dexie rolls the whole transaction back (no partial restore — T-07-02).
-  await db.transaction('rw', db.people, db.maps, db.markers, db.media, async () => {
+  //
+  // The transaction also drops the `syncedMediaHashes` sync watermark (CR-02): that meta row is
+  // a write-only record of which media hashes were already pushed to the cloud. A restore swaps
+  // in a different media set, so trusting the old watermark would make `getNewMedia` skip
+  // re-uploading reintroduced blobs, leaving the cloud manifest pointing at `media/<hash>` files
+  // that no device ever re-pushes (unrecoverable photos). Clearing it forces the next push to
+  // re-validate every referenced blob against the cloud.
+  await db.transaction('rw', db.people, db.maps, db.markers, db.media, db.meta, async () => {
     await Promise.all([
       db.people.clear(),
       db.maps.clear(),
@@ -68,5 +75,7 @@ export async function importDb(file: Blob): Promise<void> {
       db.markers.bulkPut(bundle.entities.markers),
       db.media.bulkPut(mediaRecords),
     ]);
+    // Drop the stale media-sync watermark so a restore can re-push the bundle's media.
+    await db.meta.delete('syncedMediaHashes');
   });
 }
