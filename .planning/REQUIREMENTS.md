@@ -59,8 +59,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Export & Backup
 
-- [ ] **EXPT-01**: User can export the whole database as a portable, self-contained backup (JSON shards + media)
-- [ ] **EXPT-02**: User can import/restore a previously exported backup, fully reconstituting the database including photos
+- [x] **EXPT-01**: User can export the whole database as a portable, self-contained backup (JSON shards + media)
+- [x] **EXPT-02**: User can import/restore a previously exported backup, fully reconstituting the database including photos
 
 ## v2 Requirements
 
@@ -136,8 +136,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | SRCH-02 | Phase 5 | Pending |
 | BRWS-01 | Phase 2 | Pending |
 | BRWS-02 | Phase 2 | Pending |
-| EXPT-01 | Phase 1 | Pending |
-| EXPT-02 | Phase 1 | Pending |
+| EXPT-01 | Phase 1 | Complete |
+| EXPT-02 | Phase 1 | Complete |
 
 **Coverage:**
 
