@@ -13,7 +13,7 @@ Relation Blueprint is built as a sequence of widening vertical slices, not horiz
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore
+- [x] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore (completed 2026-06-24)
 - [ ] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists
 - [ ] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps
 - [ ] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph
@@ -36,11 +36,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans complete
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Scaffold (React/Vite/TS) + test harness (Vitest/Playwright/fake-indexeddb) + blocking Google OAuth Client ID prerequisite
+- [x] 01-01-PLAN.md — Scaffold (React/Vite/TS) + test harness (Vitest/Playwright/fake-indexeddb) + blocking Google OAuth Client ID prerequisite
 - [x] 01-02-PLAN.md — Domain model + zod schemas + StorageProvider interface (locked vs InMemoryProvider) + Dexie schema + offline repository
 - [x] 01-03-PLAN.md — Walking Skeleton slice: image-map + round avatar marker + person form + profile sidebar (edit/delete)
 
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 7/8 | In Progress|  |
+| 1. Storage Spine & First Person on a Map | 8/8 | Complete   | 2026-06-24 |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
