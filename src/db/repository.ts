@@ -82,10 +82,39 @@ export async function updatePerson(id: string, patch: UpdatePersonPatch): Promis
 }
 
 export async function deletePerson(id: string): Promise<void> {
-  // Cascade: removing a person removes every marker that placed them on a map.
-  await db.transaction('rw', db.people, db.markers, async () => {
+  // Cascade: removing a person removes every marker that placed them on a map, and
+  // refcount-sweeps the media blobs the person referenced so they don't accumulate forever
+  // (WR-02). Media is content-addressed and may be SHARED across entities, so a blob is deleted
+  // only when NO surviving entity (any person's photo/gallery, any map background) still
+  // references its hash. The whole sweep is one rw transaction so a failure rolls back cleanly.
+  await db.transaction('rw', db.people, db.markers, db.maps, db.media, async () => {
+    const victim = await db.people.get(id);
     await db.people.delete(id);
     await db.markers.where('personId').equals(id).delete();
+
+    if (victim) {
+      // Hashes the deleted person referenced — candidates for GC.
+      const candidates = new Set<string>();
+      if (victim.photo) candidates.add(victim.photo.hash);
+      for (const g of victim.gallery) candidates.add(g.hash);
+
+      if (candidates.size > 0) {
+        // Build the set of hashes STILL referenced by any surviving entity.
+        const stillReferenced = new Set<string>();
+        const ref = (r?: MediaRef) => {
+          if (r) stillReferenced.add(r.hash);
+        };
+        for (const p of await db.people.toArray()) {
+          ref(p.photo);
+          for (const g of p.gallery) ref(g);
+        }
+        for (const m of await db.maps.toArray()) ref(m.background);
+
+        for (const hash of candidates) {
+          if (!stillReferenced.has(hash)) await db.media.delete(hash);
+        }
+      }
+    }
   });
   emit({ entityType: 'people', entityId: id, op: 'delete' });
 }
