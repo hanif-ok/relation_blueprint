@@ -174,16 +174,25 @@ export class SyncEngine {
 
       // --- Past the commit point: the durable DB is now `next`. Failures below are recoverable. ---
 
-      // Step 5: mark local records synced, advance shard watermarks, then GC orphans + backups.
-      // Pass the exact snapshot the shards were serialized from so markSynced only clears the
-      // dirty flag on records whose serialized content was actually uploaded this commit (CR-01).
+      // Step 5: mark local records synced and advance shard watermarks. This part MUST succeed —
+      // it reconciles local state with the now-durable commit. Pass the exact snapshot the shards
+      // were serialized from so markSynced only clears the dirty flag on records whose serialized
+      // content was actually uploaded this commit (CR-01).
       await this.repo.markSynced(entities);
       for (const type of dirtyTypes) {
         await this.repo.setShardMeta(type, now);
       }
-      await rollBackups(this.provider, this.folderId, BACKUP_KEEP);
-      for (const orphanId of orphans) {
-        await this.provider.delete(orphanId);
+
+      // Step 6: best-effort GC of orphaned shards + backup trimming. The commit is ALREADY durable,
+      // so a failure here (e.g. a 401 right after commit) must NOT reject the push — that would
+      // report a sync FAILURE for a sync that actually succeeded. Catch + log instead (WR-07).
+      try {
+        await rollBackups(this.provider, this.folderId, BACKUP_KEEP);
+        for (const orphanId of orphans) {
+          await this.provider.delete(orphanId);
+        }
+      } catch (e) {
+        console.warn('post-commit GC failed (commit already durable; cleanup deferred)', e);
       }
     } finally {
       endWrite();
