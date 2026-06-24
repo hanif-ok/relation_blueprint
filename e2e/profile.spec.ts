@@ -13,6 +13,13 @@ import { expect, test } from '@playwright/test';
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEYBxVSF8FAGGmA1u4d5n5AAAAAElFTkSuQmCC';
 
+// A VALID 8x8 RGB PNG. Unlike the 2x2 PNG above (which an <img> tolerates but
+// `createImageBitmap` rejects with "source image could not be decoded"), this one decodes
+// cleanly — required for the gallery upload path, which thumbnails via createImageBitmap +
+// OffscreenCanvas before storing.
+const PNG_DECODABLE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR4nGNowAEYhpYEAILzYAGc7g8kAAAAAElFTkSuQmCC';
+
 async function resetDb(page: import('@playwright/test').Page) {
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
@@ -133,4 +140,63 @@ test('create → profile → edit → delete with cascade', async ({ page }) => 
   });
   expect(counts.people).toBe(0);
   expect(counts.markers).toBe(0);
+});
+
+/**
+ * PROF-02 — a person with no gallery shows the empty-state copy in the profile.
+ */
+test('empty gallery shows "No photos yet." in the profile', async ({ page }) => {
+  await seedMap(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+
+  await page.getByTestId('add-person').click();
+  await page.getByTestId('field-name').fill('Grace Hopper');
+  await page.getByRole('button', { name: 'Save person' }).click();
+
+  await clickFirstMarker(page);
+  const sidebar = page.getByTestId('profile-sidebar');
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByText('No photos yet.')).toBeVisible();
+  await expect(page.getByTestId('profile-gallery')).toHaveCount(0);
+});
+
+/**
+ * PROF-02 / PROF-03 — adding a photo through the form's gallery control thumbnails it
+ * client-side, stores it as a content-addressed blob, and renders it in the profile gallery.
+ */
+test('adding a gallery photo in the form renders it in the profile gallery', async ({ page }) => {
+  await seedMap(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+
+  await page.getByTestId('add-person').click();
+  await page.getByTestId('field-name').fill('Radia Perlman');
+
+  // Upload a real decodable PNG through the multi-photo gallery input; the browser
+  // thumbnails it client-side (createImageBitmap + OffscreenCanvas) before storing.
+  await page.getByTestId('person-gallery-input').setInputFiles({
+    name: 'photo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(PNG_DECODABLE_BASE64, 'base64'),
+  });
+
+  // Wait until the in-form gallery shows a stored tile (image resolved from the blob store).
+  await expect(page.getByTestId('form-gallery').locator('img')).toHaveCount(1, {
+    timeout: 15_000,
+  });
+
+  await page.getByRole('button', { name: 'Save person' }).click();
+
+  await clickFirstMarker(page);
+  const sidebar = page.getByTestId('profile-sidebar');
+  await expect(sidebar).toBeVisible();
+
+  const gallery = page.getByTestId('profile-gallery');
+  await expect(gallery).toBeVisible();
+  await expect(gallery.locator('img')).toHaveCount(1, { timeout: 15_000 });
+
+  // The photo persisted as exactly one content-addressed media blob (dedupe-friendly).
+  const mediaCount = await page.evaluate(() => window.__rb!.db.media.count());
+  expect(mediaCount).toBeGreaterThanOrEqual(1);
 });

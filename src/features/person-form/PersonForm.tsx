@@ -10,9 +10,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { createPerson, updatePerson } from '@/db/repository';
-import { storeMedia } from '@/db/media';
-import { useBlobImage } from '@/features/person-map/useMapImage';
-import { getMedia } from '@/db/repository';
+import { PhotoUpload } from './PhotoUpload';
 import type { MediaRef, Person } from '@/domain/types';
 import styles from './PersonForm.module.css';
 
@@ -32,6 +30,7 @@ interface FormState {
   notes: string;
   tags: string[];
   photo?: MediaRef;
+  gallery: MediaRef[];
 }
 
 function initialState(person?: Person | null): FormState {
@@ -42,6 +41,7 @@ function initialState(person?: Person | null): FormState {
     notes: person?.notes ?? '',
     tags: person?.tags ?? [],
     photo: person?.photo,
+    gallery: person?.gallery ?? [],
   };
 }
 
@@ -49,7 +49,6 @@ export function PersonForm({ open, onOpenChange, person, onSaved }: PersonFormPr
   const isEdit = !!person;
   const [state, setState] = useState<FormState>(() => initialState(person));
   const [tagDraft, setTagDraft] = useState('');
-  const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
   const nameRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
 
@@ -58,19 +57,10 @@ export function PersonForm({ open, onOpenChange, person, onSaved }: PersonFormPr
     if (open) {
       setState(initialState(person));
       setTagDraft('');
-      setPhotoBlob(undefined);
-      if (person?.photo) void getMedia(person.photo.hash).then(setPhotoBlob);
     }
   }, [open, person]);
 
-  const photoPreview = useBlobImage(photoBlob);
   const nameEmpty = state.name.trim().length === 0;
-
-  async function handlePhoto(file: File) {
-    setPhotoBlob(file);
-    const ref = await storeMedia(file);
-    setState((s) => ({ ...s, photo: ref }));
-  }
 
   function addTag() {
     const t = tagDraft.trim();
@@ -93,6 +83,7 @@ export function PersonForm({ open, onOpenChange, person, onSaved }: PersonFormPr
       description: state.description.trim() || undefined,
       tags: state.tags,
       notes: state.notes.trim() || undefined,
+      gallery: state.gallery,
     };
     let savedId: string;
     if (isEdit && person) {
@@ -150,29 +141,12 @@ export function PersonForm({ open, onOpenChange, person, onSaved }: PersonFormPr
 
             <div className={styles.field}>
               <span className={styles.label}>Photo</span>
-              <div className={styles.photoRow}>
-                <span className={styles.photoPreview}>
-                  {photoPreview ? (
-                    <img src={photoPreview.src} alt="" className={styles.photoImg} />
-                  ) : (
-                    <span className={styles.photoPlaceholder} aria-hidden="true" />
-                  )}
-                </span>
-                <label className={styles.uploadLabel}>
-                  Upload photo
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className={styles.hiddenInput}
-                    data-testid="person-photo-input"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void handlePhoto(file);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-              </div>
+              <PhotoUpload
+                photo={state.photo}
+                gallery={state.gallery}
+                onPhotoChange={(photo) => setState((s) => ({ ...s, photo }))}
+                onGalleryChange={(gallery) => setState((s) => ({ ...s, gallery }))}
+              />
             </div>
 
             <label className={styles.field}>
