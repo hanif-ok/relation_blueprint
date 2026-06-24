@@ -1,4 +1,5 @@
 import styles from './App.module.css';
+import { UpdateToast } from '@/features/pwa/UpdateToast';
 
 /**
  * Walking-skeleton app shell.
@@ -16,6 +17,7 @@ export function App() {
         <span className={styles.wordmark}>Relation Blueprint</span>
       </header>
       <main className={styles.surface} />
+      <UpdateToast />
     </div>
   );
 }
