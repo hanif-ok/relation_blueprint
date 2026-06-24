@@ -27,8 +27,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Profiles & Media
 
 - [x] **PROF-01**: User can click any person or location to open a sidebar profile showing all of its data
-- [ ] **PROF-02**: Each entity can have a thumbnail and a multi-photo gallery
-- [ ] **PROF-03**: Photos are thumbnailed client-side and stored as media blobs in the user's own cloud
+- [x] **PROF-02**: Each entity can have a thumbnail and a multi-photo gallery
+- [x] **PROF-03**: Photos are thumbnailed client-side and stored as media blobs in the user's own cloud
 
 ### Maps & Editor
 
@@ -119,8 +119,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DATA-03 | Phase 2 | Pending |
 | DATA-04 | Phase 1 | Complete |
 | PROF-01 | Phase 1 | Complete |
-| PROF-02 | Phase 1 | Pending |
-| PROF-03 | Phase 1 | Pending |
+| PROF-02 | Phase 1 | Complete |
+| PROF-03 | Phase 1 | Complete |
 | MAP-01 | Phase 1 | Complete |
 | MAP-02 | Phase 3 | Pending |
 | MAP-03 | Phase 3 | Pending |

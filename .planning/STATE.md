@@ -6,14 +6,14 @@ current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
 stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-24T14:48:43.968Z"
+last_updated: "2026-06-24T15:07:07.829Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 01 execution started
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P08 | 14 | 2 tasks | 14 files |
 | Phase 01 P03 | 15 | 2 tasks | 22 files |
 | Phase 01 P05 | 8 | 2 tasks | 8 files |
+| Phase 01 P04 | 12 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 01 P05]: Atomic write = the manifest overwrite is the SOLE commit point; shards/media are immutable writeFile, discardable on failure
 - [Phase ?]: [Phase 01 P05]: Serializer normalizes dirty=false for the canonical cloud copy; a pulled shard arrives already-clean
 - [Phase ?]: [Phase 01 P05]: SyncEngine consumes a RepositoryPort so the atomicity test runs over a plain snapshot; reconcile/production use createDexieRepoPort
+- [Phase ?]: [Phase 01 P04]: Media hash is SHA-256 of the PROCESSED (resized) bytes — storeMedia caps/thumbnails then hashes; Plan 05 uses this as the media/<hash> Drive filename
+- [Phase ?]: [Phase 01 P04]: storeMedia(kind) routes avatar->96px square webp thumb, gallery->1600px-cap webp, raw->as-is; resolveMediaUrl owns object-URL creation, callers revoke on unmount
 
 ### Pending Todos
 
@@ -106,6 +109,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T14:48:19.358Z
+Last session: 2026-06-24T15:06:43.537Z
 Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
 Resume file: None
