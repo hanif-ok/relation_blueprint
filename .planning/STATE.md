@@ -6,14 +6,14 @@ current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
 stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-24T14:03:23.583Z"
+last_updated: "2026-06-24T14:15:44.315Z"
 last_activity: 2026-06-24
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-06-24 — Phase 01 execution started
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01 P02 | 6 | 2 tasks | 10 files |
+| Phase 01 P08 | 14 | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Roadmap]: Typed custom fields (Phase 2) are the keystone that search, profiles, and relationships depend on
 - [Phase ?]: Media stored as ArrayBuffer+mime (not Blob) in Dexie for structured-clone portability across browser and fake-indexeddb; repository converts at the boundary
 - [Phase ?]: StorageProvider interface locked against an InMemoryProvider conformance fake before any real backend exists (Plan 05/06 target a stable seam)
+- [Phase ?]: [Phase 01 P08]: PWA SW uses registerType:'prompt' — a new worker waits and activates only on user Reload when no write is in flight (never blind skipWaiting)
+- [Phase ?]: [Phase 01 P08]: src/sync/writeStatus.ts is the in-flight-write seam — Plan 05 sync engine MUST call beginWrite()/endWrite() so the SW update guard sees active Drive writes
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T14:02:57.654Z
+Last session: 2026-06-24T14:15:36.568Z
 Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
 Resume file: None

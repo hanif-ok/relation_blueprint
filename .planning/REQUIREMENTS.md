@@ -14,7 +14,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **STOR-03**: App works fully offline against a local IndexedDB store treated as the source of truth
 - [ ] **STOR-04**: App syncs local changes to the connected cloud in the background (single-curator, last-write-wins)
 - [ ] **STOR-05**: App writes atomically with rolling versioned cloud backups so a failed write cannot corrupt the database
-- [ ] **STOR-06**: User can install the app as a PWA, and the app requests persistent local storage
+- [x] **STOR-06**: User can install the app as a PWA, and the app requests persistent local storage
 - [ ] **STOR-07**: User can alternatively connect Mega.nz as the storage provider (session-only credentials, never persisted)
 
 ### Entities & Custom Fields
@@ -112,7 +112,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | STOR-03 | Phase 1 | Complete |
 | STOR-04 | Phase 1 | Pending |
 | STOR-05 | Phase 1 | Pending |
-| STOR-06 | Phase 1 | Pending |
+| STOR-06 | Phase 1 | Complete |
 | STOR-07 | Phase 6 | Pending |
 | DATA-01 | Phase 2 | Pending |
 | DATA-02 | Phase 1 | Complete |
