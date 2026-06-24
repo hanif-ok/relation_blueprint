@@ -1,0 +1,50 @@
+/*
+ * Design tokens — the CSS custom-property half of the single source of truth.
+ *
+ * Every value here has a matching named constant in `tokens.ts` so the Konva canvas
+ * (the marker) and the DOM chrome render the exact same palette and never drift.
+ * (UI-SPEC ## Color, ## Spacing Scale, ## Radius/Elevation, A5)
+ *
+ * Discipline: --amber is the single reserved accent (create action + marker
+ * placement/selection only). Never use it for secondary buttons, links, the Edit
+ * button, or decorative fills (UI-SPEC A8).
+ */
+
+:root {
+  /* ---- Color ---------------------------------------------------------------- */
+  --paper: #f4f1ea; /* dominant chrome background */
+  --paper-shade: #e7e2d6; /* cards, wells, hover fills, initials fallback */
+  --slate: #1b2230; /* permanently-dark Konva canvas */
+  --amber: #c8742b; /* reserved accent: create + placement/selection */
+  --brick: #b23a2e; /* destructive (delete person) only */
+  --ink: #26211a; /* primary text on paper */
+  --ink-muted: #6b6358; /* muted text on paper */
+  --hairline: #d8d2c4; /* warm paper-on-paper border */
+
+  /* ---- Spacing (8-point scale) ---------------------------------------------- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ---- Radius --------------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+
+  /* ---- Borders & elevation -------------------------------------------------- */
+  --border-hairline: 1px solid var(--hairline);
+  --elevation-1: 0 1px 2px rgba(38, 33, 26, 0.06);
+  --elevation-2: 0 8px 24px rgba(27, 34, 48, 0.18);
+
+  /* ---- Type families -------------------------------------------------------- */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Fixed chrome metrics */
+  --top-bar-height: 56px;
+}
