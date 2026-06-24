@@ -101,7 +101,10 @@ export async function createFile(
   contentType: string,
 ): Promise<string> {
   const boundary = `rb_${Math.random().toString(36).slice(2)}_${Date.now()}`;
-  const metadata = JSON.stringify({ name, parents: [parentId] });
+  // Set mimeType on the file resource so Drive does not sniff/guess it. Shards are JSON and
+  // media blobs have no filename extension, so an omitted mimeType would leave Drive assigning
+  // an unexpected type that surfaces through stat/list filtering (WR-04).
+  const metadata = JSON.stringify({ name, parents: [parentId], mimeType: contentType });
   const bodyBuffer = await body.arrayBuffer();
 
   // Assemble the multipart body as a Blob so binary content survives intact.
