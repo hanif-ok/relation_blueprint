@@ -17,11 +17,14 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
 }
 
 /**
- * Hash a Blob, persist it via the repository, and return the MediaRef that entities
- * (Person.photo, MapDoc.background) store. Optional intrinsic dimensions are kept on
- * the ref so consumers can size the image without re-decoding.
+ * Hash a Blob and persist it AS-IS (no resize/cap), returning the MediaRef that entities store.
+ *
+ * Named `storeMediaRaw` to make the no-resize path impossible to select by accident — the
+ * capping pipeline that bounds quota lives in `@/media/mediaManager` under the SAME `storeMedia`
+ * name, and the two were a trap when identically named (WR-06). Use this only for already-processed
+ * bytes; route user uploads (photos, map backgrounds) through `mediaManager.storeMedia`.
  */
-export async function storeMedia(
+export async function storeMediaRaw(
   blob: Blob,
   dimensions?: { width?: number; height?: number },
 ): Promise<MediaRef> {

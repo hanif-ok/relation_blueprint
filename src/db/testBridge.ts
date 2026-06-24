@@ -17,7 +17,7 @@ import {
   createMap,
   upsertMarker,
 } from './repository';
-import { storeMedia } from './media';
+import { storeMediaRaw } from './media';
 import {
   markConnected,
   markSyncing,
@@ -51,7 +51,8 @@ export interface TestBridge {
   listPeople: typeof listPeople;
   createMap: typeof createMap;
   upsertMarker: typeof upsertMarker;
-  storeMedia: typeof storeMedia;
+  /** Raw (no-resize) media store for seeding pre-made blobs in E2E specs. */
+  storeMedia: typeof storeMediaRaw;
   connect: ConnectTestBridge;
 }
 
@@ -76,7 +77,7 @@ export function installTestBridge(): void {
     listPeople,
     createMap,
     upsertMarker,
-    storeMedia,
+    storeMedia: storeMediaRaw,
     connect: {
       markConnected,
       markSyncing,

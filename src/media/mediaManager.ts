@@ -70,14 +70,18 @@ export async function buildMediaRef(blob: Blob): Promise<MediaRef> {
   };
 }
 
+/** Longest-edge cap (px) for a map background — larger than a gallery image so floor plans /
+ * site photos stay legible, while still bounding IndexedDB + Drive quota (WR-06 / T-04-01). */
+const MAP_MAX_EDGE = 4096;
+
 /** How `storeMedia` should pre-process the bytes before hashing + storing. */
 export interface StoreMediaOptions {
   /**
-   * `'gallery'` (default) caps the longest edge for a full gallery image; `'avatar'`
-   * produces a small square thumbnail; `'raw'` stores the bytes as-is (e.g. an already
-   * processed blob or a non-photo asset).
+   * `'gallery'` (default) caps the longest edge for a full gallery image; `'map'` caps at a
+   * larger edge for a map background (keeps detail, still quota-bounded); `'avatar'` produces a
+   * small square thumbnail; `'raw'` stores the bytes as-is (already-processed/non-photo asset).
    */
-  kind?: 'gallery' | 'avatar' | 'raw';
+  kind?: 'gallery' | 'map' | 'avatar' | 'raw';
 }
 
 /**
@@ -96,6 +100,8 @@ export async function storeMedia(
     processed = await makeThumbnail(blob);
   } else if (kind === 'gallery') {
     processed = await capGalleryImage(blob);
+  } else if (kind === 'map') {
+    processed = await capGalleryImage(blob, MAP_MAX_EDGE);
   } else {
     processed = blob;
   }

@@ -13,7 +13,7 @@ import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
 import type { Marker } from '@/domain/types';
 import { createMap } from '@/db/repository';
-import { storeMedia } from '@/db/media';
+import { storeMedia } from '@/media/mediaManager';
 import { colors } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
 import { useMapImage, useBlobImage } from './useMapImage';
@@ -85,8 +85,17 @@ export function MapView({ selectedPersonId, onSelect }: MapViewProps) {
     }
     try {
       const dims = await decodeDimensions(file);
-      const ref = await storeMedia(file, dims);
-      await createMap({ name: file.name, background: ref, width: dims.width, height: dims.height });
+      // Route the map background through the capping pipeline (WR-06): a raw 25MB upload is
+      // downscaled/re-encoded to WebP before storage so it doesn't defeat the quota budget. The
+      // returned ref carries the POST-cap intrinsic dimensions; fall back to the pre-decode dims
+      // when the runtime lacks an image decoder (ref dims undefined).
+      const ref = await storeMedia(file, { kind: 'map' });
+      await createMap({
+        name: file.name,
+        background: ref,
+        width: ref.width ?? dims.width,
+        height: ref.height ?? dims.height,
+      });
     } catch {
       setUploadError(UPLOAD_ERROR);
     }
