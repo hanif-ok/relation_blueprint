@@ -29,13 +29,22 @@ const JSON_TYPE = 'application/json';
 /**
  * Serialize an entity set into one JSON shard Blob per type, keyed by shard file name.
  * The body of each shard is a JSON array of the entities of that type, in input order.
+ *
+ * `dirty` is LOCAL-ONLY sync metadata (true = "has unsynced local changes"). Anything written
+ * to a cloud shard is by definition synced, so `dirty` is normalized to `false` on the way out.
+ * This keeps the cloud copy canonical and makes a freshly-pulled shard arrive already-clean.
  */
 export function serializeShards(entities: EntitySet): Record<string, Blob> {
   return {
-    [SHARD_NAMES.people]: toBlob(entities.people),
-    [SHARD_NAMES.maps]: toBlob(entities.maps),
-    [SHARD_NAMES.markers]: toBlob(entities.markers),
+    [SHARD_NAMES.people]: toBlob(entities.people.map(clean)),
+    [SHARD_NAMES.maps]: toBlob(entities.maps.map(clean)),
+    [SHARD_NAMES.markers]: toBlob(entities.markers.map(clean)),
   };
+}
+
+/** Force `dirty: false` for the cloud copy without mutating the caller's object. */
+function clean<T extends { dirty: boolean }>(entity: T): T {
+  return { ...entity, dirty: false };
 }
 
 /**
