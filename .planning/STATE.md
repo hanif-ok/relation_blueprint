@@ -6,14 +6,14 @@ current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
 stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-24T15:36:48.828Z"
-last_activity: 2026-06-24
+last_updated: "2026-06-25T04:19:44.334Z"
+last_activity: 2026-06-25
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 8
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 9
   percent: 0
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 8 of 8
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-06-24 — Phase 01 execution started
+Last activity: 2026-06-25 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P04 | 12 | 2 tasks | 10 files |
 | Phase 01 P06 | 18 | 2 tasks | 19 files |
 | Phase 01 P07 | 8 | 2 tasks | 11 files |
+| Phase 01 P09 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,7 @@ Recent decisions affecting current work:
 - [Phase 01]: [Phase 01 P07]: Export bundles a minimal v0 local manifest (empty-string shard pointers) so the backup is schema-complete and importable on a never-synced device; entities travel inline
 - [Phase 01]: [Phase 01 P07]: importDb validate-before-write — BackupSchema.parse runs before the single rw transaction, so a corrupt/foreign file leaves the DB untouched (T-07-01/02)
 - [Phase 01]: [Phase 01 P07]: backup media stores only hash->base64; restore recovers each blob's mime from entity MediaRefs, bytes restored byte-for-byte (round-trip property test)
+- [Phase ?]: [Phase 01 P09]: prepareOnOpen() = discover-existing-manifest-or-bootstrap, called before reconcileOnOpen() in onConnected — fixes empty-DB first-connect error and enables silent re-adoption of an existing cloud DB (no second commit point)
 
 ### Pending Todos
 
@@ -108,6 +110,11 @@ Recent decisions affecting current work:
 - Phase 1 carries a research flag — spike the full Drive auth + read/write + token-expiry cycle and the atomic write pattern before planning.
 - Phases 3 (Map Editor / Konva at scale) and 6 (Mega megajs) also carry research flags.
 
+### Roadmap Evolution
+
+- Phase 2 edited: added success criteria 5-6: profile photo lightbox/expand + gallery sort/reorder (deferred from Phase 1 UAT)
+- Phase 3 edited: added success criteria 6-7: resizable/rotatable markers + map image transform handles via Konva Transformer (deferred from Phase 1 UAT)
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
@@ -118,6 +125,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-24T15:36:09.070Z
+Last session: 2026-06-25T04:19:24.392Z
 Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
 Resume file: None

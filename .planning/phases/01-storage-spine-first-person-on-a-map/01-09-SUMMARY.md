@@ -99,6 +99,10 @@ None - no external service configuration required. (The gap is in the in-engine 
 - The atomic manifest-swap remains the sole commit point; `bootstrap()` still only creates files when none exist.
 - Plan 01-10 (silent reconnect) remains the last incomplete plan in this phase.
 
+## Self-Check: PASSED
+
+All created/modified files exist on disk and all task commits (69ff106, 4ddd191, 9504dba, dae3191) plus the SUMMARY commit (83f3259) are present in git history.
+
 ---
 *Phase: 01-storage-spine-first-person-on-a-map*
 *Completed: 2026-06-25*

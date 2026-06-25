@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
 
-**Plans**: 8 plans complete + 2 gap-closure plans (UAT)
+**Plans**: 9/10 plans executed
 Plans:
 **Wave 1**
 
@@ -57,7 +57,7 @@ Plans:
 
 **Gap closure** *(from Phase 1 UAT — both independent, parallel)*
 
-- [ ] 01-09-PLAN.md — GAP 1 (MAJOR): empty-DB first connect reaches synced — prepareOnOpen() discover-or-bootstrap before reconcile + regression test (STOR-02/04/05)
+- [x] 01-09-PLAN.md — GAP 1 (MAJOR): empty-DB first connect reaches synced — prepareOnOpen() discover-or-bootstrap before reconcile + regression test (STOR-02/04/05)
 - [ ] 01-10-PLAN.md — GAP 2 (MINOR): silent on-load Drive re-acquire on refresh (no popup, token-never-persisted) + test (STOR-01/06)
 
 **Research flag:** NEEDS DEEPER RESEARCH — Drive OAuth token lifecycle crossing ~1hr expiry, GIS token-client behavior on a static site, atomic temp-then-swap write pattern for Drive REST v3, and sharded manifest sync reconciliation. Spike the full auth + read/write + token-expiry cycle before committing to PLAN. Lock in: `drive.file` scope only, visible named folder (never `appDataFolder`), sharded manifest + StorageProvider abstraction, `navigator.storage.persist()`, controlled service-worker update flow.
@@ -75,6 +75,8 @@ Plans:
   2. User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type, and those fields render and validate correctly in profiles
   3. User can browse all people as a list and all locations as a list, alongside direct map navigation
   4. Default fields stay minimal and a privacy/sensitivity notice is shown at setup (real personal data, provider security only in v1)
+  5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
+  6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
 **Plans**: TBD
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
@@ -93,6 +95,8 @@ Plans:
   3. User can nest maps into spatial map-groups (floor → building → street) and navigate up and down the hierarchy
   4. A single person placed on multiple maps stays one canonical record — edits to that person propagate to every map they appear on
   5. The map editor stays responsive (no jank) when a map holds many markers
+  6. User can select a placed marker and resize (and rotate) it via on-canvas transform handles, with the new size/rotation persisting across reloads (deferred from Phase 1 UAT)
+  7. User can resize/transform the map background image via handles (beyond view pan/zoom), and the change persists (deferred from Phase 1 UAT)
 
 **Plans**: TBD
 **Research flag:** NEEDS DEEPER RESEARCH — Konva.js viewport culling and shape caching patterns at hundreds-to-thousands of markers, portal/nested-map navigation UX, and Konva + React 19 compatibility. Research before PLAN; build caching/culling in from the start, not as a retrofit.
@@ -153,7 +157,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 8/8 | Complete   | 2026-06-24 |
+| 1. Storage Spine & First Person on a Map | 9/10 | In Progress|  |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
