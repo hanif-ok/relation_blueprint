@@ -7,6 +7,7 @@ import styles from './App.module.css';
 import { MapView } from '@/features/person-map/MapView';
 import { BrowseList } from '@/features/browse/BrowseList';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
+import { PrivacyNotice } from '@/features/onboarding/PrivacyNotice';
 import { ViewSwitcher, type ViewKey } from '@/features/nav/ViewSwitcher';
 import { NewEntityMenu } from '@/features/nav/NewEntityMenu';
 import { EntityForm, type EntityFormType } from '@/features/entity-form/EntityForm';
@@ -50,6 +51,14 @@ export function App() {
   // aria-live announcement for "Show on map" (the DOM-accessible path to a canvas action).
   const [announce, setAnnounce] = useState('');
 
+  // Privacy notice (S20, D-19). The one-time dismissal persists in the Dexie `meta` table so it
+  // round-trips with the DB; `reviewPrivacy` is a transient re-view that never rewrites the flag.
+  const [reviewPrivacy, setReviewPrivacy] = useState(false);
+  const privacyDismissed = useLiveQuery(
+    async () => (await db.meta.get('privacyNoticeDismissed'))?.value === true,
+    [],
+  );
+
   // Drive connect/reconnect/status chrome wired to the atomic SyncEngine.
   const sync = useSyncEngine();
   const drive = useConnectDrive({
@@ -63,6 +72,31 @@ export function App() {
   }, []);
 
   const map = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
+
+  // Does the user have any first-class entity yet? Gates the one-time privacy notice's auto-show
+  // (criterion 4: show at first entity creation OR first provider connect, whichever comes first).
+  const hasAnyEntity = useLiveQuery(async () => {
+    const counts = await Promise.all([
+      db.people.count(),
+      db.maps.count(),
+      db.groups.count(),
+      db.relationshipLinks.count(),
+    ]);
+    return counts.some((c) => c > 0);
+  }, []);
+
+  // Auto-show once on first run: the flag is loaded-and-absent AND there's a first entity OR a
+  // live Drive connection. `privacyDismissed === false` (not undefined) ensures the flag finished
+  // loading, so we never flash the notice before the meta read resolves.
+  const privacyOpen =
+    reviewPrivacy ||
+    (privacyDismissed === false && (drive.status.connected || hasAnyEntity === true));
+
+  /** Persist the one-time dismissal to the Dexie meta table (round-trips with the DB). */
+  async function dismissPrivacy() {
+    setReviewPrivacy(false);
+    await db.meta.put({ key: 'privacyNoticeDismissed', value: true });
+  }
 
   // The entity currently being edited, loaded from the right table for the form.
   const editingEntity = useLiveQuery<Person | MapDoc | Group | RelationshipLink | undefined>(
@@ -175,9 +209,7 @@ export function App() {
           onOpenFields={() => {
             /* Field manager is plan 02-04. */
           }}
-          onOpenPrivacy={() => {
-            /* Privacy notice re-view is wired in Task 3. */
-          }}
+          onOpenPrivacy={() => setReviewPrivacy(true)}
         />
 
         <main className={styles.surface}>
@@ -257,6 +289,9 @@ export function App() {
           });
         }}
       />
+
+      {/* One-time privacy/sensitivity notice (S20, D-19) — re-viewable from the nav. */}
+      <PrivacyNotice open={privacyOpen} onDismiss={() => void dismissPrivacy()} />
 
       <UpdateToast />
       <InstallPrompt />

@@ -45,9 +45,19 @@ async function createViaMenu(page: Page, type: string, name: string) {
   await expect(page.getByTestId('entity-form-save')).toHaveCount(0);
 }
 
+/** Pre-dismiss the one-time privacy notice so it never blocks a flow that isn't testing it. */
+async function suppressPrivacyNotice(page: Page) {
+  await page.evaluate(async () => {
+    await window.__rb!.db.meta.put({ key: 'privacyNoticeDismissed', value: true });
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
   await resetDb(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+  await suppressPrivacyNotice(page);
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 });
