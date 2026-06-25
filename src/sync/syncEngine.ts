@@ -70,7 +70,7 @@ export interface SyncEngineOptions {
   manifestFileId?: string;
 }
 
-const ENTITY_TYPES: EntityType[] = ['people', 'maps', 'markers'];
+const ENTITY_TYPES: EntityType[] = ['people', 'maps', 'markers', 'groups', 'relationship-links'];
 
 export class SyncEngine {
   private readonly provider: StorageProvider;
@@ -99,8 +99,15 @@ export class SyncEngine {
   async bootstrap(): Promise<void> {
     if (this._manifestFileId) return;
 
-    // Write three empty shard files so the manifest can point at them.
-    const empty = serializeShards({ people: [], maps: [], markers: [] });
+    // Write empty shard files so the manifest can point at them (one per manifest EntityType).
+    const empty = serializeShards({
+      people: [],
+      maps: [],
+      markers: [],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
+    });
     const shards = {} as Record<EntityType, ShardPointer>;
     for (const type of ENTITY_TYPES) {
       const blob = empty[SHARD_NAMES[type]];
@@ -245,17 +252,37 @@ export class SyncEngine {
       const set = await deserializeShards({ [SHARD_NAMES[type]]: blob });
       // Per-type assignment keeps the discriminated EntitySet fields type-sound (a single
       // `pulled[type] = set[type]` would collapse the arrays to their union and fail tsc).
+      // The `relationship-links` EntityType maps onto the `relationshipLinks` EntitySet field.
       if (type === 'people') pulled.people = set.people;
       else if (type === 'maps') pulled.maps = set.maps;
-      else pulled.markers = set.markers;
+      else if (type === 'markers') pulled.markers = set.markers;
+      else if (type === 'groups') pulled.groups = set.groups;
+      else pulled.relationshipLinks = set.relationshipLinks;
     }
 
     if (Object.keys(pulled).length > 0) {
       await this.repo.upsert(pulled);
       for (const type of ENTITY_TYPES) {
-        if (pulled[type]) await this.repo.setShardMeta(type, manifest.shards[type].updatedAt);
+        if (pulledHas(pulled, type)) await this.repo.setShardMeta(type, manifest.shards[type].updatedAt);
       }
     }
+  }
+}
+
+/** Was a shard of this manifest EntityType pulled this reconcile? Bridges the kebab EntityType
+ * keys to the EntitySet's `relationshipLinks` camelCase field. */
+function pulledHas(pulled: Partial<EntitySet>, type: EntityType): boolean {
+  switch (type) {
+    case 'people':
+      return pulled.people !== undefined;
+    case 'maps':
+      return pulled.maps !== undefined;
+    case 'markers':
+      return pulled.markers !== undefined;
+    case 'groups':
+      return pulled.groups !== undefined;
+    case 'relationship-links':
+      return pulled.relationshipLinks !== undefined;
   }
 }
 
@@ -291,12 +318,15 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
 
   return {
     async getEntities(): Promise<EntitySet> {
-      const [people, maps, markers] = await Promise.all([
+      const [people, maps, markers, groups, relationshipLinks, fieldDefs] = await Promise.all([
         db.people.toArray(),
         db.maps.toArray(),
         db.markers.toArray(),
+        db.groups.toArray(),
+        db.relationshipLinks.toArray(),
+        db.fieldDefs.toArray(),
       ]);
-      return { people, maps, markers };
+      return { people, maps, markers, groups, relationshipLinks, fieldDefs };
     },
 
     async getDirtyTypes(): Promise<EntityType[]> {
@@ -305,6 +335,8 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
       if ((await db.people.filter((p) => p.dirty).count()) > 0) types.push('people');
       if ((await db.maps.filter((m) => m.dirty).count()) > 0) types.push('maps');
       if ((await db.markers.filter((m) => m.dirty).count()) > 0) types.push('markers');
+      if ((await db.groups.filter((g) => g.dirty).count()) > 0) types.push('groups');
+      if ((await db.relationshipLinks.filter((r) => r.dirty).count()) > 0) types.push('relationship-links');
       return types;
     },
 
@@ -327,7 +359,7 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
       // Snapshot the media hashes BEFORE the entity transaction so the synced-media watermark
       // reflects exactly what this commit pushed (getNewMedia ran against the same set).
       const allHashes = (await db.media.toArray()).map((m) => m.hash);
-      await db.transaction('rw', db.people, db.maps, db.markers, db.meta, async () => {
+      await db.transaction('rw', [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.meta], async () => {
         // Clear `dirty` ONLY where the record's content was actually serialized in this commit.
         // We match on (id, updatedAt) against the snapshot: if the user edited a record AFTER the
         // snapshot but BEFORE this runs, its `updatedAt` was bumped, so it no longer matches and
@@ -350,6 +382,18 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
             await db.markers.update(mk.id, { dirty: false });
           }
         }
+        for (const g of synced.groups) {
+          const cur = await db.groups.get(g.id);
+          if (cur && cur.dirty && cur.updatedAt === g.updatedAt) {
+            await db.groups.update(g.id, { dirty: false });
+          }
+        }
+        for (const r of synced.relationshipLinks) {
+          const cur = await db.relationshipLinks.get(r.id);
+          if (cur && cur.dirty && cur.updatedAt === r.updatedAt) {
+            await db.relationshipLinks.update(r.id, { dirty: false });
+          }
+        }
         // Union the previously-synced hashes with everything currently stored (this commit
         // uploaded any that were new). Content addressing makes the union safe and stable.
         const prior = await db.meta.get(SYNCED_MEDIA_KEY);
@@ -360,32 +404,56 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
     },
 
     async upsert(entities: Partial<EntitySet>): Promise<void> {
-      await db.transaction('rw', db.people, db.maps, db.markers, async () => {
-        if (entities.people) {
-          for (const incoming of entities.people) {
-            const local = await db.people.get(incoming.id);
-            if (!local || incoming.updatedAt > local.updatedAt) {
-              await db.people.put({ ...incoming, dirty: false });
+      await db.transaction(
+        'rw',
+        db.people,
+        db.maps,
+        db.markers,
+        db.groups,
+        db.relationshipLinks,
+        async () => {
+          if (entities.people) {
+            for (const incoming of entities.people) {
+              const local = await db.people.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.people.put({ ...incoming, dirty: false });
+              }
             }
           }
-        }
-        if (entities.maps) {
-          for (const incoming of entities.maps) {
-            const local = await db.maps.get(incoming.id);
-            if (!local || incoming.updatedAt > local.updatedAt) {
-              await db.maps.put({ ...incoming, dirty: false });
+          if (entities.maps) {
+            for (const incoming of entities.maps) {
+              const local = await db.maps.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.maps.put({ ...incoming, dirty: false });
+              }
             }
           }
-        }
-        if (entities.markers) {
-          for (const incoming of entities.markers) {
-            const local = await db.markers.get(incoming.id);
-            if (!local || incoming.updatedAt > local.updatedAt) {
-              await db.markers.put({ ...incoming, dirty: false });
+          if (entities.markers) {
+            for (const incoming of entities.markers) {
+              const local = await db.markers.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.markers.put({ ...incoming, dirty: false });
+              }
             }
           }
-        }
-      });
+          if (entities.groups) {
+            for (const incoming of entities.groups) {
+              const local = await db.groups.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.groups.put({ ...incoming, dirty: false });
+              }
+            }
+          }
+          if (entities.relationshipLinks) {
+            for (const incoming of entities.relationshipLinks) {
+              const local = await db.relationshipLinks.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.relationshipLinks.put({ ...incoming, dirty: false });
+              }
+            }
+          }
+        },
+      );
     },
 
     async getShardMeta(type: EntityType): Promise<number> {

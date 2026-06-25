@@ -4,9 +4,14 @@
 // Index discipline (RESEARCH Anti-Pattern): the `media` table is keyed ONLY by `hash` —
 // the Blob column is NOT indexed (indexing blobs bloats the DB for zero query benefit).
 // Photos are stored as separate blobs referenced by content hash, never base64-embedded.
+//
+// Phase 2 adds three tables via a `version(2)` upgrade: `groups`, `relationshipLinks`, and
+// `fieldDefs` (the per-type custom-field schema, also indexed by `entityType` + `order` so the
+// field manager can list/sort one type's fields). Dexie auto-upgrades the open DB in the
+// browser — this is a Dexie schema, NOT a Drizzle/Prisma migration, so there is no push step.
 
 import Dexie, { type EntityTable } from 'dexie';
-import type { MapDoc, Marker, Person } from '@/domain/types';
+import type { FieldDef, Group, MapDoc, Marker, Person, RelationshipLink } from '@/domain/types';
 
 /**
  * A media blob stored content-addressed by `hash`. The bytes column is intentionally
@@ -41,6 +46,9 @@ export class RelationBlueprintDB extends Dexie {
   people!: EntityTable<Person, 'id'>;
   maps!: EntityTable<MapDoc, 'id'>;
   markers!: EntityTable<Marker, 'id'>;
+  groups!: EntityTable<Group, 'id'>;
+  relationshipLinks!: EntityTable<RelationshipLink, 'id'>;
+  fieldDefs!: EntityTable<FieldDef, 'id'>;
   media!: EntityTable<MediaRecord, 'hash'>;
   meta!: EntityTable<MetaRecord, 'key'>;
   syncQueue!: EntityTable<SyncQueueRecord, 'seq'>;
@@ -55,6 +63,15 @@ export class RelationBlueprintDB extends Dexie {
       media: 'hash',
       meta: 'key',
       syncQueue: '++seq, entityType, entityId',
+    });
+    // Phase 2 (D-07/D-08/D-09): add the new entity tables + the field-definition store. Dexie
+    // auto-upgrades the open DB; existing version(1) tables are carried forward unchanged.
+    // `fieldDefs` is additionally indexed by `entityType` and `order` so the field manager can
+    // query one type's definitions and list them in display order.
+    this.version(2).stores({
+      groups: 'id, name, updatedAt, dirty',
+      relationshipLinks: 'id, name, updatedAt, dirty',
+      fieldDefs: 'id, entityType, order, updatedAt, dirty',
     });
   }
 }

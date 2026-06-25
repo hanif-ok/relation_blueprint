@@ -4,7 +4,11 @@
 // losslessly restore (proven by the round-trip property test).
 //
 // Bundle shape (locked by BackupSchema):
-//   { schemaVersion, manifest, entities: { people, maps, markers }, media: { <hash>: base64 } }
+//   { schemaVersion, manifest,
+//     entities: { people, maps, markers, groups, 'relationship-links' },
+//     fieldDefs, media: { <hash>: base64 } }
+// Custom-field VALUES ride on each entity's `custom` map (so the entity arrays carry them);
+// the field DEFINITIONS travel in their own `fieldDefs` slot so a restored DB renders them.
 //
 // `schemaVersion` is the bundle's OWN format version (1) — distinct from the cloud manifest's
 // `version`. Media is base64-embedded here (the skeleton format); a zip/fflate container is a
@@ -42,6 +46,8 @@ function localManifest(now: number): Manifest {
       people: { ...emptyPointer },
       maps: { ...emptyPointer },
       markers: { ...emptyPointer },
+      groups: { ...emptyPointer },
+      'relationship-links': { ...emptyPointer },
     },
   };
 }
@@ -51,10 +57,13 @@ function localManifest(now: number): Manifest {
  * Media bytes are base64-encoded so photos survive the round trip byte-for-byte.
  */
 export async function exportDb(): Promise<Blob> {
-  const [people, maps, markers, mediaRows] = await Promise.all([
+  const [people, maps, markers, groups, relationshipLinks, fieldDefs, mediaRows] = await Promise.all([
     db.people.toArray(),
     db.maps.toArray(),
     db.markers.toArray(),
+    db.groups.toArray(),
+    db.relationshipLinks.toArray(),
+    db.fieldDefs.toArray(),
     db.media.toArray(),
   ]);
 
@@ -66,7 +75,8 @@ export async function exportDb(): Promise<Blob> {
   const bundle: Backup = {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     manifest: localManifest(Date.now()),
-    entities: { people, maps, markers },
+    entities: { people, maps, markers, groups, 'relationship-links': relationshipLinks },
+    fieldDefs,
     media,
   };
 

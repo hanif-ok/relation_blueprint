@@ -7,7 +7,20 @@
 // that correspondence at compile time.
 
 import { z } from 'zod';
-import type { Backup, Manifest, MapDoc, Marker, MediaRef, Person, ShardPointer } from './types';
+import type {
+  Backup,
+  CustomValue,
+  CustomValues,
+  FieldDef,
+  Group,
+  Manifest,
+  MapDoc,
+  Marker,
+  MediaRef,
+  Person,
+  RelationshipLink,
+  ShardPointer,
+} from './types';
 
 export const MediaRefSchema = z.object({
   hash: z.string(),
@@ -15,6 +28,23 @@ export const MediaRefSchema = z.object({
   width: z.number().optional(),
   height: z.number().optional(),
 });
+
+/**
+ * The closed union of allowed custom-field VALUE shapes (threat T-02-02): a string
+ * (text/date/phone/link-to-entity id), a number, a string[] (tags), a MediaRef (photo), or
+ * `null` (empty). An out-of-band value fails validation rather than persisting. The MediaRef
+ * branch is listed BEFORE `z.null()`/scalars so a photo object is matched as a MediaRef.
+ */
+export const CustomValueSchema: z.ZodType<CustomValue> = z.union([
+  z.string(),
+  z.number(),
+  z.array(z.string()),
+  MediaRefSchema,
+  z.null(),
+]);
+
+/** The per-entity custom value map (D-01): `fieldId -> value`; tolerates missing keys. */
+export const CustomValuesSchema: z.ZodType<CustomValues> = z.record(z.string(), CustomValueSchema);
 
 export const PersonSchema = z.object({
   id: z.string(),
@@ -25,6 +55,7 @@ export const PersonSchema = z.object({
   tags: z.array(z.string()),
   notes: z.string().optional(),
   gallery: z.array(MediaRefSchema),
+  custom: CustomValuesSchema,
   updatedAt: z.number(),
   dirty: z.boolean(),
 });
@@ -35,6 +66,34 @@ export const MapDocSchema = z.object({
   background: MediaRefSchema,
   width: z.number(),
   height: z.number(),
+  photo: MediaRefSchema.optional(),
+  gallery: z.array(MediaRefSchema),
+  notes: z.string().optional(),
+  custom: CustomValuesSchema,
+  updatedAt: z.number(),
+  dirty: z.boolean(),
+});
+
+export const GroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  photo: MediaRefSchema.optional(),
+  gallery: z.array(MediaRefSchema),
+  notes: z.string().optional(),
+  custom: CustomValuesSchema,
+  updatedAt: z.number(),
+  dirty: z.boolean(),
+});
+
+export const RelationshipLinkSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  photo: MediaRefSchema.optional(),
+  gallery: z.array(MediaRefSchema),
+  notes: z.string().optional(),
+  label: z.string().optional(),
+  date: z.string().optional(),
+  custom: CustomValuesSchema,
   updatedAt: z.number(),
   dirty: z.boolean(),
 });
@@ -49,7 +108,24 @@ export const MarkerSchema = z.object({
   dirty: z.boolean(),
 });
 
-export const EntityTypeSchema = z.enum(['people', 'maps', 'markers']);
+export const EntityTypeSchema = z.enum(['people', 'maps', 'markers', 'groups', 'relationship-links']);
+
+/** Closed enum of the 7 DATA-03 field types (threat T-02-02). */
+export const FieldTypeSchema = z.enum(['text', 'number', 'date', 'phone', 'tags', 'link-to-entity', 'photo']);
+
+export const FieldDefSchema = z.object({
+  id: z.string(),
+  entityType: EntityTypeSchema,
+  label: z.string(),
+  type: FieldTypeSchema,
+  required: z.boolean(),
+  order: z.number().int(),
+  options: z.array(z.string()).optional(),
+  targetType: EntityTypeSchema.optional(),
+  deleted: z.boolean(),
+  updatedAt: z.number(),
+  dirty: z.boolean(),
+});
 
 export const ShardPointerSchema = z.object({
   fileId: z.string(),
@@ -65,6 +141,8 @@ export const ManifestSchema = z.object({
     people: ShardPointerSchema,
     maps: ShardPointerSchema,
     markers: ShardPointerSchema,
+    groups: ShardPointerSchema,
+    'relationship-links': ShardPointerSchema,
   }),
   // No `backups` field: rolling backups are discovered by listing the `backups/` folder, the
   // single source of truth. Zod ignores unknown keys, so older on-disk manifests that still
@@ -78,7 +156,12 @@ export const BackupSchema = z.object({
     people: z.array(PersonSchema),
     maps: z.array(MapDocSchema),
     markers: z.array(MarkerSchema),
+    groups: z.array(GroupSchema),
+    'relationship-links': z.array(RelationshipLinkSchema),
   }),
+  // Custom-field DEFINITIONS travel in their own slot so a restored DB renders custom fields
+  // (values live on each entity's `custom` map; definitions describe them — D-02).
+  fieldDefs: z.array(FieldDefSchema),
   media: z.record(z.string(), z.string()),
 });
 
@@ -88,6 +171,11 @@ export type MediaRefInput = z.infer<typeof MediaRefSchema>;
 export type PersonInput = z.infer<typeof PersonSchema>;
 export type MapDocInput = z.infer<typeof MapDocSchema>;
 export type MarkerInput = z.infer<typeof MarkerSchema>;
+export type GroupInput = z.infer<typeof GroupSchema>;
+export type RelationshipLinkInput = z.infer<typeof RelationshipLinkSchema>;
+export type FieldDefInput = z.infer<typeof FieldDefSchema>;
+export type CustomValueInput = z.infer<typeof CustomValueSchema>;
+export type CustomValuesInput = z.infer<typeof CustomValuesSchema>;
 export type ShardPointerInput = z.infer<typeof ShardPointerSchema>;
 export type ManifestInput = z.infer<typeof ManifestSchema>;
 export type BackupInput = z.infer<typeof BackupSchema>;
@@ -96,6 +184,11 @@ const _mediaRefCheck = {} as MediaRefInput satisfies MediaRef;
 const _personCheck = {} as PersonInput satisfies Person;
 const _mapDocCheck = {} as MapDocInput satisfies MapDoc;
 const _markerCheck = {} as MarkerInput satisfies Marker;
+const _groupCheck = {} as GroupInput satisfies Group;
+const _relationshipLinkCheck = {} as RelationshipLinkInput satisfies RelationshipLink;
+const _fieldDefCheck = {} as FieldDefInput satisfies FieldDef;
+const _customValueCheck = {} as CustomValueInput satisfies CustomValue;
+const _customValuesCheck = {} as CustomValuesInput satisfies CustomValues;
 const _shardPointerCheck = {} as ShardPointerInput satisfies ShardPointer;
 const _manifestCheck = {} as ManifestInput satisfies Manifest;
 const _backupCheck = {} as BackupInput satisfies Backup;
@@ -103,6 +196,11 @@ void _mediaRefCheck;
 void _personCheck;
 void _mapDocCheck;
 void _markerCheck;
+void _groupCheck;
+void _relationshipLinkCheck;
+void _fieldDefCheck;
+void _customValueCheck;
+void _customValuesCheck;
 void _shardPointerCheck;
 void _manifestCheck;
 void _backupCheck;

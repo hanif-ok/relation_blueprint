@@ -28,6 +28,8 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       if (set.people.some((e) => e.dirty)) types.push('people');
       if (set.maps.some((e) => e.dirty)) types.push('maps');
       if (set.markers.some((e) => e.dirty)) types.push('markers');
+      if (set.groups.some((e) => e.dirty)) types.push('groups');
+      if (set.relationshipLinks.some((e) => e.dirty)) types.push('relationship-links');
       return types;
     },
     async getNewMedia(): Promise<Record<string, Blob>> {
@@ -49,11 +51,17 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       clearMatching(set.people, synced.people);
       clearMatching(set.maps, synced.maps);
       clearMatching(set.markers, synced.markers);
+      clearMatching(set.groups, synced.groups);
+      clearMatching(set.relationshipLinks, synced.relationshipLinks);
     },
     async upsert(incoming: Partial<EntitySet>): Promise<void> {
       if (incoming.people) set.people = structuredClone(incoming.people);
       if (incoming.maps) set.maps = structuredClone(incoming.maps);
       if (incoming.markers) set.markers = structuredClone(incoming.markers);
+      if (incoming.groups) set.groups = structuredClone(incoming.groups);
+      if (incoming.relationshipLinks) {
+        set.relationshipLinks = structuredClone(incoming.relationshipLinks);
+      }
     },
     async getShardMeta(type: EntityType): Promise<number> {
       return shardMeta.get(type) ?? 0;
@@ -66,12 +74,16 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       for (const e of set.people) e.dirty = true;
       for (const e of set.maps) e.dirty = true;
       for (const e of set.markers) e.dirty = true;
+      for (const e of set.groups) e.dirty = true;
+      for (const e of set.relationshipLinks) e.dirty = true;
     },
     allClean(): boolean {
       return (
         set.people.every((e) => !e.dirty) &&
         set.maps.every((e) => !e.dirty) &&
-        set.markers.every((e) => !e.dirty)
+        set.markers.every((e) => !e.dirty) &&
+        set.groups.every((e) => !e.dirty) &&
+        set.relationshipLinks.every((e) => !e.dirty)
       );
     },
   };

@@ -8,20 +8,30 @@
 // overwritten in place. The serializer only concerns itself with the bytes <-> entities
 // mapping; the atomic commit lives in syncEngine.ts.
 
-import type { MapDoc, Marker, Person } from '@/domain/types';
+import type { FieldDef, Group, MapDoc, Marker, Person, RelationshipLink } from '@/domain/types';
 
 /** The in-memory entity set the serializer reads from / reconstructs. */
 export interface EntitySet {
   people: Person[];
   maps: MapDoc[];
   markers: Marker[];
+  groups: Group[];
+  relationshipLinks: RelationshipLink[];
+  fieldDefs: FieldDef[];
 }
 
-/** Canonical shard file names — one bucket (000) per type for the skeleton. */
+// Canonical shard file names — one bucket (000) per type for the skeleton. Keyed by
+// `EntityType` (kebab-case, so `SHARD_NAMES[type]` is well-typed in the sync engine) PLUS a
+// `fieldDefs` slot. NOTE: the manifest tracks only the five entity-type shards; the field
+// definitions ride in export/restore + reconcile but are not a manifest EntityType (they
+// describe schema, not entities).
 export const SHARD_NAMES = {
   people: 'people-000.json',
   maps: 'maps-000.json',
   markers: 'markers-000.json',
+  groups: 'groups-000.json',
+  'relationship-links': 'relationship-links-000.json',
+  fieldDefs: 'field-defs-000.json',
 } as const;
 
 const JSON_TYPE = 'application/json';
@@ -39,6 +49,10 @@ export function serializeShards(entities: EntitySet): Record<string, Blob> {
     [SHARD_NAMES.people]: toBlob(entities.people.map(clean)),
     [SHARD_NAMES.maps]: toBlob(entities.maps.map(clean)),
     [SHARD_NAMES.markers]: toBlob(entities.markers.map(clean)),
+    [SHARD_NAMES.groups]: toBlob(entities.groups.map(clean)),
+    [SHARD_NAMES['relationship-links']]: toBlob(entities.relationshipLinks.map(clean)),
+    // fieldDefs carry a `dirty` flag too, so `clean` normalizes them on the way out.
+    [SHARD_NAMES.fieldDefs]: toBlob(entities.fieldDefs.map(clean)),
   };
 }
 
@@ -58,6 +72,9 @@ export async function deserializeShards(shards: Record<string, Blob>): Promise<E
     people: await parseShard<Person>(shards[SHARD_NAMES.people]),
     maps: await parseShard<MapDoc>(shards[SHARD_NAMES.maps]),
     markers: await parseShard<Marker>(shards[SHARD_NAMES.markers]),
+    groups: await parseShard<Group>(shards[SHARD_NAMES.groups]),
+    relationshipLinks: await parseShard<RelationshipLink>(shards[SHARD_NAMES['relationship-links']]),
+    fieldDefs: await parseShard<FieldDef>(shards[SHARD_NAMES.fieldDefs]),
   };
 }
 
