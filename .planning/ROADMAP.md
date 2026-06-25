@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. App keeps working when offline (IndexedDB is the source of truth) and syncs changes back to Drive when reconnected, without a failed/interrupted write corrupting the database
   5. User can install the app as a PWA, export the whole database as a self-contained backup, and restore it on a fresh session with all photos intact (round-trip verified)
 
-**Plans**: 9/10 plans executed
+**Plans**: 10/10 plans complete
 Plans:
 **Wave 1**
 
@@ -58,7 +58,7 @@ Plans:
 **Gap closure** *(from Phase 1 UAT — both independent, parallel)*
 
 - [x] 01-09-PLAN.md — GAP 1 (MAJOR): empty-DB first connect reaches synced — prepareOnOpen() discover-or-bootstrap before reconcile + regression test (STOR-02/04/05)
-- [ ] 01-10-PLAN.md — GAP 2 (MINOR): silent on-load Drive re-acquire on refresh (no popup, token-never-persisted) + test (STOR-01/06)
+- [x] 01-10-PLAN.md — GAP 2 (MINOR): silent on-load Drive re-acquire on refresh (no popup, token-never-persisted) + test (STOR-01/06)
 
 **Research flag:** NEEDS DEEPER RESEARCH — Drive OAuth token lifecycle crossing ~1hr expiry, GIS token-client behavior on a static site, atomic temp-then-swap write pattern for Drive REST v3, and sharded manifest sync reconciliation. Spike the full auth + read/write + token-expiry cycle before committing to PLAN. Lock in: `drive.file` scope only, visible named folder (never `appDataFolder`), sharded manifest + StorageProvider abstraction, `navigator.storage.persist()`, controlled service-worker update flow.
 **UI hint**: yes
@@ -157,7 +157,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Storage Spine & First Person on a Map | 9/10 | In Progress|  |
+| 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 0/TBD | Not started | - |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |

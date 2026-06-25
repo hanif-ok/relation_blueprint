@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: storage-spine-first-person-on-a-map
 status: executing
-stopped_at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-25T04:19:44.334Z"
+stopped_at: Completed 01-10-PLAN.md
+last_updated: "2026-06-25T04:25:37.867Z"
 last_activity: 2026-06-25
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
-  completed_plans: 9
-  percent: 0
+  completed_plans: 10
+  percent: 17
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-24)
 ## Current Position
 
 Phase: 01 (storage-spine-first-person-on-a-map) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-06-25 — Phase 01 execution started
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P06 | 18 | 2 tasks | 19 files |
 | Phase 01 P07 | 8 | 2 tasks | 11 files |
 | Phase 01 P09 | 3 | 2 tasks | 4 files |
+| Phase 01 P10 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Recent decisions affecting current work:
 - [Phase 01]: [Phase 01 P07]: importDb validate-before-write — BackupSchema.parse runs before the single rw transaction, so a corrupt/foreign file leaves the DB untouched (T-07-01/02)
 - [Phase 01]: [Phase 01 P07]: backup media stores only hash->base64; restore recovers each blob's mime from entity MediaRefs, bytes restored byte-for-byte (round-trip property test)
 - [Phase ?]: [Phase 01 P09]: prepareOnOpen() = discover-existing-manifest-or-bootstrap, called before reconcileOnOpen() in onConnected — fixes empty-DB first-connect error and enables silent re-adoption of an existing cloud DB (no second commit point)
+- [Phase ?]: [Phase 01 P10]: Silent on-load Drive re-acquire — App mount effect calls restore() once; restore() self-gates on isConfigured() and fails QUIETLY (no markError/markNeedsReconnect), preserving the token-never-persisted invariant (only mechanism is the in-memory GIS prompt:'' re-grant)
 
 ### Pending Todos
 
@@ -125,6 +127,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-25T04:19:24.392Z
-Stopped at: Roadmap and STATE initialized; REQUIREMENTS.md traceability updated
+Last session: 2026-06-25T04:25:37.856Z
+Stopped at: Completed 01-10-PLAN.md
 Resume file: None
