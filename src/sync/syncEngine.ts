@@ -118,6 +118,34 @@ export class SyncEngine {
   }
 
   /**
+   * Connect-time initialization step that `reconcileOnOpen()` requires: ensure `_manifestFileId`
+   * is resolved BEFORE any reconcile/push runs, using discover-then-bootstrap (GAP 1 / 01-09):
+   *   1. Already resolved (provided id or a prior call) → no-op, idempotent.
+   *   2. Otherwise list the app folder and ADOPT an existing `manifest.json` if present — this is
+   *      the silent re-adoption path (a second device reconnecting to an existing cloud DB). It
+   *      writes NOTHING, so it can never overwrite or duplicate the canonical manifest.
+   *   3. Only when no manifest exists, `bootstrap()` (idempotent) writes the empty v0 manifest +
+   *      three empty shards — the empty-first-connect path.
+   * On an empty connect this makes the subsequent `reconcileOnOpen()` a clean no-op (v0
+   * updatedAt=0 ≤ local watermark 0 ⇒ every type skipped). It does not change the commit
+   * sequence: the atomic manifest swap remains the sole commit point.
+   */
+  async prepareOnOpen(): Promise<void> {
+    if (this._manifestFileId) return; // idempotent — preserve a provided/already-resolved id.
+
+    const entries = await this.provider.list(this.folderId);
+    const existing = entries.find((e) => e.name === MANIFEST_NAME);
+    if (existing) {
+      // Silent re-adoption: a manifest already lives in this folder — adopt its id, write nothing.
+      this._manifestFileId = existing.id;
+      return;
+    }
+
+    // Empty-first-connect: no manifest yet — bootstrap the v0 manifest + empty shards.
+    await this.bootstrap();
+  }
+
+  /**
    * Collect dirty entities and run the atomic commit (RESEARCH ## Pattern 2). On any failure
    * before the manifest overwrite, throws and leaves the durable DB at its last good state.
    */
