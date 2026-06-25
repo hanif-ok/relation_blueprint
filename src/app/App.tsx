@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
 import { upsertMarker } from '@/db/repository';
@@ -38,6 +38,15 @@ export function App() {
     onConnected: sync.onConnected,
     onDisconnected: sync.onDisconnected,
   });
+
+  // Silent on-load Drive re-acquire (GAP 2): once on mount, attempt a no-popup token re-grant so
+  // the connection survives a refresh. restore() self-gates on isConfigured() and fails QUIETLY —
+  // an unconfigured/dev app or a benign no-session stays offline with no popup and no error pill.
+  // Empty deps => fires exactly once on mount; it is fire-and-forget and never blocks render.
+  useEffect(() => {
+    drive.restore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const map = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
   const editingPerson = useLiveQuery<Person | undefined>(
