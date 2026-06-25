@@ -123,10 +123,15 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
       });
       engineRef.current = engine;
 
-      // 1. Reconcile cloud → local once on open (LWW), then 2. subscribe for change-driven push.
+      // 1. Establish/locate the manifest (discover an existing one, else bootstrap a fresh v0),
+      // 2. reconcile cloud → local once on open (LWW), then 3. subscribe for change-driven push.
+      // prepareOnOpen() runs INSIDE the try so any failure still routes to markError below; it
+      // is the missing init step — without it an empty-DB connect reconciles a never-bootstrapped
+      // engine and throws "manifest not initialized" (GAP 1 / 01-09).
       void (async () => {
         markSyncing();
         try {
+          await engine.prepareOnOpen();
           await engine.reconcileOnOpen();
           if (activeRef.current) markSynced();
         } catch (err) {
