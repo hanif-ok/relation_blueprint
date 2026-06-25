@@ -103,3 +103,9 @@ Split the always-cascading `deletePerson` into a marker-only `deleteMarker` (the
 - **Plan 02-03 (browse/view switcher):** pass `openedFrom="list"` from browse rows to surface the brick "Delete {entity}" cascade; the prop + brick path already exist. The list-context cascade E2E lands there.
 - `deleteEntity`/`deleteMarker` are not yet on the `window.__rb` test bridge; the E2E drives them through the UI and asserts survival via `db.people`/`db.markers`. Add them to the bridge if a future plan needs to call them directly from a spec.
 - The "Delete person" copy is currently hardcoded to "person"; the plan notes parameterizing `{type}` for Location/Group/Relationship-link deletion when those profiles open from a list (02-03+).
+
+## Self-Check: PASSED
+
+- Files verified on disk: `tests/db/delete.cascade.test.ts`, `e2e/delete-vs-remove.spec.ts`, `src/db/repository.ts`, `02-02-SUMMARY.md`.
+- Commits verified in git log: `514f5a7` (test RED), `ae2265a` (feat Task 1), `c8c4c66` (feat Task 2), `4ec07b5` (docs SUMMARY).
+- Working tree clean.
