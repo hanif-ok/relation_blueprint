@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { deletePerson, getMedia } from '@/db/repository';
+import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
 import { PhotoGallery } from './PhotoGallery';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
@@ -24,6 +24,15 @@ import styles from './ProfileSidebar.module.css';
 
 export interface ProfileSidebarProps {
   personId: string | null;
+  /**
+   * Which context opened the sidebar (D-11/D-12, S21). Decides the single destructive action:
+   * `'marker'` shows neutral "Remove from map" (marker-only, non-destructive to the entity);
+   * `'list'` shows brick "Delete {entity}" (full cascade). Defaults to `'marker'` until the
+   * browse/list surface (plan 02-03) passes `'list'`.
+   */
+  openedFrom?: 'marker' | 'list';
+  /** The marker to remove when `openedFrom === 'marker'`. Required for "Remove from map". */
+  markerId?: string;
   onClose: () => void;
   onEdit: (personId: string) => void;
   /** Raised after a successful delete so the host can clear selection. */
@@ -37,10 +46,19 @@ function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function ProfileSidebar({ personId, onClose, onEdit, onDeleted }: ProfileSidebarProps) {
+export function ProfileSidebar({
+  personId,
+  openedFrom = 'marker',
+  markerId,
+  onClose,
+  onEdit,
+  onDeleted,
+}: ProfileSidebarProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
+
+  const isMarkerContext = openedFrom === 'marker';
 
   const person = useLiveQuery<Person | undefined>(
     async () => (personId ? db.people.get(personId) : undefined),
@@ -164,29 +182,59 @@ export function ProfileSidebar({ personId, onClose, onEdit, onDeleted }: Profile
           >
             Edit
           </button>
-          <button
-            type="button"
-            className={styles.delete}
-            onClick={() => setConfirmOpen(true)}
-            data-testid="profile-delete"
-          >
-            Delete
-          </button>
+          {/* Exactly ONE destructive action, by context (S21): neutral "Remove from map"
+              (marker-only) OR brick "Delete {entity}" (full cascade). Never both. */}
+          {isMarkerContext ? (
+            <button
+              type="button"
+              className={styles.remove}
+              onClick={() => setConfirmOpen(true)}
+              data-testid="profile-remove"
+            >
+              Remove from map
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.delete}
+              onClick={() => setConfirmOpen(true)}
+              data-testid="profile-delete"
+            >
+              Delete person
+            </button>
+          )}
         </div>
       </aside>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title="Delete this person?"
-        body={`${person.name} will be removed from the map and your database. This can't be undone unless you restore a backup.`}
-        confirmLabel="Delete person"
-        cancelLabel="Cancel"
-        onConfirm={() => {
-          const id = person.id;
-          void deletePerson(id).then(() => onDeleted(id));
-        }}
-      />
+      {isMarkerContext ? (
+        // Marker context: neutral, non-destructive to the entity — deletes only the marker.
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Remove from this map?"
+          body={`${person.name} stays in your database and lists — only the marker on this map is removed.`}
+          confirmLabel="Remove from map"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            if (markerId) void deleteMarker(markerId).then(() => onClose());
+            else onClose();
+          }}
+        />
+      ) : (
+        // List context: brick, full cascade — entity + all markers + media GC.
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Delete this person?"
+          body={`${person.name} will be removed from your database and every map it appears on. This can't be undone unless you restore a backup.`}
+          confirmLabel="Delete person"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            const id = person.id;
+            void deleteEntity('people', id).then(() => onDeleted(id));
+          }}
+        />
+      )}
     </>
   );
 }
