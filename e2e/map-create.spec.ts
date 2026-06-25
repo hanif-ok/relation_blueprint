@@ -8,9 +8,12 @@ import { expect, test } from '@playwright/test';
  * (the Stage). Each test starts from a clean IndexedDB so it is order-independent.
  */
 
-// A 2x2 PNG (red square), base64-encoded — small, valid, image/png.
+// A VALID 8x8 RGB PNG. The map upload routes through `storeMedia({ kind: 'map' })` →
+// `capGalleryImage`, which decodes via `createImageBitmap` — and `createImageBitmap` REJECTS
+// the old 2x2 test PNG ("source image could not be decoded"). This 8x8 decodes cleanly
+// (the same fixture profile.spec uses for its gallery-upload path).
 const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEYBxVSF8FAGGmA1u4d5n5AAAAAElFTkSuQmCC';
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR4nGNowAEYhpYEAILzYAGc7g8kAAAAAElFTkSuQmCC';
 
 async function resetDb(page: import('@playwright/test').Page) {
   await page.evaluate(async () => {

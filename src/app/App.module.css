@@ -97,12 +97,15 @@
   flex-direction: column;
 }
 
-/* Temporary placeholder for entity views until Task 2 wires the BrowseList. */
-.placeholder {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-muted, #6b6358);
-  font-family: var(--font-body, 'Inter', sans-serif);
+/* Visually-hidden live region for the Show-on-map DOM→canvas announcement. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

@@ -67,6 +67,12 @@ async function clickFirstMarker(page: import('@playwright/test').Page) {
   });
 }
 
+/** Open the Person create form via the top-bar "+ New ▾" menu (the generalized "+ Person"). */
+async function openCreatePerson(page: import('@playwright/test').Page) {
+  await page.getByTestId('new-entity-trigger').click();
+  await page.getByTestId('new-entity-people').click();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
   await resetDb(page);
@@ -74,9 +80,13 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 });
 
-test('+ Person is disabled until a map exists', async ({ page }) => {
-  await expect(page.getByTestId('add-person')).toBeDisabled();
-  await expect(page.getByTestId('add-person')).toHaveAttribute('title', 'Upload a map first');
+test('the "+ New" menu offers Person and opens the create form', async ({ page }) => {
+  // The Phase-1 "+ Person" became the always-available "+ New ▾" create menu (U5, DATA-01);
+  // it is no longer gated on a map existing.
+  await page.getByTestId('new-entity-trigger').click();
+  await expect(page.getByTestId('new-entity-people')).toBeVisible();
+  await page.getByTestId('new-entity-people').click();
+  await expect(page.getByTestId('entity-form-title')).toHaveText('New person');
 });
 
 test('empty name disables save and shows the validation message', async ({ page }) => {
@@ -84,9 +94,9 @@ test('empty name disables save and shows the validation message', async ({ page 
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 
-  await page.getByTestId('add-person').click();
+  await openCreatePerson(page);
   await expect(page.getByText('Add a name so you can find this person.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save person' })).toBeDisabled();
+  await expect(page.getByTestId('entity-form-save')).toBeDisabled();
 });
 
 test('create → profile → edit → remove from map (entity survives)', async ({ page }) => {
@@ -94,8 +104,8 @@ test('create → profile → edit → remove from map (entity survives)', async 
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 
-  // Create a person with all DATA-02 fields via the form.
-  await page.getByTestId('add-person').click();
+  // Create a person with all DATA-02 fields via the generalized entity form.
+  await openCreatePerson(page);
   await page.getByTestId('field-name').fill('Ada Lovelace');
   await page.getByTestId('field-phone').fill('555-0100');
   await page.getByTestId('field-description').fill('First programmer');
@@ -103,7 +113,7 @@ test('create → profile → edit → remove from map (entity survives)', async 
   await tagInput.fill('mathematician');
   await tagInput.press('Enter');
   await page.getByTestId('field-notes').fill('Notes about Ada.');
-  await page.getByRole('button', { name: 'Save person' }).click();
+  await page.getByTestId('entity-form-save').click();
 
   // The created person was placed as a marker; select it to open the profile.
   await clickFirstMarker(page);
@@ -116,10 +126,10 @@ test('create → profile → edit → remove from map (entity survives)', async 
   await expect(page.getByTestId('profile-tags')).toContainText('mathematician');
   await expect(page.getByTestId('profile-notes')).toHaveText('Notes about Ada.');
 
-  // Edit: change the phone and save.
+  // Edit: change the phone and save (edit save is the neutral "Save changes").
   await page.getByTestId('profile-edit').click();
   await page.getByTestId('field-phone').fill('555-9999');
-  await page.getByRole('button', { name: 'Save person' }).click();
+  await page.getByTestId('entity-form-save').click();
   await expect(page.getByTestId('profile-phone')).toHaveText('555-9999');
 
   // Marker context shows the neutral "Remove from map" action (S21) — NOT a cascade delete.
@@ -150,9 +160,9 @@ test('empty gallery shows "No photos yet." in the profile', async ({ page }) => 
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 
-  await page.getByTestId('add-person').click();
+  await openCreatePerson(page);
   await page.getByTestId('field-name').fill('Grace Hopper');
-  await page.getByRole('button', { name: 'Save person' }).click();
+  await page.getByTestId('entity-form-save').click();
 
   await clickFirstMarker(page);
   const sidebar = page.getByTestId('profile-sidebar');
@@ -170,7 +180,7 @@ test('adding a gallery photo in the form renders it in the profile gallery', asy
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 
-  await page.getByTestId('add-person').click();
+  await openCreatePerson(page);
   await page.getByTestId('field-name').fill('Radia Perlman');
 
   // Upload a real decodable PNG through the multi-photo gallery input; the browser
@@ -186,7 +196,7 @@ test('adding a gallery photo in the form renders it in the profile gallery', asy
     timeout: 15_000,
   });
 
-  await page.getByRole('button', { name: 'Save person' }).click();
+  await page.getByTestId('entity-form-save').click();
 
   await clickFirstMarker(page);
   const sidebar = page.getByTestId('profile-sidebar');

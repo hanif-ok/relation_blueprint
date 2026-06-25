@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { upsertMarker } from '@/db/repository';
+import { deleteEntity, upsertMarker } from '@/db/repository';
 import type { Group, MapDoc, Person, RelationshipLink } from '@/domain/types';
 import styles from './App.module.css';
 import { MapView } from '@/features/person-map/MapView';
+import { BrowseList } from '@/features/browse/BrowseList';
+import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import { ViewSwitcher, type ViewKey } from '@/features/nav/ViewSwitcher';
 import { NewEntityMenu } from '@/features/nav/NewEntityMenu';
 import { EntityForm, type EntityFormType } from '@/features/entity-form/EntityForm';
@@ -37,6 +39,16 @@ export function App() {
 
   // The open entity form: which type, and the id being edited (null = create).
   const [form, setForm] = useState<{ type: EntityFormType; editingId: string | null } | null>(null);
+
+  // Pending delete from a browse-row overflow menu: which entity, with its display name for copy.
+  const [confirmDelete, setConfirmDelete] = useState<{
+    type: ProfileEntityType;
+    id: string;
+    name: string;
+  } | null>(null);
+
+  // aria-live announcement for "Show on map" (the DOM-accessible path to a canvas action).
+  const [announce, setAnnounce] = useState('');
 
   // Drive connect/reconnect/status chrome wired to the atomic SyncEngine.
   const sync = useSyncEngine();
@@ -105,6 +117,44 @@ export function App() {
     }
   }
 
+  // --- Browse-list handlers (Task 2) ---------------------------------------------------
+
+  /** A browse row opens the profile in LIST context (D-16). */
+  function openFromList(type: ProfileEntityType, id: string) {
+    setProfile({ type, id, openedFrom: 'list' });
+  }
+
+  /** Jump to the Map view and select a person's marker, announced for AT (Show on map). */
+  async function showOnMap(id: string) {
+    const person = await db.people.get(id);
+    setActiveView('map');
+    setProfile({ type: 'people', id, openedFrom: 'marker' });
+    setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
+  }
+
+  /** Resolve an entity's display name for the delete-confirm copy, then open the confirm. */
+  async function requestDelete(type: ProfileEntityType, id: string) {
+    const table =
+      type === 'people'
+        ? db.people
+        : type === 'maps'
+          ? db.maps
+          : type === 'groups'
+            ? db.groups
+            : db.relationshipLinks;
+    const entity = await table.get(id);
+    setConfirmDelete({ type, id, name: entity?.name ?? '' });
+  }
+
+  const deleteSingular = confirmDelete
+    ? ({
+        people: 'person',
+        maps: 'location',
+        groups: 'group',
+        'relationship-links': 'relationship-link',
+      } as const)[confirmDelete.type]
+    : '';
+
   return (
     <div className={styles.app}>
       <header className={styles.topBar}>
@@ -141,11 +191,22 @@ export function App() {
               }
             />
           ) : (
-            <section className={styles.placeholder} data-testid={`browse-${activeView}`}>
-              <p>Browse list for {activeView} (wired in Task 2).</p>
-            </section>
+            <BrowseList
+              key={activeView}
+              type={activeView as EntityView}
+              onOpen={(id) => openFromList(activeView as EntityView, id)}
+              onEdit={(id) => openEdit(activeView as EntityView, id)}
+              onDelete={(id) => void requestDelete(activeView as EntityView, id)}
+              onShowOnMap={(id) => void showOnMap(id)}
+              onCreate={() => openCreate(activeView as EntityView)}
+            />
           )}
         </main>
+      </div>
+
+      {/* Visually-hidden live region for the Show-on-map DOM→canvas bridge (Accessibility). */}
+      <div className={styles.srOnly} aria-live="polite" role="status">
+        {announce}
       </div>
 
       <ProfileSidebar
@@ -162,17 +223,40 @@ export function App() {
         }}
       />
 
-      {form && (
-        <EntityForm
-          open={!!form}
-          onOpenChange={(open) => {
-            if (!open) setForm(null);
-          }}
-          entityType={form.type}
-          entity={form.editingId ? editingEntity : null}
-          onSaved={(id) => void handleSaved(id)}
-        />
-      )}
+      {/* Always-mounted so Radix can animate/clean up its overlay on close (restoring body
+          pointer-events). `open` is the single source of visibility; `form` carries the args. */}
+      <EntityForm
+        open={!!form}
+        onOpenChange={(open) => {
+          if (!open) setForm(null);
+        }}
+        entityType={form?.type ?? 'people'}
+        entity={form?.editingId ? editingEntity : null}
+        onSaved={(id) => void handleSaved(id)}
+      />
+
+      {/* Browse-row "Delete {entity}" — brick, full cascade (S21). */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
+        title={`Delete this ${deleteSingular}?`}
+        body={
+          confirmDelete
+            ? `${confirmDelete.name} will be removed from your database and every map it appears on. This can't be undone unless you restore a backup.`
+            : ''
+        }
+        confirmLabel={`Delete ${deleteSingular}`}
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          if (!confirmDelete) return;
+          const { type, id } = confirmDelete;
+          void deleteEntity(type, id).then(() => {
+            if (profile?.id === id) setProfile(null);
+          });
+        }}
+      />
 
       <UpdateToast />
       <InstallPrompt />
