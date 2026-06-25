@@ -101,42 +101,116 @@ export async function updatePerson(id: string, patch: UpdatePersonPatch): Promis
   return updated;
 }
 
-export async function deletePerson(id: string): Promise<void> {
-  // Cascade: removing a person removes every marker that placed them on a map, and
-  // refcount-sweeps the media blobs the person referenced so they don't accumulate forever
-  // (WR-02). Media is content-addressed and may be SHARED across entities, so a blob is deleted
-  // only when NO surviving entity (any person's photo/gallery, any map background) still
-  // references its hash. The whole sweep is one rw transaction so a failure rolls back cleanly.
-  await db.transaction('rw', db.people, db.markers, db.maps, db.media, async () => {
-    const victim = await db.people.get(id);
-    await db.people.delete(id);
-    await db.markers.where('personId').equals(id).delete();
+/** The entity families `deleteEntity` can cascade. Markers are deleted via `deleteMarker`. */
+export type DeletableEntityType = 'people' | 'maps' | 'groups' | 'relationship-links';
 
-    if (victim) {
-      // Hashes the deleted person referenced — candidates for GC.
-      const candidates = new Set<string>();
-      if (victim.photo) candidates.add(victim.photo.hash);
-      for (const g of victim.gallery) candidates.add(g.hash);
+/** True when a value looks like a content-addressed MediaRef (carries a string `hash`). */
+function isMediaRef(value: unknown): value is MediaRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { hash?: unknown }).hash === 'string'
+  );
+}
 
-      if (candidates.size > 0) {
-        // Build the set of hashes STILL referenced by any surviving entity.
-        const stillReferenced = new Set<string>();
-        const ref = (r?: MediaRef) => {
-          if (r) stillReferenced.add(r.hash);
-        };
-        for (const p of await db.people.toArray()) {
-          ref(p.photo);
-          for (const g of p.gallery) ref(g);
-        }
-        for (const m of await db.maps.toArray()) ref(m.background);
-
-        for (const hash of candidates) {
-          if (!stillReferenced.has(hash)) await db.media.delete(hash);
-        }
-      }
+/**
+ * Every media hash an entity references — across the universal spine (`photo`/`gallery`/the
+ * map `background`) AND any Photo-typed custom-field VALUE (a MediaRef stored in `custom`).
+ * One source of truth used by BOTH the GC-candidate pass and the still-referenced sweep, so
+ * the two can never drift and wrongly collect a shared blob (02-PATTERNS media-GC generalization).
+ */
+function collectEntityMediaHashes(entity: {
+  photo?: MediaRef;
+  gallery?: MediaRef[];
+  background?: MediaRef;
+  custom?: CustomValues;
+}): string[] {
+  const hashes: string[] = [];
+  if (entity.photo) hashes.push(entity.photo.hash);
+  if (entity.gallery) for (const g of entity.gallery) hashes.push(g.hash);
+  if (entity.background) hashes.push(entity.background.hash);
+  if (entity.custom) {
+    for (const value of Object.values(entity.custom)) {
+      if (isMediaRef(value)) hashes.push(value.hash);
     }
-  });
-  emit({ entityType: 'people', entityId: id, op: 'delete' });
+  }
+  return hashes;
+}
+
+/**
+ * Marker-only delete — the map-level "Remove from map" action (D-12). Removes ONLY that marker
+ * row; the referenced entity and any OTHER markers survive, and NO media is collected. This is
+ * the user-flagged correctness fix: removing someone from a map must not delete them from the DB.
+ */
+export async function deleteMarker(id: string): Promise<void> {
+  await db.markers.delete(id);
+  emit({ entityType: 'markers', entityId: id, op: 'delete' });
+}
+
+const DELETABLE_TABLES: Record<DeletableEntityType, EntityTableHandle> = {
+  people: () => db.people,
+  maps: () => db.maps,
+  groups: () => db.groups,
+  'relationship-links': () => db.relationshipLinks,
+};
+
+type EntityTableHandle = () =>
+  | typeof db.people
+  | typeof db.maps
+  | typeof db.groups
+  | typeof db.relationshipLinks;
+
+/**
+ * Generalized cascade delete — the list-level "Delete {entity}" action (D-12). In ONE rw
+ * transaction over every entity table + markers + media: remove the entity, cascade-delete its
+ * markers (people: by `personId`; maps: by `mapId`; groups/relationship-links have none), then
+ * refcount-sweep media. A candidate hash is GC'd ONLY when NO surviving entity of ANY type still
+ * references it via photo/gallery/background OR a custom Photo-field value — so a blob shared
+ * across types is never wrongly collected (threat T-02-03). The single rw transaction rolls back
+ * cleanly on failure. `deletePerson` delegates here for back-compat.
+ */
+export async function deleteEntity(entityType: DeletableEntityType, id: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.media],
+    async () => {
+      const victim = await DELETABLE_TABLES[entityType]().get(id);
+      await DELETABLE_TABLES[entityType]().delete(id);
+
+      // Cascade markers for the spatial types only.
+      if (entityType === 'people') await db.markers.where('personId').equals(id).delete();
+      else if (entityType === 'maps') await db.markers.where('mapId').equals(id).delete();
+
+      if (!victim) return;
+
+      const candidates = new Set<string>(collectEntityMediaHashes(victim));
+      if (candidates.size === 0) return;
+
+      // Hashes STILL referenced by any surviving entity of ANY type (all five families' spine
+      // media + custom Photo values). markers carry no media, so they are not scanned.
+      const stillReferenced = new Set<string>();
+      const add = (hashes: string[]) => {
+        for (const h of hashes) stillReferenced.add(h);
+      };
+      for (const p of await db.people.toArray()) add(collectEntityMediaHashes(p));
+      for (const m of await db.maps.toArray()) add(collectEntityMediaHashes(m));
+      for (const g of await db.groups.toArray()) add(collectEntityMediaHashes(g));
+      for (const l of await db.relationshipLinks.toArray()) add(collectEntityMediaHashes(l));
+
+      for (const hash of candidates) {
+        if (!stillReferenced.has(hash)) await db.media.delete(hash);
+      }
+    },
+  );
+  emit({ entityType, entityId: id, op: 'delete' });
+}
+
+/**
+ * Delete a person + cascade (DATA-04). Retained as a thin delegate to the generalized
+ * `deleteEntity('people', ...)` so existing callers/tests keep working unchanged.
+ */
+export async function deletePerson(id: string): Promise<void> {
+  return deleteEntity('people', id);
 }
 
 export async function getPerson(id: string): Promise<Person | undefined> {
