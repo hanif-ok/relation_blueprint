@@ -19,7 +19,10 @@ import { deserializeShards, SHARD_NAMES } from '@/sync/serializer';
 import { readManifest } from '@/sync/manifest';
 import { InMemoryProvider } from '@/storage/memory/InMemoryProvider';
 import { __resetWriteStatus } from '@/sync/writeStatus';
-import { __resetForTests as resetSyncStatus } from '@/features/connect/syncStatusStore';
+import {
+  __resetForTests as resetSyncStatus,
+  getSnapshot,
+} from '@/features/connect/syncStatusStore';
 import { createPerson } from '@/db/repository';
 import { db } from '@/db/schema';
 
@@ -64,6 +67,73 @@ describe('useSyncEngine wiring (regression: SyncEngine is actually booted on con
 
     // The engine reconciles cloud → local exactly once on connect.
     await waitFor(() => expect(reconcileSpy).toHaveBeenCalledTimes(1));
+  });
+
+  it('reaches a clean synced state on an EMPTY-DB connect (GAP 1: no markError)', async () => {
+    // The bug: onConnected reconciled on a never-bootstrapped engine, so manifestFileId() threw
+    // and markError fired ("sync failed, please retry"). prepareOnOpen() must establish the
+    // manifest first so the empty connect resolves to 'synced' (error===null, lastSyncedAt set).
+    const provider = new InMemoryProvider();
+    const folderId = await provider.ensureFolder(APP_FOLDER);
+
+    const { result } = renderHook(() =>
+      useSyncEngine({ provider, debounceMs: TEST_DEBOUNCE_MS }),
+    );
+
+    await act(async () => {
+      result.current.onConnected(folderId);
+    });
+
+    // markSynced ran (lastSyncedAt set, syncing cleared) and markError did NOT (error stays null).
+    await waitFor(() => {
+      const s = getSnapshot();
+      expect(s.error).toBeNull();
+      expect(s.syncing).toBe(false);
+      expect(s.lastSyncedAt).not.toBeNull();
+    });
+
+    // prepareOnOpen bootstrapped exactly one canonical manifest for the empty DB.
+    const entries = await provider.list(folderId);
+    expect(entries.filter((e) => e.name === 'manifest.json')).toHaveLength(1);
+  });
+
+  it('re-adopts an existing cloud DB on reconnect without duplicating manifest.json', async () => {
+    // A second connect against a folder that already holds a manifest must ADOPT it, never
+    // re-bootstrap a second manifest over the canonical one (T-01-09-01 tampering mitigation).
+    const provider = new InMemoryProvider();
+    const folderId = await provider.ensureFolder(APP_FOLDER);
+
+    const { result } = renderHook(() =>
+      useSyncEngine({ provider, debounceMs: TEST_DEBOUNCE_MS }),
+    );
+
+    // First connect: establishes the manifest, then disconnect.
+    await act(async () => {
+      result.current.onConnected(folderId);
+    });
+    await waitFor(() => {
+      const s = getSnapshot();
+      expect(s.error).toBeNull();
+      expect(s.lastSyncedAt).not.toBeNull();
+    });
+    await act(async () => {
+      result.current.onDisconnected();
+    });
+
+    // Reset status, then a fresh connect against the SAME folder must re-adopt, not re-bootstrap.
+    resetSyncStatus();
+    await act(async () => {
+      result.current.onConnected(folderId);
+    });
+    await waitFor(() => {
+      const s = getSnapshot();
+      expect(s.error).toBeNull();
+      expect(s.lastSyncedAt).not.toBeNull();
+    });
+
+    // Still exactly one canonical manifest — no duplicate created by the second connect.
+    const entries = await provider.list(folderId);
+    expect(entries.filter((e) => e.name === 'manifest.json')).toHaveLength(1);
   });
 
   it('pushes a local repository write to the provider as a shard (STOR-04)', async () => {
