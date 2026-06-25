@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "The FIRST Google Drive sync on an EMPTY database fails with 'sync failed, please retry' on the status chip. Once user creates a person/map and sync runs again, it succeeds."
 created: 2026-06-25T00:00:00Z
-updated: 2026-06-25T00:30:00Z
+updated: 2026-06-25T04:31:16Z
+resolved_by: "01-09-PLAN.md — SyncEngine.prepareOnOpen() discover-or-bootstrap before reconcileOnOpen(); empty-DB connect now reaches 'synced'. Regression-tested green. Commits 69ff106..5055d33."
 ---
 
 ## Current Focus

@@ -1,11 +1,11 @@
 ---
-status: diagnosed
+status: resolved
 phase: 01-storage-spine-first-person-on-a-map
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md, 01-06-SUMMARY.md, 01-07-SUMMARY.md, 01-08-SUMMARY.md]
 mode: mvp
 user_story: "As a single curator of a private people-and-places dataset, I want to connect my own Google Drive, create a person, place them on an image-map, open their profile, and export then restore my whole database, so that I own my entire database in my own cloud with no server and can trust the storage spine before I put real data in it."
 started: 2026-06-24T23:02:02Z
-updated: 2026-06-24T23:31:16Z
+updated: 2026-06-25T04:31:16Z
 ---
 
 ## Current Test
@@ -22,7 +22,8 @@ result: pass
 
 ### 2. Connect your Google Drive — drive.file-only consent + visible folder (STOR-01, T-01-01)
 expected: Click the status pill / Connect Drive and sign in. The OAuth consent screen lists ONLY "files this app creates" (drive.file) — NEVER "See and manage all of your Google Drive files". After granting, the pill becomes "Drive – Synced" and a visible "Relation Blueprint" folder appears at drive.google.com.
-result: issue
+result: resolved
+resolution: "Empty-state first-sync defect fixed in 01-09 (SyncEngine.prepareOnOpen discover-or-bootstrap before reconcileOnOpen); an empty-DB connect now reaches 'synced', regression-tested green (error===null, lastSyncedAt set). The live drive.file consent-screen wording clause of this test remains a human_verification item in 01-VERIFICATION.md (needs a real Google Client ID per SETUP.md)."
 reported: "sync failed, please retry message on chip"
 severity: major
 clarification: "User later determined the error is triggered by EMPTY STATE — connecting / first-syncing before any person/map exists shows 'sync failed, please retry' on the chip. Connect, drive.file consent, and folder creation all work; sync succeeds once data exists (Test 7 passed). Defect is in the empty / first-sync (bootstrap) push path, not auth. Downgraded blocker → major: spine works once data exists, but a clean first-connect on an empty DB shows a scary error that undermines trust in the storage spine."
@@ -89,7 +90,8 @@ note: "User: 'the media is unsorted'. Out of scope for Phase 1 — PROF-02 specs
 
 total: 14
 passed: 13
-issues: 1
+issues: 0
+resolved: 1
 pending: 0
 skipped: 0
 blocked: 0
@@ -98,7 +100,8 @@ notes: 5   # passing tests with out-of-scope/minor observations: T4 (marker resi
 ## Gaps
 
 - truth: "Connecting Google Drive before adding data reaches a clean synced state — an empty / first sync must not error. The 'Relation Blueprint' folder is created on connect and populated once data exists."
-  status: failed
+  status: resolved
+  resolved_by: "01-09 — SyncEngine.prepareOnOpen() discover-or-bootstrap before reconcileOnOpen(); empty-DB connect reaches 'synced' (no markError). Regression test asserts error===null + lastSyncedAt set, and exactly one manifest.json on re-adoption. Green gate: tsc + 92/92 vitest + build."
   reason: "User reported: 'sync failed, please retry message on chip'. Later clarified: the error is triggered by EMPTY STATE — the first sync before any person/map exists fails with 'sync failed, please retry'. Connect / drive.file consent / folder-creation all work; sync succeeds once data exists (Test 7 passed). Likely defect in the empty / first-sync bootstrap push path (Plan 01-05 SyncEngine.bootstrap/push or DriveProvider handling of empty/zero-entity shards), NOT auth."
   severity: major
   test: 2
@@ -117,7 +120,8 @@ notes: 5   # passing tests with out-of-scope/minor observations: T4 (marker resi
   debug_session: ".planning/debug/empty-state-first-sync.md"
 
 - truth: "After a page refresh, Drive stays connected without a manual reconnect — the app silently re-acquires a token on load (no popup) when a Google session exists."
-  status: failed
+  status: resolved
+  resolved_by: "01-10 — one on-load silent restore() (GIS prompt:'') gated by isConfigured(); reconnects across reloads with no popup, fails quietly on no-session (no error/reconnect pill). Token never persisted — test asserts indexedDB.open not called + localStorage empty."
   reason: "User reported during an otherwise-passing offline test: 'on refresh, drive gets unconnected'. By design the GIS access token is in-memory only and never persisted (token-never-persisted invariant), so reload drops it. The app currently requires a manual Reconnect click after every refresh instead of attempting a silent re-acquire (GIS prompt:''). UX papercut, not a security defect. Fix = silent re-acquisition on load; MUST NOT persist the token."
   severity: minor
   test: 11

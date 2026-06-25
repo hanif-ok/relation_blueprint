@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "After a page refresh, the app shows Google Drive as disconnected and the user must click Reconnect on every reload. The gap is that the app does not attempt a SILENT token re-acquisition on load, so the connection does not survive a refresh."
 created: 2026-06-25T00:00:00Z
-updated: 2026-06-25T00:00:00Z
+updated: 2026-06-25T04:31:16Z
+resolved_by: "01-10-PLAN.md — on-load silent restore() via GIS prompt:'' (token never persisted); survives reload, fails quietly on no-session. Regression-tested green. Commits c1c73f2..5b3a7e3."
 ---
 
 ## Current Focus
