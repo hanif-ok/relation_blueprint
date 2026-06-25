@@ -63,6 +63,13 @@ export interface ConnectDriveApi {
   connect: () => void;
   /** Revoke the token and reset the connection state. */
   disconnect: () => void;
+  /**
+   * Silent on-load re-acquire (no popup). Re-establishes the Drive session across reloads via the
+   * GIS `prompt:''` path when a grant is still active. Fails QUIETLY — on no active grant (or any
+   * error) it leaves the status at its not-connected default WITHOUT surfacing an error/reconnect
+   * pill. Persists NOTHING (token-never-persisted invariant). Safe to call once on App mount.
+   */
+  restore: () => void;
 }
 
 export function useConnectDrive(options: UseConnectDriveOptions = {}): ConnectDriveApi {
@@ -94,9 +101,35 @@ export function useConnectDrive(options: UseConnectDriveOptions = {}): ConnectDr
     }
   }, [onConnected]);
 
+  const runRestore = useCallback(async () => {
+    // Mirrors runConnect's SUCCESS tail but is SILENT (prompt:'') and SELF-SILENCING on failure.
+    // Gate inside restore (not App) so a fresh, unconfigured visit stays quietly not-connected —
+    // never the "not configured" error pill that the user-gesture runConnect surfaces.
+    if (!isConfigured()) return;
+    try {
+      await driveConnect({ silent: true });
+      const provider = getActiveProvider();
+      const folderId = await provider.ensureFolder(APP_FOLDER_NAME);
+      markConnected();
+      onConnected?.(folderId);
+    } catch (err) {
+      // QUIET failure: a silent restore that fails just means "no live session". Leave the status
+      // at its not-connected default — do NOT markError() or markNeedsReconnect(), so no error or
+      // reconnect pill appears on a benign fresh visit (the WR-05 routing is gesture-only). This
+      // writes NOTHING to storage; the only restore mechanism is the in-memory GIS re-acquire.
+      if (typeof console !== 'undefined') {
+        console.debug('Drive silent restore skipped (no active session):', err);
+      }
+    }
+  }, [onConnected]);
+
   const connect = useCallback(() => {
     void runConnect();
   }, [runConnect]);
+
+  const restore = useCallback(() => {
+    void runRestore();
+  }, [runRestore]);
 
   const disconnect = useCallback(() => {
     void (async () => {
@@ -106,7 +139,7 @@ export function useConnectDrive(options: UseConnectDriveOptions = {}): ConnectDr
     })();
   }, [onDisconnected]);
 
-  return { status, connect, disconnect };
+  return { status, connect, disconnect, restore };
 }
 
 export interface ConnectDriveProps {
