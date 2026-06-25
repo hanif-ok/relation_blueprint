@@ -15,17 +15,24 @@ import { db } from '@/db/schema';
 import type { Person } from '@/domain/types';
 
 function person(id: string, name: string, updatedAt: number, dirty = false): Person {
-  return { id, name, tags: [], gallery: [], updatedAt, dirty };
+  return { id, name, tags: [], gallery: [], custom: {}, updatedAt, dirty };
 }
 
 async function clearDb(): Promise<void> {
-  await db.transaction('rw', db.people, db.maps, db.markers, db.media, db.meta, async () => {
-    await db.people.clear();
-    await db.maps.clear();
-    await db.markers.clear();
-    await db.media.clear();
-    await db.meta.clear();
-  });
+  await db.transaction(
+    'rw',
+    [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.fieldDefs, db.media, db.meta],
+    async () => {
+      await db.people.clear();
+      await db.maps.clear();
+      await db.markers.clear();
+      await db.groups.clear();
+      await db.relationshipLinks.clear();
+      await db.fieldDefs.clear();
+      await db.media.clear();
+      await db.meta.clear();
+    },
+  );
 }
 
 beforeEach(clearDb);

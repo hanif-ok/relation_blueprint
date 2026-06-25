@@ -20,17 +20,51 @@ import { base64ToBytes } from './base64';
 
 const DEFAULT_MIME = 'application/octet-stream';
 
-/** Build a hash -> mime lookup from every MediaRef carried on the bundle's entities. */
+/** True when a CustomValue is a MediaRef (a Photo-field value), not a scalar/array/null. */
+function isMediaRef(value: unknown): value is MediaRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { hash?: unknown }).hash === 'string' &&
+    typeof (value as { mime?: unknown }).mime === 'string'
+  );
+}
+
+/** Build a hash -> mime lookup from every MediaRef carried on the bundle's entities — spine
+ * photos/galleries/backgrounds AND any MediaRef stored as a custom Photo-field value. */
 function collectMimes(bundle: Backup): Map<string, string> {
   const mimes = new Map<string, string>();
   const add = (ref?: MediaRef) => {
     if (ref && !mimes.has(ref.hash)) mimes.set(ref.hash, ref.mime);
   };
+  const addCustom = (custom: Record<string, unknown>) => {
+    for (const value of Object.values(custom)) {
+      if (isMediaRef(value)) add(value);
+    }
+  };
+
   for (const person of bundle.entities.people) {
     add(person.photo);
     for (const g of person.gallery) add(g);
+    addCustom(person.custom);
   }
-  for (const map of bundle.entities.maps) add(map.background);
+  for (const map of bundle.entities.maps) {
+    add(map.background);
+    add(map.photo);
+    for (const g of map.gallery) add(g);
+    addCustom(map.custom);
+  }
+  for (const group of bundle.entities.groups) {
+    add(group.photo);
+    for (const g of group.gallery) add(g);
+    addCustom(group.custom);
+  }
+  for (const link of bundle.entities['relationship-links']) {
+    add(link.photo);
+    for (const g of link.gallery) add(g);
+    addCustom(link.custom);
+  }
   return mimes;
 }
 
@@ -62,20 +96,30 @@ export async function importDb(file: Blob): Promise<void> {
   // re-uploading reintroduced blobs, leaving the cloud manifest pointing at `media/<hash>` files
   // that no device ever re-pushes (unrecoverable photos). Clearing it forces the next push to
   // re-validate every referenced blob against the cloud.
-  await db.transaction('rw', db.people, db.maps, db.markers, db.media, db.meta, async () => {
-    await Promise.all([
-      db.people.clear(),
-      db.maps.clear(),
-      db.markers.clear(),
-      db.media.clear(),
-    ]);
-    await Promise.all([
-      db.people.bulkPut(bundle.entities.people),
-      db.maps.bulkPut(bundle.entities.maps),
-      db.markers.bulkPut(bundle.entities.markers),
-      db.media.bulkPut(mediaRecords),
-    ]);
-    // Drop the stale media-sync watermark so a restore can re-push the bundle's media.
-    await db.meta.delete('syncedMediaHashes');
-  });
+  await db.transaction(
+    'rw',
+    [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.fieldDefs, db.media, db.meta],
+    async () => {
+      await Promise.all([
+        db.people.clear(),
+        db.maps.clear(),
+        db.markers.clear(),
+        db.groups.clear(),
+        db.relationshipLinks.clear(),
+        db.fieldDefs.clear(),
+        db.media.clear(),
+      ]);
+      await Promise.all([
+        db.people.bulkPut(bundle.entities.people),
+        db.maps.bulkPut(bundle.entities.maps),
+        db.markers.bulkPut(bundle.entities.markers),
+        db.groups.bulkPut(bundle.entities.groups),
+        db.relationshipLinks.bulkPut(bundle.entities['relationship-links']),
+        db.fieldDefs.bulkPut(bundle.fieldDefs),
+        db.media.bulkPut(mediaRecords),
+      ]);
+      // Drop the stale media-sync watermark so a restore can re-push the bundle's media.
+      await db.meta.delete('syncedMediaHashes');
+    },
+  );
 }

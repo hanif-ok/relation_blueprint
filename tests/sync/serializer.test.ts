@@ -10,7 +10,7 @@ import { InMemoryProvider } from '@/storage/memory/InMemoryProvider';
 import type { MapDoc, Manifest, Marker, Person } from '@/domain/types';
 
 function person(id: string, name: string): Person {
-  return { id, name, tags: ['a', 'b'], gallery: [], updatedAt: 100, dirty: false };
+  return { id, name, tags: ['a', 'b'], gallery: [], custom: {}, updatedAt: 100, dirty: false };
 }
 function map(id: string): MapDoc {
   return {
@@ -19,6 +19,8 @@ function map(id: string): MapDoc {
     background: { hash: `h-${id}`, mime: 'image/webp' },
     width: 800,
     height: 600,
+    gallery: [],
+    custom: {},
     updatedAt: 100,
     dirty: false,
   };
@@ -37,6 +39,9 @@ describe('serializeShards / deserializeShards (STOR-02)', () => {
       people: [person('p1', 'Alice'), person('p2', 'Bob')],
       maps: [map('m1')],
       markers: [marker('k1', 'm1', 'p1'), marker('k2', 'm1', 'p2')],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
     };
 
     const shards = serializeShards(entities);
@@ -45,12 +50,22 @@ describe('serializeShards / deserializeShards (STOR-02)', () => {
     expect(restored).toEqual(entities);
   });
 
-  it('names shards `people-000.json`, `maps-000.json`, `markers-000.json`', () => {
-    const shards = serializeShards({ people: [person('p1', 'Alice')], maps: [], markers: [] });
+  it('names the five entity-type shards + the field-defs shard', () => {
+    const shards = serializeShards({
+      people: [person('p1', 'Alice')],
+      maps: [],
+      markers: [],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
+    });
     expect(Object.keys(shards).sort()).toEqual([
+      'field-defs-000.json',
+      'groups-000.json',
       'maps-000.json',
       'markers-000.json',
       'people-000.json',
+      'relationship-links-000.json',
     ]);
     for (const blob of Object.values(shards)) {
       expect(blob).toBeInstanceOf(Blob);
@@ -59,14 +74,35 @@ describe('serializeShards / deserializeShards (STOR-02)', () => {
   });
 
   it('serializes shard bodies as JSON arrays of the entity type', async () => {
-    const shards = serializeShards({ people: [person('p1', 'Alice')], maps: [], markers: [] });
+    const shards = serializeShards({
+      people: [person('p1', 'Alice')],
+      maps: [],
+      markers: [],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
+    });
     const parsed = JSON.parse(await textOf(shards['people-000.json']));
     expect(parsed).toEqual([person('p1', 'Alice')]);
   });
 
   it('deserializes empty shards to empty arrays', async () => {
-    const shards = serializeShards({ people: [], maps: [], markers: [] });
-    expect(await deserializeShards(shards)).toEqual({ people: [], maps: [], markers: [] });
+    const shards = serializeShards({
+      people: [],
+      maps: [],
+      markers: [],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
+    });
+    expect(await deserializeShards(shards)).toEqual({
+      people: [],
+      maps: [],
+      markers: [],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
+    });
   });
 });
 
@@ -88,6 +124,8 @@ describe('readManifest (zod-validated, STOR-02 / T-05-02)', () => {
         people: { fileId: 'f-people', hash: 'hp', updatedAt: 100 },
         maps: { fileId: 'f-maps', hash: 'hm', updatedAt: 100 },
         markers: { fileId: 'f-markers', hash: 'hk', updatedAt: 100 },
+        groups: { fileId: 'f-groups', hash: 'hg', updatedAt: 100 },
+        'relationship-links': { fileId: 'f-rel', hash: 'hr', updatedAt: 100 },
       },
     };
   }
@@ -131,6 +169,8 @@ describe('writeManifestWithBackup + rollBackups (rolling backup before commit)',
         people: { fileId: 'f-people', hash: 'hp', updatedAt: version },
         maps: { fileId: 'f-maps', hash: 'hm', updatedAt: version },
         markers: { fileId: 'f-markers', hash: 'hk', updatedAt: version },
+        groups: { fileId: 'f-groups', hash: 'hg', updatedAt: version },
+        'relationship-links': { fileId: 'f-rel', hash: 'hr', updatedAt: version },
       },
     };
   }

@@ -24,7 +24,7 @@ import type { MapDoc, Manifest, Marker, Person } from '@/domain/types';
 import { makeMemoryPort, type MemoryRepo } from './_memoryPort';
 
 function person(id: string, name: string, updatedAt = 100): Person {
-  return { id, name, tags: [], gallery: [], updatedAt, dirty: false };
+  return { id, name, tags: [], gallery: [], custom: {}, updatedAt, dirty: false };
 }
 function map(id: string, updatedAt = 100): MapDoc {
   return {
@@ -33,6 +33,8 @@ function map(id: string, updatedAt = 100): MapDoc {
     background: { hash: `bg-${id}`, mime: 'image/webp' },
     width: 100,
     height: 100,
+    gallery: [],
+    custom: {},
     updatedAt,
     dirty: false,
   };
@@ -51,6 +53,9 @@ async function seedCommittedDatabase(provider: InMemoryProvider) {
     people: [person('p1', 'Alice')],
     maps: [map('m1')],
     markers: [marker('k1')],
+    groups: [],
+    relationshipLinks: [],
+    fieldDefs: [],
   };
 
   const port: MemoryRepo = makeMemoryPort(committed);
@@ -87,6 +92,9 @@ describe('SyncEngine atomicity under failure injection (STOR-05)', () => {
         people: [person('p1', 'Alice RENAMED', 200), person('p2', 'Carol', 200)],
         maps: [map('m1', 200)],
         markers: [marker('k1', 200)],
+        groups: [],
+        relationshipLinks: [],
+        fieldDefs: [],
       };
       const port = makeMemoryPort(mutated);
       port.markAllDirty();
@@ -117,6 +125,9 @@ describe('SyncEngine atomicity under failure injection (STOR-05)', () => {
       people: [person('p1', 'Alice v2', 300)],
       maps: [map('m1', 300)],
       markers: [marker('k1', 300)],
+      groups: [],
+      relationshipLinks: [],
+      fieldDefs: [],
     };
     const port = makeMemoryPort(mutated);
     port.markAllDirty();

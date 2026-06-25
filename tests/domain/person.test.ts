@@ -16,6 +16,7 @@ function validPerson(): Person {
     tags: ['friend', 'london'],
     notes: 'Met at the symposium',
     gallery: [],
+    custom: {},
     updatedAt: 1_700_000_000_000,
     dirty: true,
   };
@@ -26,7 +27,13 @@ function validManifest(): Manifest {
   return {
     version: 1,
     updatedAt: 1,
-    shards: { people: pointer, maps: pointer, markers: pointer },
+    shards: {
+      people: pointer,
+      maps: pointer,
+      markers: pointer,
+      groups: pointer,
+      'relationship-links': pointer,
+    },
   };
 }
 

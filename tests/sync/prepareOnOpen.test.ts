@@ -9,7 +9,14 @@ import { InMemoryProvider } from '@/storage/memory/InMemoryProvider';
 import { makeMemoryPort } from './_memoryPort';
 
 const APP_FOLDER = 'Relation Blueprint';
-const emptySet = { people: [], maps: [], markers: [] };
+const emptySet = {
+  people: [],
+  maps: [],
+  markers: [],
+  groups: [],
+  relationshipLinks: [],
+  fieldDefs: [],
+};
 
 describe('SyncEngine.prepareOnOpen (GAP 1: establish the manifest before reconcile)', () => {
   it('bootstraps an empty folder and lets reconcileOnOpen no-op (empty-first-connect)', async () => {
