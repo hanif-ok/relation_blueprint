@@ -155,7 +155,7 @@
   cursor: pointer;
 }
 
-/* Delete — brick text button (destructive). */
+/* Delete — brick text button (destructive cascade; list context only). */
 .delete {
   font-family: var(--font-body);
   font-size: 16px;
@@ -167,8 +167,22 @@
   cursor: pointer;
 }
 
+/* Remove from map — NEUTRAL text button (non-destructive to the entity; marker context).
+ * Brick is reserved for the cascade Delete only (U6, S21). */
+.remove {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: transparent;
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+}
+
 .edit:focus-visible,
 .delete:focus-visible,
+.remove:focus-visible,
 .close:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;

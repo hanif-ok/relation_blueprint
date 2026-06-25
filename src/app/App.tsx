@@ -54,6 +54,17 @@ export function App() {
     [editingPersonId],
   );
 
+  // The marker that placed the selected person on the current map. This phase always opens the
+  // profile from a marker click, so the sidebar shows the marker-context "Remove from map" action
+  // targeting this marker. The list-context "Delete person" path is wired in plan 02-03 (browse).
+  const selectedMarkerId = useLiveQuery<string | undefined>(
+    async () =>
+      selectedPersonId
+        ? (await db.markers.where('personId').equals(selectedPersonId).first())?.id
+        : undefined,
+    [selectedPersonId],
+  );
+
   const hasMap = !!map;
 
   function openCreate() {
@@ -114,6 +125,8 @@ export function App() {
 
       <ProfileSidebar
         personId={selectedPersonId}
+        openedFrom="marker"
+        markerId={selectedMarkerId}
         onClose={() => setSelectedPersonId(null)}
         onEdit={openEdit}
         onDeleted={(deletedId) => {

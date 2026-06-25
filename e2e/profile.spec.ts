@@ -89,7 +89,7 @@ test('empty name disables save and shows the validation message', async ({ page 
   await expect(page.getByRole('button', { name: 'Save person' })).toBeDisabled();
 });
 
-test('create → profile → edit → delete with cascade', async ({ page }) => {
+test('create → profile → edit → remove from map (entity survives)', async ({ page }) => {
   await seedMap(page);
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
@@ -122,23 +122,23 @@ test('create → profile → edit → delete with cascade', async ({ page }) => 
   await page.getByRole('button', { name: 'Save person' }).click();
   await expect(page.getByTestId('profile-phone')).toHaveText('555-9999');
 
-  // Delete: confirm dialog with the exact UI-SPEC copy, then verify cascade.
-  await page.getByTestId('profile-delete').click();
-  await expect(page.getByText('Delete this person?')).toBeVisible();
+  // Marker context shows the neutral "Remove from map" action (S21) — NOT a cascade delete.
+  await page.getByTestId('profile-remove').click();
+  await expect(page.getByText('Remove from this map?')).toBeVisible();
   await expect(
     page.getByText(
-      "Ada Lovelace will be removed from the map and your database. This can't be undone unless you restore a backup.",
+      'Ada Lovelace stays in your database and lists — only the marker on this map is removed.',
     ),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Delete person' }).click();
+  await page.getByRole('button', { name: 'Remove from map' }).click();
 
-  // Person and marker are both gone (cascade).
+  // The marker is gone, but the PERSON survives in the database (the delete-from-map bug fix).
   await expect(sidebar).toHaveCount(0);
   const counts = await page.evaluate(async () => {
     const rb = window.__rb!;
     return { people: await rb.db.people.count(), markers: await rb.db.markers.count() };
   });
-  expect(counts.people).toBe(0);
+  expect(counts.people).toBe(1);
   expect(counts.markers).toBe(0);
 });
 
