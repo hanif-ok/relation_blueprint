@@ -109,7 +109,10 @@ function FieldInput({
             aria-describedby={describedBy}
             onChange={(e) => {
               const raw = e.target.value;
-              onChange(raw === '' ? null : Number(raw));
+              // A partial/non-numeric entry (a lone '-' or trailing 'e') yields NaN, which
+              // serializes to null silently on JSON round-trip — store null explicitly (WR-01).
+              const n = Number(raw);
+              onChange(raw === '' || Number.isNaN(n) ? null : n);
             }}
           />
         );
