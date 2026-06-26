@@ -1,30 +1,51 @@
 ---
 phase: 02-custom-fields-full-entity-model
-verified: 2026-06-26T00:00:00Z
-status: gaps_found
-score: 5/6 must-haves verified
+verified: 2026-06-26T14:05:00Z
+status: human_needed
+score: 6/6 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type, and those fields render AND validate correctly in profiles — including the D-05 guarantee that a type change keeps values that still fit and sets aside others"
-    status: partial
-    reason: "The create+render+validate path is fully wired and functional. The type-change coercion sub-behavior (D-05) is implemented in coerceOnTypeChange and unit-tested but has ZERO production callers. FieldEditor.handleSave calls only updateFieldDef(field.id, patch) and never touches entity.custom values. The UI displays the caution text promising the behavior; the behavior does not execute. See criterion 2 / DATA-03 evidence below."
-    artifacts:
-      - path: "src/features/fields/FieldEditor.tsx"
-        issue: "handleSave (lines 76-92) calls updateFieldDef but never iterates the entity table to run coerceOnTypeChange on existing custom values. The caution shown to the user (line 131-134) promises behavior that is absent."
-      - path: "src/features/fields/customValue.ts"
-        issue: "coerceOnTypeChange (lines 86-130) is exported and unit-tested but has no production caller. grep of src/ confirms it is only defined here and imported in its test."
-    missing:
-      - "Wire coerceOnTypeChange into FieldEditor.handleSave: when isEdit && field.type !== type, iterate the affected entity table in one rw transaction and write back kept values (or stash quarantined originals). Remove or correct the UI caution if this wiring is deferred."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 5/6
+  gaps_closed:
+    - "CR-01 / DATA-03 / SC-2 / D-05 — coerceOnTypeChange now wired into applyFieldTypeChange which is called by FieldEditor.handleSave on a type change; proven by tests/db/applyFieldTypeChange.test.ts (5 tests, all pass)"
+    - "WR-01 — NaN guard in CustomFieldInputs.tsx number-case onChange (Number.isNaN guard at line 115)"
+    - "WR-02 — tel: href sanitized to dialable characters in CustomFieldRows.tsx (line 158)"
+    - "WR-04 — FieldManager.move stale-closure removed; movedField/movedLabel captured before await (lines 100-101)"
+    - "WR-06 — reorderFieldDefs now emits per-field-id ChangeEvents (real FieldDef.id as entityId, not the entityType string)"
+  gaps_remaining: []
+  regressions: []
+human_verification:
+  - test: "Run the Playwright E2E suite: npx playwright test e2e/custom-fields.spec.ts e2e/browse-and-create.spec.ts e2e/lightbox.spec.ts e2e/gallery-reorder.spec.ts e2e/privacy-notice.spec.ts e2e/delete-vs-remove.spec.ts"
+    expected: "All E2E specs pass. These cover SC-2 type-change coercion (now wired), SC-3 browse/list/sort, SC-5 lightbox keyboard nav, SC-6 gallery reorder+persistence, privacy notice dismissal, and delete-vs-remove correctness."
+    why_human: "Cannot run Playwright without a running dev server and a browser session."
+  - test: "In a running app: (a) define a text field on People, (b) set it to 'hello' on one person and '42' on another, (c) change the field type to Number in FieldManager and save. Inspect the profile for both people."
+    expected: "The person with 'hello' shows the number input empty (value quarantined, not lost); the person with '42' shows the number 42. The caution copy was shown before save and the behavior matches the promise."
+    why_human: "This is the D-05 runtime coercion verification — confirms the now-wired applyFieldTypeChange path executes correctly in a real browser session."
+  - test: "Revert the field type back to Text and inspect the person whose value was quarantined."
+    expected: "'hello' is restored to the live field value; the quarantine slot is cleared."
+    why_human: "D-05 restore-on-revert invariant — requires inspecting Dexie state via the running app."
+  - test: "Tab to the ViewSwitcher, press ArrowDown/Up through the five view items and two tool items. At viewport <=900px, confirm icon-only items have aria-label."
+    expected: "Roving focus works; active item has ink left-edge bar; icon-only items are accessible."
+    why_human: "Visual styling and keyboard interaction cannot be verified by grep."
 ---
 
-# Phase 02: Custom Fields & Full Entity Model — Verification Report
+# Phase 02: Custom Fields & Full Entity Model — Re-Verification Report
 
 **Phase Goal:** A user can model their world fully — defining custom typed fields on any entity and working with all four first-class object types (People, Locations/Maps, Groups, Relationship-links) — and browse people and locations as lists.
 
-**Verified:** 2026-06-26
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-06-26T14:05:00Z
+**Status:** human_needed
+**Re-verification:** Yes — after gap-closure plan 02-06
+
+---
+
+## Re-Verification Summary
+
+The previous `gaps_found` verdict had one BLOCKER: CR-01 (coerceOnTypeChange had zero production callers). Plan 02-06 was executed and all seven tasks were committed. This re-verification reads the actual source, runs `npx tsc --noEmit` (exit 0) and `npx vitest run` (24 files / 154 tests, all pass), and confirms the blocker is genuinely closed.
+
+**The CR-01 BLOCKER is closed. All 6 success criteria are now VERIFIED at the code/test level.** Status is `human_needed` because SCs 1, 3, 5, 6 involve visual behavior, keyboard interaction, and E2E flows that require a running browser session.
 
 ---
 
@@ -34,20 +55,55 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | User can create and use all four first-class object types (People, Locations/Maps, Groups, Relationship-links), each with a thumbnail, photo gallery, and profile | VERIFIED | All four interfaces exist in `types.ts`; Dexie version(2) tables present in `schema.ts`; full repository CRUD (`createGroup`, `createRelationshipLink`, `updateMap`, etc.) present in `repository.ts`; EntityForm wires all four types to their respective create/update fns; ProfileSidebar renders all four types from their respective tables |
-| 2 | User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type, and those fields render AND validate correctly in profiles | PARTIAL — BLOCKER | **Create+render+validate path:** fully wired (FieldManager->FieldEditor->createFieldDef; CustomFieldRows reads listFieldDefs; EntityForm calls validateCustomValue before save). **Type-change coercion (D-05):** `coerceOnTypeChange` exists and is unit-tested but has ZERO production callers. `FieldEditor.handleSave` (lines 76-92) calls only `updateFieldDef` and never iterates entity tables to apply coercion. UI shows caution copy promising the behavior; the behavior does not run. |
-| 3 | User can browse all people as a list and all locations as a list, alongside direct map navigation | VERIFIED | BrowseList exists with `useLiveQuery(db.<table>.orderBy('name').toArray())` (line 80), `orderBy('updatedAt').reverse()` sort toggle, constant 64px row virtualization, loading shimmer, empty CTA, and "Recently updated" button. ViewSwitcher provides Map + 4 browse views. BrowseRow opens profile with `openedFrom='list'` via App.openFromList wiring. |
-| 4 | Default fields stay minimal and a privacy/sensitivity notice is shown at setup | VERIFIED | PrivacyNotice exists with exact required copy ("A note on the people you record." / "Got it" / body). Persisted in Dexie meta table (`db.meta.put({ key: 'privacyNoticeDismissed', value: true })`). Auto-shows when `privacyDismissed === false` and an entity exists or Drive is connected. Nav "About/Privacy" re-opens without rewriting the flag. |
-| 5 | User can click a photo in any profile gallery to open it full-size in a lightbox, then dismiss back to the profile | VERIFIED | PhotoLightbox exists built on Radix Dialog; uses ChevronLeft/ChevronRight/X glyphs; prev/next disabled-with-state at boundary (never no-op); arrow-key handler; revokeObjectURL on change/unmount; PhotoGallery tiles are buttons that call `onOpen(i)`; ProfileSidebar hosts lightbox state and wires `openLightbox` to both PhotoGallery and CustomFieldRows Photo thumbnails. |
-| 6 | User can reorder or sort the photos in a profile gallery, and the chosen order persists | VERIFIED | PhotoUpload has drag-to-reorder via HTML5 drag events AND keyboard reorder (Space pick / arrow move / Space drop / Esc cancel); aria-live region announces moves; first tile badged "Thumbnail"; `onGalleryChange(reordered)` flows through EntityForm save to updatePerson/updateGroup/etc. persisting gallery: MediaRef[] order. |
+| 1 | User can create and use all four first-class object types (People, Locations/Maps, Groups, Relationship-links), each with a thumbnail, photo gallery, and profile | VERIFIED | All four interfaces in `types.ts`; Dexie version(2) tables in `schema.ts`; full repository CRUD in `repository.ts`; EntityForm wires all four types; ProfileSidebar renders all four types. Confirmed intact — no plan-06 changes touched these paths. |
+| 2 | User can define custom typed fields (7 types) on any entity type — including the D-05 guarantee that a type change keeps convertible values and quarantines non-convertible originals (not deleted, restorable on revert) | VERIFIED | `applyFieldTypeChange` exported from `repository.ts` (line 547): one `db.transaction('rw', [table, db.fieldDefs], ...)` writes the patched def + coerces every entity value atomically; emits AFTER commit. `FieldEditor.handleSave` branches at line 88-94: `if (typeChanged)` calls `applyFieldTypeChange`, else `updateFieldDef`. `tests/db/applyFieldTypeChange.test.ts`: 5 tests (quarantine, keep-convertible, restore-on-revert, untouched-empty, persistence) — all pass. `coerceOnTypeChange` has real production callers at `repository.ts` lines 509 and 524. |
+| 3 | User can browse all people as a list and all locations as a list, alongside direct map navigation | VERIFIED | BrowseList exists with `useLiveQuery(db.<table>.orderBy('name').toArray())`, `orderBy('updatedAt').reverse()` sort toggle, constant 64px row virtualization, loading shimmer, empty CTA, and "Recently updated" button. ViewSwitcher provides Map + 4 browse views. BrowseRow opens profile with `openedFrom='list'` via App.openFromList wiring. Confirmed intact. |
+| 4 | Default fields stay minimal and a privacy/sensitivity notice is shown at setup | VERIFIED | PrivacyNotice exists with exact required copy; persisted in Dexie meta table; auto-shows on first entity/Drive connection; Nav "About/Privacy" re-opens. Confirmed intact. |
+| 5 | User can click a photo in any profile gallery to open it full-size in a lightbox, then dismiss back to the profile | VERIFIED | PhotoLightbox exists built on Radix Dialog with ChevronLeft/Right/X glyphs, arrow-key handler, revokeObjectURL on change/unmount, boundary guards; PhotoGallery tiles call `onOpen(i)`; ProfileSidebar hosts lightbox state. Confirmed intact. |
+| 6 | User can reorder or sort the photos in a profile gallery, and the chosen order persists | VERIFIED | PhotoUpload has drag-to-reorder via HTML5 drag events AND keyboard reorder (Space/arrow/Esc); aria-live region; "Thumbnail" badge; `onGalleryChange(reordered)` flows through EntityForm save to update fns persisting gallery order. Confirmed intact. |
 
-**Score: 5/6 truths — criterion 2 is PARTIAL due to the type-change coercion gap (SC-2 core path WORKS; D-05 sub-behavior absent).**
+**Score: 6/6 truths — all criteria now verified at the code/test level.**
 
 ---
 
-### Deferred Items
+### CR-01 Gap Closure Evidence
 
-None identified — no gaps are addressed in a later milestone phase.
+The three specific claims from the re-verification request, verified against actual source:
+
+**1. `applyFieldTypeChange` exists in `src/db/repository.ts` and calls `coerceOnTypeChange` inside one rw transaction:**
+
+- Exported at line 547: `export async function applyFieldTypeChange(entityType: DeletableEntityType, fieldId: string, patch: UpdateFieldDefPatch): Promise<FieldDef>`
+- Single transaction at line 557: `await db.transaction('rw', [table, db.fieldDefs], async () => { ... })`
+- `coerceOnTypeChange` called at lines 509 and 524 (inside `coerceEntityCustom` helper, itself called at line 577)
+- Def patch written at line 571; entity values written at lines 582-593 (via `switch(entityType)` routing through correct zod schema parse)
+- `updatedAt = Date.now()` and `dirty = true` stamped at line 579 for each touched entity
+- Emits fire AFTER commit at lines 599-602 (mirrors `deleteEntity`/`reorderFieldDefs` pattern)
+- Quarantine via `quarantineKey(fieldId)` (line 553) using `QUARANTINE_KEY_PREFIX = '__quarantine:'` (line 482); stored under reserved key inside existing `custom` map — ZERO schema change
+
+**2. `FieldEditor.tsx` handleSave invokes `applyFieldTypeChange` on a type change:**
+
+- Import at line 13: `import { applyFieldTypeChange, createFieldDef, updateFieldDef } from '@/db/repository';`
+- Import type at line 14: `import type { DeletableEntityType } from '@/db/repository';`
+- Branch at lines 87-97: `if (isEdit) { if (typeChanged) { await applyFieldTypeChange(entityType as DeletableEntityType, field!.id, patch); } else { await updateFieldDef(field!.id, patch); } }`
+- Caution copy retained at line 141-144 with `data-testid="field-editor-caution"` — now truthful
+
+**3. `tests/db/applyFieldTypeChange.test.ts` proves the wired path:**
+
+- File exists at `tests/db/applyFieldTypeChange.test.ts`
+- Imports `applyFieldTypeChange` and `quarantineKey` from `@/db/repository` (lines 13-18)
+- 5 test cases covering: quarantine non-convertible (text→number "hello"), keep convertible ("42"→42), restore-on-revert (D-05 re-addable), untouched-empty (no spurious stamp), def-and-value atomicity
+- `npx vitest run tests/db/applyFieldTypeChange.test.ts` — exit 0, 5/5 pass
+
+---
+
+### Warning Fixes Verified (WR-01/02/04/06)
+
+| Warning | File | Evidence |
+|---------|------|----------|
+| WR-01 NaN guard | `src/features/entity-form/CustomFieldInputs.tsx` line 115 | `onChange(raw === '' \|\| Number.isNaN(n) ? null : n)` — partial numeric input stores null, not NaN |
+| WR-02 tel: sanitization | `src/features/profile/CustomFieldRows.tsx` lines 156-160 | `const dialable = String(value).replace(/[^\d+*#,;]/g, '');` then `href={\`tel:${dialable}\`}` — no dangerouslySetInnerHTML (comment-only occurrence, zero JSX usage) |
+| WR-04 stale-closure | `src/features/fields/FieldManager.tsx` lines 100-101 | `const movedField = list[index]; const movedLabel = movedField.label;` captured before await |
+| WR-06 ChangeEvent contract | `src/db/repository.ts` lines 622-626 | `reorderFieldDefs` collects `reorderedIds` inside the transaction, then emits one event per real `FieldDef.id` — `entityId: entityType` string is gone (confirmed by grep returning no match) |
 
 ---
 
@@ -55,20 +111,13 @@ None identified — no gaps are addressed in a later milestone phase.
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/domain/types.ts` | Group, RelationshipLink, FieldDef, FieldType, CustomValues, EntityType | VERIFIED | All present at correct lines; EntityType union includes 'groups' and 'relationship-links' |
-| `src/domain/schemas.ts` | GroupSchema, RelationshipLinkSchema, FieldDefSchema, CustomValuesSchema, satisfies locks | VERIFIED | All present; PersonSchema and MapDocSchema include custom: CustomValuesSchema |
-| `src/db/schema.ts` | version(2).stores adding groups, relationshipLinks, fieldDefs | VERIFIED | Lines 71-75: version(2) adds all three tables with correct index strings |
-| `src/db/repository.ts` | createGroup/updateGroup, createRelationshipLink/updateRelationshipLink, updateMap, createFieldDef/updateFieldDef/reorderFieldDefs/softDeleteFieldDef/listFieldDefs, deleteMarker, deleteEntity | VERIFIED | All present; softDeleteFieldDef delegates to updateFieldDef with deleted:true (NOT a row delete); deleteMarker is marker-only with no cascade; deleteEntity is generalized with all-types GC sweep |
-| `src/features/fields/FieldManager.tsx` | Per-type field manager with listFieldDefs, reorderFieldDefs, keyboard reorder + aria-live, soft-delete via neutral confirm | VERIFIED | aria-live region at line 218; keyboard reorder via ArrowUp/Down on grip handle; Remove uses ConfirmDialog (neutral, not brick) calling softDeleteFieldDef |
-| `src/features/fields/FieldEditor.tsx` | All 7 field types, Required toggle, Tags options, link-to-entity targetType, type-change caution, soft-delete confirm | VERIFIED (except coercion wiring — see gap) | All 7 types in FIELD_TYPES; Required toggle; Tags options editor; link-to-entity targetType select; caution shown at typeChanged; Save calls createFieldDef/updateFieldDef |
-| `src/features/fields/customValue.ts` | validateCustomValue, coerceOnTypeChange | VERIFIED (module exists and is correct) | Both exported and unit-tested; coerceOnTypeChange has zero production callers — the gap |
-| `src/features/entity-form/CustomFieldInputs.tsx` | Typed inputs for all 7 types, keyed by def.id, calls validateCustomValue | VERIFIED | Keys draft by `def.id` (line 247); validateCustomValue called in EntityForm.handleSave (lines 177-187); all 7 types rendered |
-| `src/features/profile/CustomFieldRows.tsx` | Read rendering by type, "(removed)" for missing link target, tel: link for phone, empty rows omitted | VERIFIED | "(removed)" at line 91-96; tel: link at line 157; isEmpty guard at line 205 omits empty rows |
-| `src/features/browse/BrowseList.tsx` | Virtualized list, orderBy('name') and orderBy('updatedAt'), sort toggle, loading/empty/error states | VERIFIED | useLiveQuery with both orderings; constant 64px ROW_HEIGHT windowing; shimmer loading; empty state with CTA |
-| `src/features/browse/BrowseRow.tsx` | 64px row, thumbnail/initials/glyph, Show-on-map disabled-with-tooltip for non-spatial, opens profile in list context | VERIFIED | Show-on-map disabled={!spatial} (line 116) with aria-label fallback via showOnMapDisabledReason; row click calls onOpen() which wires to openFromList in App |
-| `src/features/onboarding/PrivacyNotice.tsx` | One-time dismissible dialog, exact title/body/dismiss copy, persisted flag | VERIFIED | Exact PRIVACY_TITLE and PRIVACY_BODY constants; "Got it" dismiss; App wires dismissal to db.meta.put |
-| `src/features/profile/PhotoLightbox.tsx` | Radix Dialog, ChevronLeft/Right/X, arrow keys, revokeObjectURL, disabled at boundary | VERIFIED | All three glyphs imported and used; useFullRes revokes URL on change/unmount (lines 65-68); atFirst/atLast guards |
-| `src/features/person-form/PhotoUpload.tsx` | Drag+keyboard reorder, aria-live, Thumbnail badge, onGalleryChange | VERIFIED | GripVertical handle; Space/arrow/Esc keyboard reorder; aria-live region at line 312; "Thumbnail" badge at line 133 |
+| `src/db/repository.ts` | `applyFieldTypeChange`, `quarantineKey`, `QUARANTINE_KEY_PREFIX`, fixed `reorderFieldDefs` | VERIFIED | All four present and correct; `coerceOnTypeChange` is a real production caller (lines 509, 524) |
+| `src/features/fields/FieldEditor.tsx` | handleSave branches to `applyFieldTypeChange` on type change | VERIFIED | Lines 87-97: branch on `typeChanged`; caution retained at line 141-144 |
+| `tests/db/applyFieldTypeChange.test.ts` | Wired-path test: keep/quarantine/restore/persist | VERIFIED | 5 tests, all pass; imports `applyFieldTypeChange` + `quarantineKey` from `@/db/repository` |
+| `src/features/entity-form/CustomFieldInputs.tsx` | NaN guard in number onChange | VERIFIED | `Number.isNaN` guard at line 115 |
+| `src/features/profile/CustomFieldRows.tsx` | tel: href sanitized | VERIFIED | `dialable` var + `.replace(/[^\d+*#,;]/g, '')` at line 158 |
+| `src/features/fields/FieldManager.tsx` | move() stale-closure removed | VERIFIED | `movedField`/`movedLabel` captured before await at lines 100-101 |
+| All prior phase artifacts (SC-1, SC-3-6) | Unchanged and intact | VERIFIED | Confirmed by re-reading key files; no plan-06 changes touched SC-1/3/4/5/6 paths |
 
 ---
 
@@ -76,35 +125,20 @@ None identified — no gaps are addressed in a later milestone phase.
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `FieldManager.tsx` | `repository.ts` | `createFieldDef`, `reorderFieldDefs`, `softDeleteFieldDef` | WIRED | Imports and calls all three at lines 17, 100, 240 |
-| `CustomFieldRows.tsx` | `repository.ts` | `listFieldDefs(entityType)` | WIRED | Line 198: useLiveQuery(() => listFieldDefs(entityType)) |
-| `CustomFieldInputs.tsx` | `customValue.ts` | `validateCustomValue` | WIRED (via EntityForm) | EntityForm.handleSave calls validateCustomValue per def (lines 177-187); errors passed to CustomFieldInputs via `errors` prop |
-| `BrowseList.tsx` | `db/schema.ts` | `useLiveQuery(db.<table>.orderBy(...))` | WIRED | Line 80-81: both orderings via useLiveQuery |
-| `BrowseRow.tsx` | `ProfileSidebar.tsx` | Row click -> App.openFromList -> setProfile with openedFrom='list' | WIRED | App line 163: openFromList sets openedFrom='list'; BrowseList passes onOpen to BrowseRow |
-| `EntityForm.tsx` | `repository.ts` | `createGroup`, `createRelationshipLink`, `createMap`, `createPerson` (and update variants) | WIRED | Lines 17-26: all four create and update fns imported and called in handleSave per entityType |
-| `PhotoGallery.tsx` | `PhotoLightbox.tsx` | Tile click opens lightbox at that index | WIRED | ProfileSidebar lines 304-308: PhotoGallery onOpen wired to openLightbox; PhotoLightbox mounted with lightbox state |
-| `PhotoUpload.tsx` | `repository.ts` | `onGalleryChange` -> EntityForm save -> update fn persists gallery: MediaRef[] order | WIRED | EntityForm lines 231-233: gallery included in save payload |
-| `FieldEditor.tsx` (type-change) | `customValue.ts` (`coerceOnTypeChange`) | NOT WIRED — see gap | NOT WIRED | `coerceOnTypeChange` is imported nowhere in src/ (grep confirms); FieldEditor.handleSave at lines 76-92 calls updateFieldDef only |
-
----
-
-### Data-Flow Trace (Level 4)
-
-| Artifact | Data Variable | Source | Produces Real Data | Status |
-|----------|---------------|--------|--------------------|--------|
-| `BrowseList.tsx` | `rows` (BrowseEntity[]) | `useLiveQuery(db.<table>.orderBy(...).toArray())` | Yes — live Dexie query | FLOWING |
-| `CustomFieldRows.tsx` | `defs` (FieldDef[]) | `useLiveQuery(() => listFieldDefs(entityType))` | Yes — live Dexie query | FLOWING |
-| `CustomFieldInputs.tsx` | `defs` (FieldDef[]) | `useLiveQuery(() => listFieldDefs(entityType))` | Yes — live Dexie query | FLOWING |
-| `ProfileSidebar.tsx` | `entity` (AnyEntity) | `useLiveQuery` reading per-type Dexie table by id | Yes — live Dexie query | FLOWING |
-| `PhotoLightbox.tsx` | `load.url` | `resolveMediaUrl(hash)` creating object URL from `db.media` blob | Yes — real blob | FLOWING |
+| `FieldEditor.tsx` | `repository.ts (applyFieldTypeChange)` | `handleSave` calls `applyFieldTypeChange` when `isEdit && typeChanged` | WIRED | Lines 13-14 import; line 94 call |
+| `repository.ts (applyFieldTypeChange)` | `customValue.ts (coerceOnTypeChange)` | per-entity coercion inside one rw transaction via `coerceEntityCustom` helper | WIRED | `coerceOnTypeChange` imported at line 19; called at lines 509, 524 inside `coerceEntityCustom`; `coerceEntityCustom` called at line 577 inside `applyFieldTypeChange` |
+| `tests/db/applyFieldTypeChange.test.ts` | `repository.ts` | imports `applyFieldTypeChange`, `quarantineKey`, `createPerson`, `getPerson`, `createFieldDef` | WIRED | Lines 13-18 imports; test bodies call `applyFieldTypeChange` directly through real Dexie |
+| All prior wiring (SC-1/3/4/5/6) | (see previous VERIFICATION) | Unchanged | WIRED | No plan-06 modifications touched these paths |
 
 ---
 
 ### Behavioral Spot-Checks
 
-Step 7b: No runnable entry points can be tested without a browser/Playwright session. Custom-field E2E specs exist (`e2e/custom-fields.spec.ts`, `e2e/browse-and-create.spec.ts`, `e2e/lightbox.spec.ts`, `e2e/gallery-reorder.spec.ts`, `e2e/privacy-notice.spec.ts`, `e2e/delete-vs-remove.spec.ts`). Cannot execute without a running server — routes to human verification below.
-
-Unit spot-check: `tests/fields/customValue.test.ts` exists and covers validateCustomValue and coerceOnTypeChange. Vitest run not performed in this pass; test existence confirmed by grep.
+| Behavior | Command | Result | Status |
+|----------|---------|--------|--------|
+| `applyFieldTypeChange` wired path: quarantine/keep/restore/persist | `npx vitest run tests/db/applyFieldTypeChange.test.ts` | exit 0, 5/5 tests pass | PASS |
+| Full test suite regression | `npx vitest run` | exit 0, 24 files / 154 tests pass | PASS |
+| TypeScript compile | `npx tsc --noEmit` | exit 0 (no output) | PASS |
 
 ---
 
@@ -113,7 +147,7 @@ Unit spot-check: `tests/fields/customValue.test.ts` exists and covers validateCu
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|---------|
 | DATA-01 | 02-01, 02-03 | User can create four first-class object types | SATISFIED | All four types in repository + EntityForm + browse lists; entity creation flows end-to-end |
-| DATA-03 | 02-01, 02-04 | User can define custom typed fields (7 types) on any entity type | PARTIAL — BLOCKER | Create/render/validate path fully wired; type-change coercion (D-05) unwired; see gap |
+| DATA-03 | 02-01, 02-04, 02-06 | User can define custom typed fields (7 types) on any entity type, with D-05 type-change coercion | SATISFIED | Create/render/validate + type-change coercion now fully wired via `applyFieldTypeChange`; proven by 5-test spec |
 | BRWS-01 | 02-03 | User can browse all people as a list | SATISFIED | BrowseList people view with useLiveQuery, sort, virtualization, row→profile |
 | BRWS-02 | 02-03 | User can browse all locations as a list alongside map navigation | SATISFIED | BrowseList maps view; ViewSwitcher provides Map + Locations; Show-on-map in BrowseRow |
 
@@ -123,66 +157,59 @@ Unit spot-check: `tests/fields/customValue.test.ts` exists and covers validateCu
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `src/features/fields/FieldEditor.tsx` | 131-134 | UI shows caution copy promising D-05 coercion behavior that does not run | BLOCKER | User is deceived: after a type change all entities retain old-shaped values silently; rendering a `number` input against a leftover string is a functional failure |
-| `src/features/entity-form/CustomFieldInputs.tsx` | 112 | `onChange(raw === '' ? null : Number(raw))` — Number(raw) can produce NaN for partial numeric input (e.g. trailing 'e', '-'), which serializes to null via JSON.stringify silently | WARNING | Lossy NaN->null round-trip through sync/export; validateCustomValue would catch it on save but the NaN can reach Dexie |
-| `src/features/profile/CustomFieldRows.tsx` | 157 | `href={\`tel:${String(value)}\`}` — unvalidated phone string interpolated into tel: href | WARNING | Any string is accepted as phone (type-only check); URL control characters could craft a non-phone URI; not XSS but an unsanitized URL pattern |
-| `src/db/repository.ts` | 485 | `emit({ entityType: 'fieldDefs', entityId: entityType, op: 'update' })` in reorderFieldDefs — entityType string passed as entityId | WARNING | Violates ChangeEvent contract (entityId should be a record id); latent bug for any future per-id subscriber |
-| `src/features/fields/FieldManager.tsx` | 94-102 | `move()` reads stale closure `list` for both the reorder ids and the announcement after awaiting reorderFieldDefs | WARNING | On rapid successive keypresses, stale `list` can produce incorrect final order |
+| (none) | — | No TBD/FIXME/XXX debt markers in any plan-06 modified file | — | — |
 
-No `TBD`, `FIXME`, or `XXX` debt markers found in phase-modified files.
+Prior WARNING anti-patterns from the initial verification (WR-01/02/04/06) are all closed — see "Warning Fixes Verified" section above. The initial BLOCKER anti-pattern (CR-01: caution copy advertising unwired behavior) is closed by the `applyFieldTypeChange` wiring.
 
 ---
 
 ### Human Verification Required
 
-These items require a running browser session to verify:
-
-#### 1. E2E suite green
+#### 1. E2E suite
 
 **Test:** Run `npx playwright test e2e/custom-fields.spec.ts e2e/browse-and-create.spec.ts e2e/lightbox.spec.ts e2e/gallery-reorder.spec.ts e2e/privacy-notice.spec.ts e2e/delete-vs-remove.spec.ts`
-**Expected:** All pass. The specs exercise SC-2 through SC-6 end-to-end including (removed) handling, sort toggle, lightbox keyboard nav, gallery persistence, and the delete-vs-remove correctness fix.
-**Why human:** Cannot run Playwright without a browser; server must be running.
+**Expected:** All pass. These specs cover SC-2 type-change coercion (now wired), SC-3 browse/list/sort, SC-5 lightbox keyboard nav, SC-6 gallery reorder+persistence, privacy notice dismissal, and delete-vs-remove correctness.
+**Why human:** Cannot run Playwright without a running dev server and browser session.
 
-#### 2. Custom field type-change gap — decision required
+#### 2. D-05 coercion runtime check (SC-2 — now wired, confirm correct behavior in the app)
 
-**Test:** In a running app, (a) define a text field on People, (b) fill it with "hello" on one person, (c) change the field type to Number in the field manager. Observe whether "hello" is set aside or silently left as a stale string under the number input.
-**Expected per spec:** The caution copy says "others are set aside, not deleted." The stored value should be quarantined and not rendered in the number input; the person's `custom[fieldId]` should be in a quarantine store or absent.
-**Expected actual (verified by code):** The stale string "hello" remains in `entity.custom[fieldId]`. The number input in the form binds `value={typeof value === 'number' ? value : ''}` (CustomFieldInputs line 108) so it silently shows empty, but the bad value is still stored. The profile `CustomValueView` for 'number' calls `String(value)` showing "hello" as text.
-**Why human:** This is the CR-01 gap. A developer must decide: fix `FieldEditor.handleSave` to wire coercion, OR explicitly defer and remove the caution copy.
+**Test:** In a running app: (a) define a text field on People, (b) set it to "hello" on one person and "42" on another, (c) change the field type to Number in FieldManager. Inspect the profile for both people.
+**Expected:** "hello" person shows the number input empty (value quarantined, not lost); "42" person shows the number 42. The D-05 caution copy was shown before save and the behavior matches the promise.
+**Why human:** Confirms the wired `applyFieldTypeChange` path executes correctly in a real browser session against a real Dexie database.
 
-#### 3. Nav roving focus and active-item styling
+#### 3. D-05 restore-on-revert runtime check
 
-**Test:** Tab to the ViewSwitcher, press ArrowDown/Up through the five view items and two tool items. Confirm: (a) focus moves correctly, (b) the active item has an ink left-edge bar and is NOT amber, (c) collapsed-to-icon-only view (at ≤900px) items still have aria-label.
-**Expected:** Roving focus works; active item is ink/paper only; icon-only items are labelled.
+**Test:** After the type-change above, revert the field type back to Text. Inspect the person whose value was quarantined ("hello").
+**Expected:** "hello" is restored to the live field value; the quarantine slot is cleared.
+**Why human:** D-05 restore-on-revert invariant requires confirming via the running app / Dexie state.
+
+#### 4. Nav roving focus and active-item styling
+
+**Test:** Tab to the ViewSwitcher, press ArrowDown/Up through the five view items and two tool items. At viewport width ≤900px, confirm icon-only items have aria-label. Confirm the active item has an ink left-edge bar (not amber).
+**Expected:** Roving focus works; active item styled correctly; icon-only items are accessible.
 **Why human:** Visual styling and keyboard interaction cannot be verified by grep.
+
+---
+
+### Deferred Items
+
+None. No items deferred to later milestone phases.
 
 ---
 
 ### Gaps Summary
 
-**One blocker gap prevents this phase from being marked passed.**
+No gaps remain. The single BLOCKER gap (CR-01 / DATA-03 / SC-2 / D-05) from the initial verification is genuinely closed:
 
-**CR-01: Type-change coercion unwired (DATA-03 / SC-2 / D-05)**
+- `coerceOnTypeChange` now has two production callers in `src/db/repository.ts` (lines 509, 524) — both inside `coerceEntityCustom`, which is called from `applyFieldTypeChange`.
+- `FieldEditor.handleSave` branches on `typeChanged` and calls `applyFieldTypeChange` (not just `updateFieldDef`) when the type changes.
+- The wired path is proven by `tests/db/applyFieldTypeChange.test.ts` (5 tests covering keep, quarantine, restore-on-revert, untouched-empty, and def/value atomicity).
+- `npx tsc --noEmit` exits 0; `npx vitest run` exits 0 (24 files / 154 tests).
 
-`coerceOnTypeChange` in `src/features/fields/customValue.ts` (lines 86-130) is correctly implemented and covered by unit tests, but it has no production caller anywhere in `src/`. When a user edits a field definition's type in `FieldEditor` and clicks "Save field", `handleSave` (lines 76-92) calls only `updateFieldDef(field!.id, patch)` — it never iterates the affected entity table to apply coercion.
-
-The caution message displayed to the user ("Changing the type keeps values that still fit; others are set aside, not deleted.") is false advertising for a behavior that does not run.
-
-**Consequences confirmed by reading the code:**
-- `CustomFieldInputs` number input shows empty for a leftover string value (it guards `typeof value === 'number'`), but the string is still stored in Dexie under `custom[fieldId]`.
-- `CustomFieldRows` number view calls `String(value)` — after a text->number change it will render "hello" as a number row.
-- `validateCustomValue` will flag "hello" as invalid on the user's next save of that entity.
-- The D-05 "set aside, not deleted / re-addable" quarantine mechanism does not exist at runtime.
-
-**Path to closure:** Wire coercion into `FieldEditor.handleSave` per the CR-01 fix sketch in `02-REVIEW.md` (iterate the entity table in one rw transaction, apply `coerceOnTypeChange`, persist `kept` or stash `quarantined`). Alternatively, explicitly defer this sub-behavior, remove the caution copy from the UI, and document the decision — in which case D-05 type-change coercion should be a named gap in a future phase plan.
-
-**The create + render + validate path for custom fields (defining a new field, filling values, and seeing them render in profiles) is fully wired and functional.** The gap is specifically the type-change value-retention sub-behavior.
+Status is `human_needed` because SCs 1, 3, 5, 6 involve visual behavior and keyboard interaction requiring a browser session, and the D-05 runtime behavior merits a live smoke-test to confirm the wiring executes as expected.
 
 ---
 
-**Note on Code Review Finding CR-02 (avatar URL leak):** The review flags `useBlobImage` as not revoking its URL. Reading `src/features/person-map/useMapImage.ts` (lines 12-37) shows the effect cleanup at line 31 explicitly calls `URL.revokeObjectURL(url)`. The URL is revoked on cleanup / blob change. CR-02 is a false positive — the lifecycle is correct.
-
----
-
-_Verified: 2026-06-26_
+_Verified: 2026-06-26T14:05:00Z_
 _Verifier: Claude (gsd-verifier)_
+_Re-verification: Yes — gap-closure plan 02-06_
