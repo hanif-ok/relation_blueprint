@@ -66,8 +66,10 @@ describe('SyncEngine field-defs cloud round-trip (DATA-03 BLOCKER closed)', () =
     // The local definition was marked clean after the successful push.
     expect((await db.fieldDefs.get('f1'))?.dirty).toBe(false);
 
-    // Device B: simulate a fresh device — wipe local fieldDefs, then reconcile.
+    // Device B: simulate a fresh device — wipe local fieldDefs AND the shard watermarks (held in
+    // `meta`), exactly as a brand-new Dexie would have them, so reconcile actually pulls.
     await db.fieldDefs.clear();
+    await db.meta.clear();
     const engineB = new SyncEngine({
       provider,
       folderId,
@@ -145,6 +147,7 @@ describe('SyncEngine field-defs cloud round-trip (DATA-03 BLOCKER closed)', () =
     );
 
     await db.fieldDefs.clear();
+    await db.meta.clear();
     const engineB = new SyncEngine({
       provider,
       folderId,

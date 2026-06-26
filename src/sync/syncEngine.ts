@@ -25,13 +25,24 @@ import { serializeShards, deserializeShards, SHARD_NAMES, type EntitySet } from 
 import { readManifest, writeManifestWithBackup, rollBackups } from './manifest';
 import { beginWrite, endWrite } from './writeStatus';
 import type { StorageProvider } from '@/storage/StorageProvider';
-import type { EntityType, Manifest, ShardPointer } from '@/domain/types';
+import type { EntityType, Manifest } from '@/domain/types';
 import type { RelationBlueprintDB } from '@/db/schema';
 
 const JSON_TYPE = 'application/json';
 const MANIFEST_NAME = 'manifest.json';
 const MEDIA_FOLDER = 'media';
 const BACKUP_KEEP = 5;
+
+/**
+ * A sync-shard token: the five entity families PLUS the custom-field DEFINITIONS shard
+ * (`'field-defs'`, DATA-03). This is a SYNC-LOCAL widening used only by the engine + manifest;
+ * the core `EntityType` union (`src/domain/types.ts`) is intentionally NOT widened, because
+ * `EntityType` is also `FieldDef.entityType` (the family a field decorates) and the key of
+ * `Record<EntityType, ...>` maps across the field-manager / profile UI — widening it there would
+ * corrupt those semantics. The `'field-defs'` token resolves to `SHARD_NAMES['field-defs']`
+ * (= `field-defs-000.json`) and to the EntitySet's `fieldDefs` array.
+ */
+export type SyncShardType = EntityType | 'field-defs';
 
 /**
  * The repository surface the engine reads dirty entities from and upserts pulled shards into.
@@ -41,8 +52,8 @@ const BACKUP_KEEP = 5;
 export interface RepositoryPort {
   /** The full current entity set (one shard per type holds ALL entities of that type). */
   getEntities(): Promise<EntitySet>;
-  /** Which entity types currently have at least one dirty record. */
-  getDirtyTypes(): Promise<EntityType[]>;
+  /** Which shard types currently have at least one dirty record (incl. `'field-defs'`). */
+  getDirtyTypes(): Promise<SyncShardType[]>;
   /** New media blobs to upload this commit, keyed by content hash. */
   getNewMedia(): Promise<Record<string, Blob>>;
   /**
@@ -56,9 +67,9 @@ export interface RepositoryPort {
   /** Upsert pulled entities (reconcile-on-open). Only provided types are touched. */
   upsert(entities: Partial<EntitySet>): Promise<void>;
   /** The local `updatedAt` watermark for a shard type (0 if never reconciled). */
-  getShardMeta(type: EntityType): Promise<number>;
+  getShardMeta(type: SyncShardType): Promise<number>;
   /** Persist the local `updatedAt` watermark for a shard type. */
-  setShardMeta(type: EntityType, updatedAt: number): Promise<void>;
+  setShardMeta(type: SyncShardType, updatedAt: number): Promise<void>;
 }
 
 export interface SyncEngineOptions {
@@ -70,7 +81,14 @@ export interface SyncEngineOptions {
   manifestFileId?: string;
 }
 
-const ENTITY_TYPES: EntityType[] = ['people', 'maps', 'markers', 'groups', 'relationship-links'];
+const ENTITY_TYPES: SyncShardType[] = [
+  'people',
+  'maps',
+  'markers',
+  'groups',
+  'relationship-links',
+  'field-defs',
+];
 
 export class SyncEngine {
   private readonly provider: StorageProvider;
@@ -108,7 +126,7 @@ export class SyncEngine {
       relationshipLinks: [],
       fieldDefs: [],
     });
-    const shards = {} as Record<EntityType, ShardPointer>;
+    const shards = {} as Manifest['shards'];
     for (const type of ENTITY_TYPES) {
       const blob = empty[SHARD_NAMES[type]];
       const fileId = await this.provider.writeFile(SHARD_NAMES[type], this.folderId, blob, JSON_TYPE);
@@ -169,7 +187,7 @@ export class SyncEngine {
    * guard sees an active write. The manifest overwrite is the SOLE commit point; everything
    * before it is additive (new immutable files) and discardable on failure.
    */
-  async commit(dirtyTypes: EntityType[], newMedia: Record<string, Blob>): Promise<void> {
+  async commit(dirtyTypes: SyncShardType[], newMedia: Record<string, Blob>): Promise<void> {
     const manifestFileId = this.manifestFileId();
     beginWrite();
     try {
@@ -178,15 +196,18 @@ export class SyncEngine {
       const now = Date.now();
 
       // Step 1: write NEW immutable shard files for every dirty type.
-      const shards: Record<EntityType, ShardPointer> = { ...current.shards };
+      const shards: Manifest['shards'] = { ...current.shards };
       const shardBlobs = serializeShards(entities);
       const orphans: string[] = [];
       for (const type of dirtyTypes) {
         const blob = shardBlobs[SHARD_NAMES[type]];
         const newFileId = await this.provider.writeFile(SHARD_NAMES[type], this.folderId, blob, JSON_TYPE);
         const hash = await sha256Hex(await blob.arrayBuffer());
-        // The previous shard file becomes an orphan only once the commit succeeds.
-        orphans.push(current.shards[type].fileId);
+        // The previous shard file becomes an orphan only once the commit succeeds. An OLD manifest
+        // (predating the field-defs pointer) has no `current.shards['field-defs']`, so guard the
+        // dereference — there is simply no prior file to orphan in that case.
+        const prior = current.shards[type];
+        if (prior) orphans.push(prior.fileId);
         shards[type] = { fileId: newFileId, hash, updatedAt: now };
       }
 
@@ -245,6 +266,10 @@ export class SyncEngine {
 
     for (const type of ENTITY_TYPES) {
       const pointer = manifest.shards[type];
+      // OLD-manifest edge: a manifest written before the field-defs pointer existed has no
+      // `shards['field-defs']`. Skip a missing pointer rather than dereferencing it — a second
+      // device reconnecting to a pre-fix cloud DB must no-op here, not crash (RESEARCH § Pitfall 1).
+      if (!pointer) continue;
       const localWatermark = await this.repo.getShardMeta(type);
       if (pointer.updatedAt <= localWatermark) continue; // local is newer-or-equal → keep local.
 
@@ -252,26 +277,29 @@ export class SyncEngine {
       const set = await deserializeShards({ [SHARD_NAMES[type]]: blob });
       // Per-type assignment keeps the discriminated EntitySet fields type-sound (a single
       // `pulled[type] = set[type]` would collapse the arrays to their union and fail tsc).
-      // The `relationship-links` EntityType maps onto the `relationshipLinks` EntitySet field.
+      // The `relationship-links` EntityType maps onto the `relationshipLinks` EntitySet field;
+      // the `'field-defs'` token maps onto the `fieldDefs` field.
       if (type === 'people') pulled.people = set.people;
       else if (type === 'maps') pulled.maps = set.maps;
       else if (type === 'markers') pulled.markers = set.markers;
       else if (type === 'groups') pulled.groups = set.groups;
-      else pulled.relationshipLinks = set.relationshipLinks;
+      else if (type === 'relationship-links') pulled.relationshipLinks = set.relationshipLinks;
+      else pulled.fieldDefs = set.fieldDefs;
     }
 
     if (Object.keys(pulled).length > 0) {
       await this.repo.upsert(pulled);
       for (const type of ENTITY_TYPES) {
-        if (pulledHas(pulled, type)) await this.repo.setShardMeta(type, manifest.shards[type].updatedAt);
+        const pointer = manifest.shards[type];
+        if (pointer && pulledHas(pulled, type)) await this.repo.setShardMeta(type, pointer.updatedAt);
       }
     }
   }
 }
 
-/** Was a shard of this manifest EntityType pulled this reconcile? Bridges the kebab EntityType
- * keys to the EntitySet's `relationshipLinks` camelCase field. */
-function pulledHas(pulled: Partial<EntitySet>, type: EntityType): boolean {
+/** Was a shard of this manifest shard-type pulled this reconcile? Bridges the kebab tokens to
+ * the EntitySet's camelCase `relationshipLinks` / `fieldDefs` fields. */
+function pulledHas(pulled: Partial<EntitySet>, type: SyncShardType): boolean {
   switch (type) {
     case 'people':
       return pulled.people !== undefined;
@@ -283,6 +311,8 @@ function pulledHas(pulled: Partial<EntitySet>, type: EntityType): boolean {
       return pulled.groups !== undefined;
     case 'relationship-links':
       return pulled.relationshipLinks !== undefined;
+    case 'field-defs':
+      return pulled.fieldDefs !== undefined;
   }
 }
 
@@ -304,7 +334,7 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
  * so a locally-newer unpushed edit survives reconcile (single curator, newest wins).
  */
 export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
-  const metaKey = (type: EntityType) => `shardMeta:${type}`;
+  const metaKey = (type: SyncShardType) => `shardMeta:${type}`;
   // Tracks which content-addressed media hashes have already been pushed to the cloud, so
   // `getNewMedia` only returns blobs the provider hasn't seen. Content addressing means the
   // upload is idempotent regardless, but skipping already-synced hashes avoids re-uploading
@@ -329,14 +359,15 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
       return { people, maps, markers, groups, relationshipLinks, fieldDefs };
     },
 
-    async getDirtyTypes(): Promise<EntityType[]> {
-      const types: EntityType[] = [];
+    async getDirtyTypes(): Promise<SyncShardType[]> {
+      const types: SyncShardType[] = [];
       // `dirty` is a boolean index column; IndexedDB can't key on booleans, so filter in JS.
       if ((await db.people.filter((p) => p.dirty).count()) > 0) types.push('people');
       if ((await db.maps.filter((m) => m.dirty).count()) > 0) types.push('maps');
       if ((await db.markers.filter((m) => m.dirty).count()) > 0) types.push('markers');
       if ((await db.groups.filter((g) => g.dirty).count()) > 0) types.push('groups');
       if ((await db.relationshipLinks.filter((r) => r.dirty).count()) > 0) types.push('relationship-links');
+      if ((await db.fieldDefs.filter((f) => f.dirty).count()) > 0) types.push('field-defs');
       return types;
     },
 
@@ -359,7 +390,10 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
       // Snapshot the media hashes BEFORE the entity transaction so the synced-media watermark
       // reflects exactly what this commit pushed (getNewMedia ran against the same set).
       const allHashes = (await db.media.toArray()).map((m) => m.hash);
-      await db.transaction('rw', [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.meta], async () => {
+      await db.transaction(
+        'rw',
+        [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.fieldDefs, db.meta],
+        async () => {
         // Clear `dirty` ONLY where the record's content was actually serialized in this commit.
         // We match on (id, updatedAt) against the snapshot: if the user edited a record AFTER the
         // snapshot but BEFORE this runs, its `updatedAt` was bumped, so it no longer matches and
@@ -394,23 +428,26 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
             await db.relationshipLinks.update(r.id, { dirty: false });
           }
         }
+        for (const f of synced.fieldDefs) {
+          const cur = await db.fieldDefs.get(f.id);
+          if (cur && cur.dirty && cur.updatedAt === f.updatedAt) {
+            await db.fieldDefs.update(f.id, { dirty: false });
+          }
+        }
         // Union the previously-synced hashes with everything currently stored (this commit
         // uploaded any that were new). Content addressing makes the union safe and stable.
         const prior = await db.meta.get(SYNCED_MEDIA_KEY);
         const merged = new Set<string>(Array.isArray(prior?.value) ? (prior.value as string[]) : []);
         for (const hash of allHashes) merged.add(hash);
         await db.meta.put({ key: SYNCED_MEDIA_KEY, value: [...merged] });
-      });
+        },
+      );
     },
 
     async upsert(entities: Partial<EntitySet>): Promise<void> {
       await db.transaction(
         'rw',
-        db.people,
-        db.maps,
-        db.markers,
-        db.groups,
-        db.relationshipLinks,
+        [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.fieldDefs],
         async () => {
           if (entities.people) {
             for (const incoming of entities.people) {
@@ -452,16 +489,24 @@ export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
               }
             }
           }
+          if (entities.fieldDefs) {
+            for (const incoming of entities.fieldDefs) {
+              const local = await db.fieldDefs.get(incoming.id);
+              if (!local || incoming.updatedAt > local.updatedAt) {
+                await db.fieldDefs.put({ ...incoming, dirty: false });
+              }
+            }
+          }
         },
       );
     },
 
-    async getShardMeta(type: EntityType): Promise<number> {
+    async getShardMeta(type: SyncShardType): Promise<number> {
       const row = await db.meta.get(metaKey(type));
       return typeof row?.value === 'number' ? row.value : 0;
     },
 
-    async setShardMeta(type: EntityType, updatedAt: number): Promise<void> {
+    async setShardMeta(type: SyncShardType, updatedAt: number): Promise<void> {
       await db.meta.put({ key: metaKey(type), value: updatedAt });
     },
   };

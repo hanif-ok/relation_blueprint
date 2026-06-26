@@ -207,7 +207,14 @@ export interface ShardPointer {
 export interface Manifest {
   version: number;
   updatedAt: number;
-  shards: Record<EntityType, ShardPointer>;
+  /**
+   * One pointer per entity-type shard, PLUS an optional `'field-defs'` pointer for the
+   * custom-field DEFINITIONS shard (DATA-03). The field-defs pointer is OPTIONAL so manifests
+   * written before that shard was threaded through the cloud path still validate and reconcile
+   * as a safe no-op. The core `EntityType` union is intentionally NOT widened with `'field-defs'`
+   * (that token is a sync-local concern only — `SyncShardType` in syncEngine.ts).
+   */
+  shards: Record<EntityType, ShardPointer> & { 'field-defs'?: ShardPointer };
 }
 
 /**
