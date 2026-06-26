@@ -545,20 +545,26 @@ const isDrawMode = tool === 'rect' || tool === 'ellipse' || tool === 'line' || t
 
 **The migration round-trip (A1) is the single item most worth a focused test before building the rest of the coordinate model on top of it.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three questions are answered by the Assumptions Log above (A2/A3/A5); the planner adopted
+> each recommendation. They remain documented for traceability with their resolutions inline.
 
 1. **Does the existing `AvatarMarker` composite Group resize cleanly under a Transformer, or should the Transformer attach to an inner sizing node?**
    - What we know: Transformer attaches to any node; the marker is a Group with a stem-tip origin and the avatar offset up.
    - What's unclear: whether resizing the whole Group (stem + avatar + ring together) looks right.
    - Recommendation: build it on the Group first; if the stem scales undesirably, attach to an inner avatar node. Low-cost switch (A3).
+   - **RESOLVED (A3):** Attach the Transformer to the `AvatarMarker` Group first; fall back to an inner sizing node only if the stem scales badly (a visual check during build, low-cost switch). Adopted in plan 03-04 (TransformerOverlay + AvatarMarker, RESEARCH A3).
 
 2. **Portal data shape: discriminated `Marker` vs. `MapDoc.portals[]`?**
    - What we know: both ride existing shards (markers shard vs. maps shard); both work.
    - Recommendation: discriminated `Marker` (Pattern 5 option a) — portals are placements like person-markers — unless optionality bites existing marker code (A5).
+   - **RESOLVED (A5):** Use the discriminated `Marker` (`kind: 'person' | 'portal'`, optional `personId`/`targetMapId`) — portals are placements on the markers shard. Adopted in plans 03-01 (schema triple) and 03-06 (PortalGlyph), per RESEARCH A5.
 
 3. **Exact jank threshold on real hardware at thousands of markers.**
    - What we know: culling + caching + listening(false) is the documented toolkit; the number is hardware-dependent.
    - Recommendation: a measured spike with ~1000 synthetic markers gates criterion 5 sign-off (A2).
+   - **RESOLVED (A2):** Treated as a measured-spike gate, not a code blocker — viewport culling + selective caching + `listening(false)` are built in from the start (03-02), and a ~1000-synthetic-marker spike (fixture from 03-01) gates criterion 5 sign-off in VALIDATION (Manual-Only Verifications), per RESEARCH A2.
 
 ## Environment Availability
 

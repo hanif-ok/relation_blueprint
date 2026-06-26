@@ -138,7 +138,14 @@ Plans:
   6. User can select a placed marker and resize (and rotate) it via on-canvas transform handles, with the new size/rotation persisting across reloads (deferred from Phase 1 UAT)
   7. User can resize/transform the map background image via handles (beyond view pan/zoom), and the change persists (deferred from Phase 1 UAT)
 
-**Plans**: TBD
+**Plans**: 7 plans
+- [ ] 03-01-PLAN.md — Data foundation: Marker transform/portal fields + MapDoc sub-objects, Dexie version(4) backfill, migration round-trip (Wave 0)
+- [ ] 03-02-PLAN.md — Active-map model: coords composition, viewport culling, map switcher, breadcrumb up-navigation (Wave 1)
+- [ ] 03-03-PLAN.md — Drawing: tool palette, pan/draw/select state machine, shapes (rect/ellipse/line/polygon), style popover + zone labels (Wave 2)
+- [ ] 03-04-PLAN.md — Transform handles: Konva Transformer (resize/rotate), image-space anchoring, background transform (Wave 3)
+- [ ] 03-05-PLAN.md — Layers: per-map logical layers panel (create/rename/reorder/show/hide/lock) + name-label toggle (Wave 4)
+- [ ] 03-06-PLAN.md — Portals: door-arch glyph, single-click select / double-click navigate, create-or-pick target, parent→child hierarchy (Wave 5)
+- [ ] 03-07-PLAN.md — Multi-placement: map-side PersonPicker (D-11) + profile "Appears on" with jump-to-placement (D-12) — MAP-05 (Wave 6)
 **Research flag:** NEEDS DEEPER RESEARCH — Konva.js viewport culling and shape caching patterns at hundreds-to-thousands of markers, portal/nested-map navigation UX, and Konva + React 19 compatibility. Research before PLAN; build caching/culling in from the start, not as a retrofit.
 **UI hint**: yes
 
