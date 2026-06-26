@@ -26,6 +26,32 @@ export const colors = {
   inkMuted: '#6B6358',
   /** Warm hairline border (never pure grey). */
   hairline: '#D8D2C4',
+  /**
+   * Portal-glyph fill ONLY (UI-SPEC, Phase 3) — a calm cool slate-blue reading as
+   * "doorway/elsewhere", orthogonal to amber selection. Reserved for portal markers; a selected
+   * portal keeps this fill but gains the amber selection outline.
+   */
+  portal: '#3E6B8C',
+} as const;
+
+/**
+ * The five zone/shape presets (D-03, UI-SPEC). Keyed by lowercased preset id. Each carries a
+ * solid `stroke` hex (full opacity) and a translucent `fill` (20% opacity) of the same hue. The
+ * five presets + a fill on/off toggle are the WHOLE shape-styling surface — no color picker /
+ * stroke-width / opacity slider. These hexes also seed tokens.css by a later UI plan; keep them
+ * named here, never inline.
+ */
+export const zonePresets = {
+  /** Generic rooms / unlabeled areas (the default). */
+  stone: { stroke: '#8A8170', fill: 'rgba(138,129,112,0.20)' },
+  /** Outdoor / green areas. */
+  sage: { stroke: '#6E8E6A', fill: 'rgba(110,142,106,0.20)' },
+  /** Warm / living spaces. */
+  clay: { stroke: '#A8745A', fill: 'rgba(168,116,90,0.20)' },
+  /** Cool / utility spaces. */
+  dusk: { stroke: '#6E7A9E', fill: 'rgba(110,122,158,0.20)' },
+  /** Restricted / special zones. */
+  plum: { stroke: '#8A6E8E', fill: 'rgba(138,110,142,0.20)' },
 } as const;
 
 /** 8-point spacing scale (px), matching the tokens.css custom properties. */

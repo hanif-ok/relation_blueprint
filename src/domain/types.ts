@@ -123,8 +123,88 @@ export interface MapDoc {
   notes?: string;
   /** DATA-03/D-01: custom-field value map (always present; may be empty). */
   custom: CustomValues;
+  /**
+   * Phase-3 (D-09): optional parent map for nested-space navigation (a portal target chain).
+   * A map with no `parentId` is a top-level space.
+   */
+  parentId?: string;
+  /**
+   * Phase-3 (D-16): how the background image is positioned/scaled/rotated within the Stage.
+   * Marker/shape `x`/`y` are stored in the background image's intrinsic IMAGE space and
+   * composed onto THIS transform at render time. Absent = identity (offset 0, scale 1, rot 0).
+   */
+  backgroundTransform?: BackgroundTransform;
+  /**
+   * Phase-3 (D-01/D-02): drawing primitives placed on the map. A shape carrying a non-empty
+   * `label` IS a zone (D-02) — there is no separate `zones` array. Always present; may be empty.
+   */
+  shapes: Shape[];
+  /**
+   * Phase-3 (D-04): the editor layer stack. New maps backfill a single default "Markers" layer
+   * (order 0). Always present; may be empty for pre-Phase-3 data not yet upgraded.
+   */
+  layers: Layer[];
   updatedAt: number;
   dirty: boolean;
+}
+
+/**
+ * Phase-3 (D-16): the background image's placement within the Konva Stage. Marker/shape
+ * coordinates live in the image's intrinsic pixel space and are composed onto this transform
+ * at render time. The identity transform (`offsetX:0, offsetY:0, scale:1, rotation:0`) means
+ * image space === stage space — so a Phase-1/2 marker's stage-space x/y is already valid as
+ * image-space at the identity, requiring NO per-marker coordinate rewrite on upgrade (RESEARCH
+ * Pattern 7 / A1).
+ */
+export interface BackgroundTransform {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  /** Rotation in radians. */
+  rotation: number;
+}
+
+/**
+ * Phase-3 (D-04): one editor layer. Markers/shapes reference a layer by `layerId`. A locked
+ * layer renders dimmed + non-interactive; a hidden layer is not rendered (UI-SPEC). `order`
+ * is the bottom-to-top stacking index.
+ */
+export interface Layer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  order: number;
+}
+
+/**
+ * Phase-3 (D-01/D-02/D-03): a drawing primitive placed on a map. Rect/ellipse use the
+ * `x`/`y`/`width`/`height` bounding box (image-space); line/polygon use `points` (a flat
+ * `[x0,y0,x1,y1,…]` array in image-space). `preset` is one of the five lowercased zone-preset
+ * ids (stone/sage/clay/dusk/plum); `fill` toggles the translucent fill on/off (D-03). A
+ * non-empty `label` promotes the shape to a ZONE (D-02) — there is intentionally no separate
+ * Zone entity/array.
+ */
+export interface Shape {
+  id: string;
+  layerId: string;
+  kind: 'rect' | 'ellipse' | 'line' | 'polygon';
+  /** Bounding-box origin (image-space) — for rect/ellipse. */
+  x?: number;
+  y?: number;
+  /** Bounding-box size (image-space) — for rect/ellipse. */
+  width?: number;
+  height?: number;
+  /** Flat `[x0,y0,x1,y1,…]` vertices (image-space) — for line/polygon. */
+  points?: number[];
+  /** Rotation in radians. */
+  rotation: number;
+  /** One of the five lowercased zone-preset ids (stone/sage/clay/dusk/plum). */
+  preset: string;
+  /** D-03: translucent fill on/off (always off for Line). */
+  fill: boolean;
+  /** D-02: a non-empty label makes this shape a zone. */
+  label?: string;
 }
 
 /**
@@ -165,15 +245,42 @@ export interface RelationshipLink {
 }
 
 /**
- * A marker placing a Person at (x, y) on a MapDoc. Skeleton-minimal: distinctive
- * portal markers, connectors, and per-marker styling are later phases.
+ * Phase-3 (RESEARCH Pattern 5a): a marker is either a PERSON marker (placing a Person on the
+ * map) or a PORTAL marker (a doorway to `targetMapId`). The discriminant is `kind`.
+ */
+export type MarkerKind = 'person' | 'portal';
+
+/**
+ * A marker placed on a MapDoc. Phase-3 widens the Phase-1/2 skeleton:
+ *  - `kind` discriminates person vs portal (RESEARCH Pattern 5a). Defaults to `'person'`.
+ *  - `personId` is now OPTIONAL — a portal carries no person; `targetMapId` is the portal's
+ *    destination map.
+ *  - `width`/`height`/`rotation` are the optional Transformer state (D-14/D-15).
+ *  - `x`/`y` are REINTERPRETED as IMAGE-space coordinates (relative to the background image's
+ *    intrinsic pixel space), composed onto the live `MapDoc.backgroundTransform` at render
+ *    time (D-13/D-16, RESEARCH Pattern 7). The fields are NOT renamed and are NOT rewritten on
+ *    the version(4) upgrade — at the identity transform, old stage-space coords are already
+ *    valid image-space.
  */
 export interface Marker {
   id: string;
   mapId: string;
-  personId: string;
+  /** Person marker discriminant (RESEARCH Pattern 5a); defaults to `'person'`. */
+  kind: MarkerKind;
+  /** The placed Person — present for `kind:'person'`, absent for a portal. */
+  personId?: string;
+  /** Portal destination map — present for `kind:'portal'`. */
+  targetMapId?: string;
+  /** IMAGE-space x (see interface doc — composed onto backgroundTransform at render). */
   x: number;
+  /** IMAGE-space y. */
   y: number;
+  /** Optional Transformer width (D-14). */
+  width?: number;
+  /** Optional Transformer height (D-14). */
+  height?: number;
+  /** Optional Transformer rotation in radians (D-15). */
+  rotation?: number;
   updatedAt: number;
   dirty: boolean;
 }

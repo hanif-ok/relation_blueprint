@@ -21,12 +21,14 @@ function map(id: string): MapDoc {
     height: 600,
     gallery: [],
     custom: {},
+    shapes: [],
+    layers: [],
     updatedAt: 100,
     dirty: false,
   };
 }
 function marker(id: string, mapId: string, personId: string): Marker {
-  return { id, mapId, personId, x: 1, y: 2, updatedAt: 100, dirty: false };
+  return { id, mapId, kind: 'person', personId, x: 1, y: 2, updatedAt: 100, dirty: false };
 }
 
 async function textOf(blob: Blob): Promise<string> {
