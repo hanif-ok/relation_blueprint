@@ -14,7 +14,7 @@ Relation Blueprint is built as a sequence of widening vertical slices, not horiz
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore (completed 2026-06-24)
-- [ ] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists
+- [x] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (completed 2026-06-26)
 - [ ] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps
 - [ ] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph
 - [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
@@ -78,7 +78,7 @@ Plans:
   5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
   6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 Plans:
 
 **Wave 1**
@@ -99,7 +99,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 02-05-PLAN.md — Deferred Phase-1 UAT media: photo lightbox (criterion 5) + persisted gallery drag/keyboard reorder (criterion 6)
+- [x] 02-05-PLAN.md — Deferred Phase-1 UAT media: photo lightbox (criterion 5) + persisted gallery drag/keyboard reorder (criterion 6)
 
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
 **UI hint**: yes
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
-| 2. Custom Fields & Full Entity Model | 4/5 | In Progress|  |
+| 2. Custom Fields & Full Entity Model | 5/5 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
