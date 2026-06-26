@@ -21,7 +21,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **DATA-01**: User can create four first-class object types — People, Locations/Maps, Groups, and Relationship-links
 - [x] **DATA-02**: A Person ships with out-of-the-box fields: name, photo, phone, description, tags, notes
-- [ ] **DATA-03**: User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type
+- [x] **DATA-03**: User can define custom typed fields (text, number, date, phone, tags/select, link-to-entity, photo) on any entity type
 - [x] **DATA-04**: User can edit and delete any entity
 
 ### Profiles & Media
@@ -116,7 +116,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | STOR-07 | Phase 6 | Pending |
 | DATA-01 | Phase 2 | Pending |
 | DATA-02 | Phase 1 | Complete |
-| DATA-03 | Phase 2 | Pending |
+| DATA-03 | Phase 2 | Complete |
 | DATA-04 | Phase 1 | Complete |
 | PROF-01 | Phase 1 | Complete |
 | PROF-02 | Phase 1 | Complete |
