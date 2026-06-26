@@ -1,0 +1,146 @@
+/* PhotoLightbox (S18) — full-viewport dark-scrim overlay. The scrim is the slate canvas
+ * color (#1B2230, --slate) at ~92%, NOT generic black (U7). Controls are paper glyph buttons
+ * (≥44px hit area) with the amber focus ring; the index caption is mono paper text. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.92); /* --slate #1B2230 @ ~92% (U7) */
+}
+
+.content {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-2xl);
+}
+
+.content:focus {
+  outline: none;
+}
+
+.stage {
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.image {
+  max-width: calc(100vw - 2 * var(--space-2xl));
+  max-height: calc(100vh - 2 * var(--space-2xl));
+  object-fit: contain;
+  display: block;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); /* soft dark lift (S18) */
+}
+
+/* Loading full-res: a centered quiet shimmer on the scrim — never a blank flash (S18). */
+.shimmer {
+  display: block;
+  width: 240px;
+  height: 240px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    100deg,
+    rgba(244, 241, 234, 0.06) 30%,
+    rgba(244, 241, 234, 0.14) 50%,
+    rgba(244, 241, 234, 0.06) 70%
+  );
+  background-size: 200% 100%;
+  animation: lightboxShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes lightboxShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Decode error: a single paper line on the scrim + the close button stays available (S18). */
+.decodeError {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--paper);
+  margin: 0;
+  text-align: center;
+}
+
+/* prev / next / close — paper glyph buttons, ≥44px hit target. */
+.nav {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgba(27, 34, 48, 0.55);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nav:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.prev {
+  left: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.next {
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.close {
+  top: var(--space-md);
+  right: var(--space-md);
+}
+
+/* Mono index caption, bottom-center — paper text on the scrim. */
+.caption {
+  position: fixed;
+  bottom: var(--space-lg);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+}
+
+/* Visually-hidden Radix Dialog.Title (a11y label without visual chrome). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Reduced motion: no shimmer animation (and no slide transition between photos — none added). */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background: rgba(244, 241, 234, 0.1);
+  }
+}

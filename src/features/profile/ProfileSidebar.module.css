@@ -158,6 +158,24 @@
   border: var(--border-hairline);
 }
 
+/* Openable custom Photo value — opens the lightbox. A button so it is keyboard-operable. */
+.customPhotoButton {
+  display: inline-block;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  padding: 0;
+  cursor: pointer;
+}
+
+.customPhotoButton:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 .customPhotoImg {
   width: 100%;
   height: 100%;

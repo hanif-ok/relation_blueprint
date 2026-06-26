@@ -22,6 +22,7 @@ import { db } from '@/db/schema';
 import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
 import { PhotoGallery } from './PhotoGallery';
+import { PhotoLightbox } from './PhotoLightbox';
 import { CustomFieldRows } from './CustomFieldRows';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import type { EntityType, Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
@@ -100,6 +101,32 @@ export function ProfileSidebar({
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
+  // Lightbox host (S18): which ordered photo set is open and at what index. `null` = closed.
+  // The gallery passes `entity.gallery`; a custom Photo field passes a single-photo array.
+  const [lightbox, setLightbox] = useState<{ photos: MediaRef[]; index: number } | null>(null);
+  // Mirror the lightbox-open state in a ref so the sidebar's window-level Esc handler reads the
+  // value at the MOMENT of the keypress — Radix dismisses the lightbox on the same Escape and may
+  // null the state before our bubble listener runs, which would otherwise let one Esc close both.
+  const lightboxOpenRef = useRef(false);
+  lightboxOpenRef.current = lightbox !== null;
+  // The thumbnail that opened the lightbox, captured so focus returns there on dismiss (S18).
+  // (The trigger is a plain button, not a Radix Dialog.Trigger, so we restore focus ourselves.)
+  const lightboxTriggerRef = useRef<HTMLElement | null>(null);
+
+  /** Open the lightbox over `photos` at `index`, remembering the focused trigger for focus-return. */
+  function openLightbox(photos: MediaRef[], index: number) {
+    lightboxTriggerRef.current = (document.activeElement as HTMLElement) ?? null;
+    setLightbox({ photos, index });
+  }
+
+  /** Close the lightbox and return focus to the originating thumbnail (S18). */
+  function closeLightbox() {
+    const trigger = lightboxTriggerRef.current;
+    setLightbox(null);
+    lightboxTriggerRef.current = null;
+    // Restore focus after the overlay unmounts so Radix's own focus handling doesn't override it.
+    if (trigger) requestAnimationFrame(() => trigger.focus());
+  }
 
   const isMarkerContext = openedFrom === 'marker';
   const requestedType: ProfileEntityType = entityType ?? 'people';
@@ -154,10 +181,14 @@ export function ProfileSidebar({
   useEffect(() => {
     if (!entity) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !confirmOpen) onClose();
+      // While a modal overlay (confirm dialog OR lightbox) is open, Esc belongs to it — the
+      // sidebar must not steal it, or one Esc would close both. The lightbox check reads a ref
+      // so it is correct even if Radix has already begun closing on this same keypress.
+      if (e.key === 'Escape' && !confirmOpen && !lightboxOpenRef.current) onClose();
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Capture phase so this guard runs before Radix's dismiss layer can null the state.
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [entity?.id, confirmOpen, onClose]);
 
   if (!id || !entity) return null;
@@ -266,11 +297,15 @@ export function ProfileSidebar({
             entityType={type}
             custom={entity.custom}
             onOpenEntity={onOpenEntity}
+            onOpenPhoto={(photo) => openLightbox([photo], 0)}
           />
 
           <div className={styles.row}>
             <span className={styles.rowLabel}>Photos</span>
-            <PhotoGallery person={galleryHost} />
+            <PhotoGallery
+              person={galleryHost}
+              onOpen={(i) => openLightbox(galleryHost.gallery, i)}
+            />
           </div>
         </div>
 
@@ -334,6 +369,20 @@ export function ProfileSidebar({
             const victimId = entity.id;
             void deleteEntity(type, victimId).then(() => onDeleted(victimId));
           }}
+        />
+      )}
+
+      {/* Photo lightbox (S18) — opens from a gallery tile or a custom Photo thumbnail. Radix
+          returns focus to the originating thumbnail on dismiss. */}
+      {lightbox && (
+        <PhotoLightbox
+          photos={lightbox.photos}
+          index={lightbox.index}
+          open
+          onOpenChange={(o) => {
+            if (!o) closeLightbox();
+          }}
+          onIndexChange={(i) => setLightbox((lb) => (lb ? { ...lb, index: i } : lb))}
         />
       )}
     </>
