@@ -119,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-24 after initialization*
+*Last updated: 2026-06-26 after Phase 02.1 — closed the DATA-03 cloud-sync blocker so custom-field definitions round-trip through the manifest cloud path (own-your-whole-database guarantee restored for the custom-field schema).*
