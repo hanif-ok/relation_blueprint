@@ -13,6 +13,9 @@ import styles from './PhotoGallery.module.css';
 
 export interface PhotoGalleryProps {
   person: Person;
+  /** Open the lightbox at a tile's index over `person.gallery` (S18). Optional: when absent the
+   *  tiles render as plain (non-interactive) thumbnails. */
+  onOpen?: (index: number) => void;
 }
 
 /** Resolve a media hash to an object URL, revoking it on change/unmount (no leaks). */
@@ -37,27 +40,40 @@ function useMediaUrl(hash: string): string | null {
   return url;
 }
 
-function GalleryTile({ photo }: { photo: MediaRef }) {
+function GalleryTile({ photo, onOpen }: { photo: MediaRef; onOpen?: () => void }) {
   const url = useMediaUrl(photo.hash);
-  return (
-    <span className={styles.tile}>
-      {url ? (
-        <img src={url} alt="" className={styles.tileImg} />
-      ) : (
-        <span className={styles.tileShimmer} aria-hidden="true" />
-      )}
-    </span>
+  const inner = url ? (
+    <img src={url} alt="" className={styles.tileImg} />
+  ) : (
+    <span className={styles.tileShimmer} aria-hidden="true" />
   );
+
+  // When openable, the tile is a real button (click/Enter open the lightbox at this index);
+  // Radix returns focus here on dismiss. Without a handler it stays a plain thumbnail.
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        className={styles.tileButton}
+        onClick={onOpen}
+        aria-label="View photo"
+        data-testid="gallery-tile"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <span className={styles.tile}>{inner}</span>;
 }
 
-export function PhotoGallery({ person }: PhotoGalleryProps) {
+export function PhotoGallery({ person, onOpen }: PhotoGalleryProps) {
   if (person.gallery.length === 0) {
     return <p className={styles.empty}>No photos yet.</p>;
   }
   return (
     <div className={styles.grid} data-testid="profile-gallery">
-      {person.gallery.map((photo) => (
-        <GalleryTile key={photo.hash} photo={photo} />
+      {person.gallery.map((photo, i) => (
+        <GalleryTile key={photo.hash} photo={photo} onOpen={onOpen && (() => onOpen(i))} />
       ))}
     </div>
   );

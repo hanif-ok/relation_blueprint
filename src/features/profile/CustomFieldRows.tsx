@@ -25,6 +25,8 @@ export interface CustomFieldRowsProps {
   custom: CustomValues;
   /** Open another entity's profile (link-to-entity navigation, D-10 one-way). */
   onOpenEntity?: (type: EntityType, id: string) => void;
+  /** Open a custom Photo-field value full-size in the shared lightbox (S18, single-photo). */
+  onOpenPhoto?: (photo: MediaRef) => void;
 }
 
 /** True when a value counts as empty (absent / blank / empty list) — its row is omitted. */
@@ -105,12 +107,27 @@ function LinkValue({
   );
 }
 
-/** A single custom Photo value: a thumbnail tile (or nothing while it loads). */
-function PhotoValue({ photo }: { photo: MediaRef }) {
+/** A single custom Photo value: a thumbnail tile that opens the shared lightbox (S18). When no
+ *  opener is wired it degrades to a plain (non-interactive) thumbnail. */
+function PhotoValue({ photo, onOpen }: { photo: MediaRef; onOpen?: (photo: MediaRef) => void }) {
   const url = useMediaUrl(photo.hash);
+  const inner = url ? <img src={url} alt="" className={styles.customPhotoImg} /> : null;
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        className={styles.customPhotoButton}
+        data-testid="custom-photo"
+        aria-label="View photo"
+        onClick={() => onOpen(photo)}
+      >
+        {inner}
+      </button>
+    );
+  }
   return (
     <span className={styles.customPhoto} data-testid="custom-photo">
-      {url ? <img src={url} alt="" className={styles.customPhotoImg} /> : null}
+      {inner}
     </span>
   );
 }
@@ -120,10 +137,12 @@ function CustomValueView({
   def,
   value,
   onOpenEntity,
+  onOpenPhoto,
 }: {
   def: FieldDef;
   value: CustomValue;
   onOpenEntity?: (type: EntityType, id: string) => void;
+  onOpenPhoto?: (photo: MediaRef) => void;
 }) {
   switch (def.type) {
     case 'text':
@@ -164,13 +183,18 @@ function CustomValueView({
         <LinkValue targetType={def.targetType} id={String(value)} onOpenEntity={onOpenEntity} />
       );
     case 'photo':
-      return <PhotoValue photo={value as MediaRef} />;
+      return <PhotoValue photo={value as MediaRef} onOpen={onOpenPhoto} />;
     default:
       return null;
   }
 }
 
-export function CustomFieldRows({ entityType, custom, onOpenEntity }: CustomFieldRowsProps) {
+export function CustomFieldRows({
+  entityType,
+  custom,
+  onOpenEntity,
+  onOpenPhoto,
+}: CustomFieldRowsProps) {
   const defs = useLiveQuery<FieldDef[]>(() => listFieldDefs(entityType), [entityType]);
   const list = defs ?? [];
 
@@ -182,7 +206,12 @@ export function CustomFieldRows({ entityType, custom, onOpenEntity }: CustomFiel
         return (
           <div className={styles.row} key={def.id} data-testid="custom-row">
             <span className={styles.rowLabel}>{def.label}</span>
-            <CustomValueView def={def} value={value} onOpenEntity={onOpenEntity} />
+            <CustomValueView
+              def={def}
+              value={value}
+              onOpenEntity={onOpenEntity}
+              onOpenPhoto={onOpenPhoto}
+            />
           </div>
         );
       })}
