@@ -78,7 +78,7 @@ Plans:
   5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
   6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
-**Plans**: 6/6 plans complete
+**Plans**: 7/7 plans complete
 Plans:
 
 **Wave 1**
@@ -104,6 +104,7 @@ Plans:
 **Gap closure** *(from 02-VERIFICATION.md — Wave 1, no executed-plan dependencies)*
 
 - [x] 02-06-PLAN.md — BLOCKER CR-01/DATA-03/D-05: wire `coerceOnTypeChange` into the field type-change save path (`applyFieldTypeChange` repository mutation + zero-schema quarantine + wired test), plus warning fixes WR-01/WR-02/WR-04/WR-06
+- [x] 02-07-PLAN.md — BLOCKER (from 02-06 code review): fix quarantine-overwrite data loss — re-key quarantine by source field-type (preserve-all) + multi-hop regression test + tags read-path guard (DATA-03/D-05)
 
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
 **UI hint**: yes
@@ -184,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
-| 2. Custom Fields & Full Entity Model | 6/6 | Complete   | 2026-06-26 |
+| 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
