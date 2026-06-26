@@ -610,14 +610,20 @@ export async function applyFieldTypeChange(
  */
 export async function reorderFieldDefs(entityType: EntityType, orderedIds: string[]): Promise<void> {
   const now = Date.now();
+  const reorderedIds: string[] = [];
   await db.transaction('rw', db.fieldDefs, async () => {
     for (let index = 0; index < orderedIds.length; index++) {
       const def = await db.fieldDefs.get(orderedIds[index]);
       if (!def || def.entityType !== entityType) continue;
       await db.fieldDefs.put({ ...def, order: index, updatedAt: now, dirty: true });
+      reorderedIds.push(def.id);
     }
   });
-  emit({ entityType: 'fieldDefs', entityId: entityType, op: 'update' });
+  // Emit one fieldDefs update per reordered field id (a real FieldDef.id as entityId) — NEVER the
+  // entityType string, which would violate the ChangeEvent record-id contract (WR-06).
+  for (const id of reorderedIds) {
+    emit({ entityType: 'fieldDefs', entityId: id, op: 'update' });
+  }
 }
 
 /**
