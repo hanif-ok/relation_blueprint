@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
-current_phase_name: custom-fields-full-entity-model
+current_phase: 02.1
+current_phase_name: close-gap-data-03-sync-fielddefs-through-the-manifest-cloud-
 status: executing
 stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-06-26T15:36:00.481Z"
+last_updated: "2026-06-26T15:53:00.105Z"
 last_activity: 2026-06-26
-last_activity_desc: Phase 02 execution started
+last_activity_desc: Phase 02.1 execution started
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 17
+  total_plans: 18
   completed_plans: 17
   percent: 29
 ---
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-24)
 
 **Core value:** You can place people on a map of real locations and instantly see who is where, open any person to their full profile, and trace how people and groups relate — all from data you fully own, with no server.
-**Current focus:** Phase 02 — custom-fields-full-entity-model
+**Current focus:** Phase 02.1 — close-gap-data-03-sync-fielddefs-through-the-manifest-cloud-
 
 ## Current Position
 
-Phase: 02 (custom-fields-full-entity-model) — EXECUTING
-Plan: 1 of 6
-Status: Ready to execute
-Last activity: 2026-06-26 — Phase 02 execution started
+Phase: 02.1 (close-gap-data-03-sync-fielddefs-through-the-manifest-cloud-) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 02.1
+Last activity: 2026-06-26 — Phase 02.1 execution started
 
 Progress: [██████████] 100%
 

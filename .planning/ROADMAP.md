@@ -114,13 +114,13 @@ Plans:
 **Goal:** Close the DATA-03 cloud-sync BLOCKER — custom-field DEFINITIONS (`db.fieldDefs`) are serialized but never pushed to / pulled from the cloud because the SyncEngine's hand-listed entity-type machinery omits `'field-defs'`. Thread a sync-local `field-defs` shard token through ENTITY_TYPES + commit + reconcileOnOpen + getDirtyTypes/markSynced/upsert, add an optional `field-defs` pointer to ManifestSchema, and prove it with a push→fresh-reconcile round-trip regression test.
 **Requirements**: DATA-03 (also unblocks STOR-02, STOR-03)
 **Depends on:** Phase 2
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 
 **Wave 1**
 
-- [ ] 02.1-01-PLAN.md — Thread the `field-defs` shard token through SyncEngine + ManifestSchema (symmetric six-branch wiring, optional manifest pointer, sync-local `SyncShardType` — EntityType untouched, NO migration) + push→fresh-reconcile round-trip regression test + atomicity/backward-compat assertions
+- [x] 02.1-01-PLAN.md — Thread the `field-defs` shard token through SyncEngine + ManifestSchema (symmetric six-branch wiring, optional manifest pointer, sync-local `SyncShardType` — EntityType untouched, NO migration) + push→fresh-reconcile round-trip regression test + atomicity/backward-compat assertions
 
 ### Phase 3: Map Editor — Spaces & Navigation
 
