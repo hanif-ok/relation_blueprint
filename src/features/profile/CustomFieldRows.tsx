@@ -175,7 +175,7 @@ function CustomValueView({
     case 'tags':
       return (
         <span className={styles.chips} data-testid="custom-tags">
-          {(value as string[]).map((tag) => (
+          {(Array.isArray(value) ? (value as string[]) : []).map((tag) => (
             <span key={tag} className={styles.chip}>
               {tag}
             </span>
