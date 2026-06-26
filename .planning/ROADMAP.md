@@ -14,7 +14,7 @@ Relation Blueprint is built as a sequence of widening vertical slices, not horiz
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore (completed 2026-06-24)
-- [ ] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (verification 2026-06-26: gaps found — 5/6 must-haves; D-05 type-change coercion unwired, awaiting gap closure)
+- [x] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (verification 2026-06-26: gaps found — 5/6 must-haves; D-05 type-change coercion unwired, awaiting gap closure) (completed 2026-06-26)
 - [ ] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps
 - [ ] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph
 - [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
@@ -78,7 +78,7 @@ Plans:
   5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
   6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
-**Plans**: 6 plans (5/5 base complete; 1 gap-closure pending)
+**Plans**: 6/6 plans complete
 Plans:
 
 **Wave 1**
@@ -103,7 +103,7 @@ Plans:
 
 **Gap closure** *(from 02-VERIFICATION.md — Wave 1, no executed-plan dependencies)*
 
-- [ ] 02-06-PLAN.md — BLOCKER CR-01/DATA-03/D-05: wire `coerceOnTypeChange` into the field type-change save path (`applyFieldTypeChange` repository mutation + zero-schema quarantine + wired test), plus warning fixes WR-01/WR-02/WR-04/WR-06
+- [x] 02-06-PLAN.md — BLOCKER CR-01/DATA-03/D-05: wire `coerceOnTypeChange` into the field type-change save path (`applyFieldTypeChange` repository mutation + zero-schema quarantine + wired test), plus warning fixes WR-01/WR-02/WR-04/WR-06
 
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
 **UI hint**: yes
@@ -184,7 +184,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
-| 2. Custom Fields & Full Entity Model | 5/5 | Gaps Found | - |
+| 2. Custom Fields & Full Entity Model | 6/6 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
