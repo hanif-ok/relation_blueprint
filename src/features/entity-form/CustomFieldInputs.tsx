@@ -16,6 +16,7 @@ import { X } from 'lucide-react';
 import { db } from '@/db/schema';
 import { listFieldDefs } from '@/db/repository';
 import { PhotoUpload } from '@/features/person-form/PhotoUpload';
+import { SetAsideNote } from '@/features/fields/SetAsideNote';
 import type { CustomValue, CustomValues, EntityType, FieldDef, MediaRef } from '@/domain/types';
 import styles from './EntityForm.module.css';
 
@@ -58,20 +59,27 @@ function useTargetEntities(targetType: EntityType | undefined): { id: string; na
 function FieldInput({
   def,
   value,
+  custom,
   onChange,
   error,
 }: {
   def: FieldDef;
   value: CustomValue;
+  /** The full custom map for this entity — read for any set-aside (quarantined) originals (F-2). */
+  custom: CustomValues;
   onChange: (value: CustomValue) => void;
   error?: string;
 }) {
   const errId = useId();
+  const hintId = useId();
   const [tagDraft, setTagDraft] = useState('');
   const targets = useTargetEntities(def.type === 'link-to-entity' ? def.targetType : undefined);
   const tags = Array.isArray(value) ? (value as string[]) : [];
 
-  const describedBy = error ? errId : undefined;
+  // A Number field carries the "Numbers only" hint (F-1); link both error and hint via describedBy.
+  const hasHint = def.type === 'number';
+  const describedBy =
+    [error ? errId : undefined, hasHint ? hintId : undefined].filter(Boolean).join(' ') || undefined;
 
   function renderInput() {
     switch (def.type) {
@@ -227,6 +235,12 @@ function FieldInput({
         {def.required ? ' *' : ''}
       </span>
       {renderInput()}
+      {hasHint && (
+        <span id={hintId} className={styles.hint}>
+          Numbers only
+        </span>
+      )}
+      <SetAsideNote custom={custom} fieldId={def.id} />
       {error && (
         <span id={errId} className={styles.error} role="alert">
           {error}
@@ -250,6 +264,7 @@ export function CustomFieldInputs({ entityType, custom, onChange, errors }: Cust
           // `?? {}` guards a legacy record whose `custom` map is absent (pre-version-3 data):
           // indexing an undefined map here would throw and white-screen the form (02-UAT test 2).
           value={(custom ?? {})[def.id] ?? null}
+          custom={custom ?? {}}
           onChange={(v) => onChange(def.id, v)}
           error={errors?.[def.id]}
         />

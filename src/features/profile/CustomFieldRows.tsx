@@ -14,7 +14,8 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { listFieldDefs } from '@/db/repository';
+import { listFieldDefs, quarantinedEntriesFor } from '@/db/repository';
+import { SetAsideNote } from '@/features/fields/SetAsideNote';
 import { resolveMediaUrl } from '@/media/mediaManager';
 import type { CustomValue, CustomValues, EntityType, FieldDef, MediaRef } from '@/domain/types';
 import styles from './ProfileSidebar.module.css';
@@ -207,17 +208,25 @@ export function CustomFieldRows({
       {list.map((def) => {
         // `?? {}` guards a legacy record whose `custom` map is absent (pre-version-3 data): indexing
         // an undefined map here would throw and white-screen the profile (02-UAT test 2).
-        const value = (custom ?? {})[def.id] ?? null;
-        if (isEmpty(value)) return null; // empty rows omitted (consistent with built-ins, U8)
+        const map = custom ?? {};
+        const value = map[def.id] ?? null;
+        const setAside = quarantinedEntriesFor(map, def.id);
+        // Omit a row only when there is NOTHING to show. A field whose live value is empty but has a
+        // set-aside original still renders so the recover note (F-2) is visible — otherwise the value
+        // reads as lost. Truly-empty rows stay omitted (consistent with the built-ins, U8).
+        if (isEmpty(value) && setAside.length === 0) return null;
         return (
           <div className={styles.row} key={def.id} data-testid="custom-row">
             <span className={styles.rowLabel}>{def.label}</span>
-            <CustomValueView
-              def={def}
-              value={value}
-              onOpenEntity={onOpenEntity}
-              onOpenPhoto={onOpenPhoto}
-            />
+            {!isEmpty(value) && (
+              <CustomValueView
+                def={def}
+                value={value}
+                onOpenEntity={onOpenEntity}
+                onOpenPhoto={onOpenPhoto}
+              />
+            )}
+            <SetAsideNote custom={map} fieldId={def.id} />
           </div>
         );
       })}

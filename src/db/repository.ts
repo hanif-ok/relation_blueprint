@@ -18,6 +18,7 @@ import {
 } from '@/domain/schemas';
 import { coerceOnTypeChange } from '@/features/fields/customValue';
 import type {
+  CustomValue,
   CustomValues,
   EntityType,
   FieldDef,
@@ -492,6 +493,32 @@ export const QUARANTINE_KEY_PREFIX = '__quarantine:';
  */
 export function quarantineKey(fieldId: string, sourceType: FieldType): string {
   return `${QUARANTINE_KEY_PREFIX}${fieldId}:${sourceType}`;
+}
+
+/** One set-aside original recovered from an entity's custom map: the value + the field type it
+ *  belonged to (switch the field's type back to `sourceType` to restore it). */
+export interface QuarantinedEntry {
+  sourceType: FieldType;
+  value: CustomValue;
+}
+
+/**
+ * The inverse of `quarantineKey`: read the set-aside (quarantined) originals for ONE field from an
+ * entity's `custom` map. Parses keys of the form `__quarantine:<fieldId>:<sourceType>` back into
+ * `{ sourceType, value }` entries — ignoring the live value and other fields' quarantine keys, and
+ * skipping empty (null) slots. The UI uses this to reassure the curator that a value which vanished
+ * on a type change is set aside (recoverable), not deleted (F-2). Key parsing lives ONLY here and in
+ * `quarantineKey` — never hand-roll the prefix/suffix at a call site.
+ */
+export function quarantinedEntriesFor(custom: CustomValues, fieldId: string): QuarantinedEntry[] {
+  const prefix = `${QUARANTINE_KEY_PREFIX}${fieldId}:`;
+  const entries: QuarantinedEntry[] = [];
+  for (const [key, value] of Object.entries(custom)) {
+    if (!key.startsWith(prefix)) continue;
+    if (value === undefined || value === null) continue;
+    entries.push({ sourceType: key.slice(prefix.length) as FieldType, value });
+  }
+  return entries;
 }
 
 /** An entity family that carries a `custom` map (everything except markers). */

@@ -127,6 +127,9 @@ export function ViewSwitcher({
                 className={isActive ? `${styles.item} ${styles.itemActive}` : styles.item}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={item.label}
+                // Hover tooltip so the icon-only narrow rail is discoverable for mouse users (F-3);
+                // complements the always-present aria-label (which feeds AT, not hover).
+                title={item.label}
                 tabIndex={index === activeIndex ? 0 : -1}
                 data-testid={`view-${item.key}`}
                 onClick={() => onSelectView(item.key)}
@@ -156,6 +159,7 @@ export function ViewSwitcher({
             }}
             className={styles.item}
             aria-label="Fields"
+            title="Fields"
             tabIndex={-1}
             data-testid="view-fields"
             onClick={onOpenFields}
@@ -173,6 +177,7 @@ export function ViewSwitcher({
             }}
             className={styles.item}
             aria-label="About and Privacy"
+            title="About / Privacy"
             tabIndex={-1}
             data-testid="view-privacy"
             onClick={onOpenPrivacy}

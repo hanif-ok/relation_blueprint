@@ -105,6 +105,14 @@
   color: var(--brick);
 }
 
+/* Muted helper text under an input (e.g. the Number field's "Numbers only", F-1). Informational —
+   ink-muted, never brick/amber, so it does not read as an error or a call to action. */
+.hint {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
 .uploadLabel {
   font-family: var(--font-body);
   font-size: 16px;
