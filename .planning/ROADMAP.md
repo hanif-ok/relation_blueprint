@@ -78,7 +78,7 @@ Plans:
   5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
   6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 Plans:
 
 **Wave 1**
@@ -91,7 +91,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 02-03-PLAN.md — Multi-surface shell: left-nav view switcher + `+ New` menu + generalized entity forms + virtualized browse lists (×4) + one-time privacy notice (DATA-01, BRWS-01, BRWS-02, criterion 4)
+- [x] 02-03-PLAN.md — Multi-surface shell: left-nav view switcher + `+ New` menu + generalized entity forms + virtualized browse lists (×4) + one-time privacy notice (DATA-01, BRWS-01, BRWS-02, criterion 4)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
-| 2. Custom Fields & Full Entity Model | 2/5 | In Progress|  |
+| 2. Custom Fields & Full Entity Model | 3/5 | In Progress|  |
 | 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
