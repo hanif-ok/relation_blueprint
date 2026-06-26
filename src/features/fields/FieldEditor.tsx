@@ -10,7 +10,8 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { createFieldDef, updateFieldDef } from '@/db/repository';
+import { applyFieldTypeChange, createFieldDef, updateFieldDef } from '@/db/repository';
+import type { DeletableEntityType } from '@/db/repository';
 import type { EntityType, FieldDef, FieldType } from '@/domain/types';
 import styles from './FieldManager.module.css';
 
@@ -84,7 +85,16 @@ export function FieldEditor({ entityType, field, onSaved, onCancel }: FieldEdito
       targetType: type === 'link-to-entity' ? targetType : undefined,
     };
     if (isEdit) {
-      await updateFieldDef(field!.id, patch);
+      if (typeChanged) {
+        // A TYPE change coerces every existing value (keep / quarantine / restore) in the SAME
+        // unit as the def patch, making the caution copy below true (D-05 / CR-01). `entityType`
+        // is the wider `EntityType`; `applyFieldTypeChange` takes the narrower `DeletableEntityType`
+        // (no `markers` — markers carry no custom map), and FieldEditor is never rendered for
+        // markers, so the cast is safe.
+        await applyFieldTypeChange(entityType as DeletableEntityType, field!.id, patch);
+      } else {
+        await updateFieldDef(field!.id, patch);
+      }
     } else {
       await createFieldDef({ entityType, ...patch });
     }

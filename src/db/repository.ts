@@ -16,6 +16,7 @@ import {
   PersonSchema,
   RelationshipLinkSchema,
 } from '@/domain/schemas';
+import { coerceOnTypeChange } from '@/features/fields/customValue';
 import type {
   CustomValues,
   EntityType,
@@ -470,19 +471,159 @@ export async function updateFieldDef(id: string, patch: UpdateFieldDefPatch): Pr
 }
 
 /**
+ * Reserved-key namespace for a quarantined custom-field original (D-05). When a field's type
+ * changes and a stored value cannot be coerced to the new type, the ORIGINAL is set aside under
+ * this namespaced key inside the SAME `custom` map (a valid `CustomValue`, so it round-trips
+ * through `CustomValuesSchema` / the serializer / backup with ZERO schema change). The separator
+ * (`:`) can never appear in a nanoid `FieldDef.id`, so a reserved key can never collide with a
+ * live field id — and a future Phase-5 search indexer can skip every key beginning with this
+ * prefix. Single-sourced here; never hand-roll the prefix at a call site.
+ */
+export const QUARANTINE_KEY_PREFIX = '__quarantine:';
+
+/** Build the reserved per-field quarantine key for `fieldId` (single source of truth, D-05). */
+export function quarantineKey(fieldId: string): string {
+  return `${QUARANTINE_KEY_PREFIX}${fieldId}`;
+}
+
+/** An entity family that carries a `custom` map (everything except markers). */
+type CustomBearingEntity = Person | MapDoc | Group | RelationshipLink;
+
+/**
+ * Rewrite one entity's `custom` map for a field type change: coerce the live value (keep, maybe
+ * reshaped, or set the original aside under `qKey`), then restore a previously-quarantined
+ * original that now fits the new type. Returns the new `custom` map plus whether it changed.
+ */
+function coerceEntityCustom(
+  custom: CustomValues,
+  fieldId: string,
+  qKey: string,
+  fromType: FieldType,
+  toType: FieldType,
+): { custom: CustomValues; changed: boolean } {
+  const next: CustomValues = { ...custom };
+  const liveValue = next[fieldId];
+  let changed = false;
+
+  if (liveValue !== undefined && liveValue !== null) {
+    const result = coerceOnTypeChange(fromType, toType, liveValue);
+    if ('kept' in result) {
+      if (result.kept !== next[fieldId]) {
+        next[fieldId] = result.kept;
+        changed = true;
+      }
+    } else {
+      next[qKey] = result.quarantined;
+      next[fieldId] = null;
+      changed = true;
+    }
+  }
+
+  const quarantined = next[qKey];
+  if (quarantined !== undefined && quarantined !== null) {
+    const restore = coerceOnTypeChange(fromType, toType, quarantined);
+    if ('kept' in restore) {
+      next[fieldId] = restore.kept;
+      delete next[qKey];
+      changed = true;
+    }
+  }
+
+  return { custom: next, changed };
+}
+
+/**
+ * Apply a custom-field DEFINITION change that includes a TYPE change (D-05 / CR-01), running
+ * `coerceOnTypeChange` over every existing entity value of the field so the FieldEditor caution
+ * copy is TRUE: convertible values are kept (possibly reshaped), non-convertible originals are
+ * QUARANTINED (set aside under `quarantineKey`, never deleted), and a value quarantined by an
+ * earlier change is RESTORED when the type changes back to one it fits. The def patch AND every
+ * coerced/quarantined entity value are written in ONE rw transaction so a mid-change failure
+ * cannot leave the def changed but values un-coerced (or vice-versa). Each touched entity is
+ * re-validated through its zod schema and stamped `updatedAt`/`dirty` (so the coerced rows sync
+ * to the cloud); change events are emitted AFTER the transaction commits. Use this INSTEAD OF
+ * `updateFieldDef` when (and only when) the field's `type` changes.
+ */
+export async function applyFieldTypeChange(
+  entityType: DeletableEntityType,
+  fieldId: string,
+  patch: UpdateFieldDefPatch,
+): Promise<FieldDef> {
+  const table = DELETABLE_TABLES[entityType]();
+  const qKey = quarantineKey(fieldId);
+  const touchedEntityIds: string[] = [];
+  let updatedDef: FieldDef | undefined;
+
+  await db.transaction('rw', [table, db.fieldDefs], async () => {
+    const def = await db.fieldDefs.get(fieldId);
+    if (!def) throw new Error(`applyFieldTypeChange: no field definition with id ${fieldId}`);
+    const fromType = def.type;
+    const toType = patch.type ?? def.type;
+
+    // (b) Persist the validated patched def in the SAME transaction as the value rewrite.
+    updatedDef = FieldDefSchema.parse({
+      ...def,
+      ...patch,
+      id: def.id,
+      updatedAt: Date.now(),
+      dirty: true,
+    });
+    await db.fieldDefs.put(updatedDef);
+
+    // (c) Coerce / quarantine / restore every entity's value for this field. Each touched row is
+    // re-validated through its own schema + stamped before the typed put (no raw un-stamped put).
+    const rows = (await table.toArray()) as CustomBearingEntity[];
+    for (const row of rows) {
+      const { custom, changed } = coerceEntityCustom(row.custom, fieldId, qKey, fromType, toType);
+      if (!changed) continue;
+      const stamped = { ...row, custom, updatedAt: Date.now(), dirty: true };
+      switch (entityType) {
+        case 'people':
+          await db.people.put(PersonSchema.parse(stamped));
+          break;
+        case 'maps':
+          await db.maps.put(MapDocSchema.parse(stamped));
+          break;
+        case 'groups':
+          await db.groups.put(GroupSchema.parse(stamped));
+          break;
+        case 'relationship-links':
+          await db.relationshipLinks.put(RelationshipLinkSchema.parse(stamped));
+          break;
+      }
+      touchedEntityIds.push(row.id);
+    }
+  });
+
+  // Emit AFTER commit so subscribers see only persisted state (mirrors deleteEntity/reorder).
+  emit({ entityType: 'fieldDefs', entityId: fieldId, op: 'update' });
+  for (const id of touchedEntityIds) {
+    emit({ entityType, entityId: id, op: 'update' });
+  }
+
+  return updatedDef!;
+}
+
+/**
  * Rewrite each definition's `order` to its index in `orderedIds` (D-02 reorder), in one rw
  * transaction so a partial reorder can't persist. Ids not belonging to `entityType` are ignored.
  */
 export async function reorderFieldDefs(entityType: EntityType, orderedIds: string[]): Promise<void> {
   const now = Date.now();
+  const reorderedIds: string[] = [];
   await db.transaction('rw', db.fieldDefs, async () => {
     for (let index = 0; index < orderedIds.length; index++) {
       const def = await db.fieldDefs.get(orderedIds[index]);
       if (!def || def.entityType !== entityType) continue;
       await db.fieldDefs.put({ ...def, order: index, updatedAt: now, dirty: true });
+      reorderedIds.push(def.id);
     }
   });
-  emit({ entityType: 'fieldDefs', entityId: entityType, op: 'update' });
+  // Emit one fieldDefs update per reordered field id (a real FieldDef.id as entityId) — NEVER the
+  // entityType string, which would violate the ChangeEvent record-id contract (WR-06).
+  for (const id of reorderedIds) {
+    emit({ entityType: 'fieldDefs', entityId: id, op: 'update' });
+  }
 }
 
 /**

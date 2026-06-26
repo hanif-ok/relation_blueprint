@@ -152,12 +152,16 @@ function CustomValueView({
           {String(value)}
         </span>
       );
-    case 'phone':
+    case 'phone': {
+      // Strip the stored value to dialable characters before it reaches the tel: URI (WR-02);
+      // the visible link text stays the raw value rendered as a React child (never innerHTML, T-03-01).
+      const dialable = String(value).replace(/[^\d+*#,;]/g, '');
       return (
-        <a className={styles.phoneLink} href={`tel:${String(value)}`} data-testid="custom-phone">
+        <a className={styles.phoneLink} href={`tel:${dialable}`} data-testid="custom-phone">
           {String(value)}
         </a>
       );
+    }
     case 'date': {
       const iso = String(value);
       const parsed = new Date(iso);

@@ -94,11 +94,16 @@ export function FieldManager({ open, onOpenChange, entityType }: FieldManagerPro
   async function move(index: number, delta: number) {
     const next = index + delta;
     if (next < 0 || next >= list.length) return;
+    // Capture the moved field (and its label) from the freshest snapshot BEFORE the await, so the
+    // reorder ids and the aria-live announcement never read a list value captured in an earlier
+    // render after `reorderFieldDefs` resolves (WR-04 stale-closure fix).
+    const movedField = list[index];
+    const movedLabel = movedField.label;
     const ids = list.map((f) => f.id);
-    const [moved] = ids.splice(index, 1);
-    ids.splice(next, 0, moved);
+    ids.splice(index, 1);
+    ids.splice(next, 0, movedField.id);
     await reorderFieldDefs(entityType, ids);
-    setAnnounce(`Moved ${list[index].label} to position ${next + 1} of ${list.length}.`);
+    setAnnounce(`Moved ${movedLabel} to position ${next + 1} of ${list.length}.`);
   }
 
   return (
