@@ -20,11 +20,24 @@ import {
   type StepLabel,
 } from '../_fakes/faultInjectingProvider';
 import type { EntitySet } from '@/sync/serializer';
-import type { MapDoc, Manifest, Marker, Person } from '@/domain/types';
+import type { FieldDef, MapDoc, Manifest, Marker, Person } from '@/domain/types';
 import { makeMemoryPort, type MemoryRepo } from './_memoryPort';
 
 function person(id: string, name: string, updatedAt = 100): Person {
   return { id, name, tags: [], gallery: [], custom: {}, updatedAt, dirty: false };
+}
+function fieldDef(id: string, updatedAt = 100): FieldDef {
+  return {
+    id,
+    entityType: 'people',
+    label: `field-${id}`,
+    type: 'text',
+    required: false,
+    order: 0,
+    deleted: false,
+    updatedAt,
+    dirty: false,
+  };
 }
 function map(id: string, updatedAt = 100): MapDoc {
   return {
@@ -55,7 +68,9 @@ async function seedCommittedDatabase(provider: InMemoryProvider) {
     markers: [marker('k1')],
     groups: [],
     relationshipLinks: [],
-    fieldDefs: [],
+    // A custom-field DEFINITION participates in the committed set: STOR-05 atomicity must hold
+    // for the field-defs shard exactly as it does for the entity shards.
+    fieldDefs: [fieldDef('fd1')],
   };
 
   const port: MemoryRepo = makeMemoryPort(committed);
@@ -94,7 +109,7 @@ describe('SyncEngine atomicity under failure injection (STOR-05)', () => {
         markers: [marker('k1', 200)],
         groups: [],
         relationshipLinks: [],
-        fieldDefs: [],
+        fieldDefs: [fieldDef('fd1', 200), fieldDef('fd2', 200)],
       };
       const port = makeMemoryPort(mutated);
       port.markAllDirty();
@@ -127,7 +142,7 @@ describe('SyncEngine atomicity under failure injection (STOR-05)', () => {
       markers: [marker('k1', 300)],
       groups: [],
       relationshipLinks: [],
-      fieldDefs: [],
+      fieldDefs: [fieldDef('fd1', 300)],
     };
     const port = makeMemoryPort(mutated);
     port.markAllDirty();
@@ -145,12 +160,20 @@ describe('SyncEngine atomicity under failure injection (STOR-05)', () => {
   });
 });
 
-/** Reconstruct the entity set the manifest currently points at, via the provider. */
+/** Reconstruct the entity set the manifest currently points at, via the provider. Reads the
+ * field-defs shard too so the deep-equal covers the custom-field DEFINITIONS (STOR-05 with a
+ * dirty FieldDef in the set). */
 async function reconstructFromManifest(provider: InMemoryProvider, manifest: Manifest): Promise<EntitySet> {
   const shards: Record<string, Blob> = {
     [SHARD_NAMES.people]: await provider.readFile(manifest.shards.people.fileId),
     [SHARD_NAMES.maps]: await provider.readFile(manifest.shards.maps.fileId),
     [SHARD_NAMES.markers]: await provider.readFile(manifest.shards.markers.fileId),
+    [SHARD_NAMES.groups]: await provider.readFile(manifest.shards.groups.fileId),
+    [SHARD_NAMES['relationship-links']]: await provider.readFile(manifest.shards['relationship-links'].fileId),
   };
+  const fieldDefsPointer = manifest.shards['field-defs'];
+  if (fieldDefsPointer) {
+    shards[SHARD_NAMES.fieldDefs] = await provider.readFile(fieldDefsPointer.fileId);
+  }
   return deserializeShards(shards);
 }
