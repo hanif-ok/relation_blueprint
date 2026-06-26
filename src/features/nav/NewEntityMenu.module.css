@@ -1,0 +1,59 @@
+/* + New ▾ — the one amber create action in the top bar (U5, A8). The dropdown surface is
+ * paper with hairline + elevation-2; items are neutral ink (only the trigger is amber). */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--paper);
+  background: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.content {
+  min-width: 220px;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-xs);
+  z-index: 50;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.item[data-highlighted] {
+  background: var(--paper-shade);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}

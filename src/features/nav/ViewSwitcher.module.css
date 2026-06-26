@@ -1,0 +1,114 @@
+/* Left-nav view switcher (S10). Paper-shade rail, 240px expanded / 56px icon-only ≤900px.
+ * Active item = paper pulled forward + 3px ink-muted left bar + ink (NOT amber) — U1/A8. */
+
+.rail {
+  flex: 0 0 240px;
+  width: 240px;
+  height: 100%;
+  background: var(--paper-shade);
+  border-right: var(--border-hairline);
+  box-shadow: var(--elevation-1);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) 0;
+  overflow-y: auto;
+}
+
+.section {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.divider {
+  height: 0;
+  margin: var(--space-md) var(--space-md);
+  border: none;
+  border-top: var(--border-hairline);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.item:hover {
+  background: var(--paper);
+}
+
+/* Active: paper pulled forward + ink-muted left bar + promoted to ink. Never amber. */
+.itemActive {
+  background: var(--paper);
+  border-left: 3px solid var(--ink-muted);
+  color: var(--ink);
+}
+
+.itemActive .glyph {
+  color: var(--ink);
+}
+
+.glyph {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+
+.label {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trailing mono count pill (S10). */
+.count {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-muted);
+  background: var(--paper-shade);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-sm);
+  min-width: 1.5em;
+  text-align: center;
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+/* Collapse to icon-only on narrow viewports — labels + count pills hidden, glyphs kept. */
+@media (max-width: 900px) {
+  .rail {
+    flex-basis: 56px;
+    width: 56px;
+  }
+
+  .label,
+  .count {
+    display: none;
+  }
+
+  .item {
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+}

@@ -1,0 +1,209 @@
+/* Entity create/edit form — right-docked paper panel (modal scrim on narrow). Inputs sit
+ * in paper-shade wells with hairline borders; amber focus ring. Save is amber on create,
+ * neutral-ink on edit (amber reserved for creation — UI-SPEC A8). Mirrors PersonForm. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.45);
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(420px, 100vw);
+  background: var(--paper);
+  box-shadow: var(--elevation-2);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  border-bottom: var(--border-hairline);
+}
+
+.title {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.label {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.input,
+.textarea {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  resize: vertical;
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.error {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brick);
+}
+
+.uploadLabel {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.uploadLabel:focus-within {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-top: var(--border-hairline);
+}
+
+.cancel,
+.saveCreate,
+.saveNeutral {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.cancel {
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+}
+
+/* Create: amber (the one creative act). */
+.saveCreate {
+  color: var(--paper);
+  background: var(--amber);
+  border: 1px solid var(--amber);
+}
+
+/* Edit: neutral-ink, paper-inverse — amber stays reserved for creation. */
+.saveNeutral {
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.saveCreate:disabled,
+.saveNeutral:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel:focus-visible,
+.saveCreate:focus-visible,
+.saveNeutral:focus-visible,
+.close:focus-visible,
+.chipRemove:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

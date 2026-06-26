@@ -13,8 +13,10 @@ import { expect, test } from '@playwright/test';
  * The real-consent + visible-folder assertion is a documented MANUAL gate (verify-work).
  */
 
+// A VALID 8x8 RGB PNG (decodes cleanly via createImageBitmap — the map upload routes through
+// capGalleryImage; the old 2x2 fixture is rejected by createImageBitmap).
 const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEYBxVSF8FAGGmA1u4d5n5AAAAAElFTkSuQmCC';
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR4nGNowAEYhpYEAILzYAGc7g8kAAAAAElFTkSuQmCC';
 
 async function resetDb(page: import('@playwright/test').Page) {
   await page.evaluate(async () => {
@@ -25,9 +27,19 @@ async function resetDb(page: import('@playwright/test').Page) {
   });
 }
 
+/** Pre-dismiss the one-time privacy notice so it never blocks a flow that isn't testing it. */
+async function suppressPrivacyNotice(page: import('@playwright/test').Page) {
+  await page.evaluate(async () => {
+    await window.__rb!.db.meta.put({ key: 'privacyNoticeDismissed', value: true });
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('./');
   await resetDb(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+  await suppressPrivacyNotice(page);
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 });
@@ -84,9 +96,11 @@ test('a 401 shows the non-destructive Reconnect banner and the app stays usable 
   });
   await expect(page.locator('[data-testid="map-view"] canvas').first()).toBeVisible({ timeout: 15_000 });
 
-  await page.getByTestId('add-person').click();
+  // Create a Person via the "+ New ▾" menu (the Phase-1 "+ Person" button generalized, U5).
+  await page.getByTestId('new-entity-trigger').click();
+  await page.getByTestId('new-entity-people').click();
   await page.getByTestId('field-name').fill('Offline Person');
-  await page.getByRole('button', { name: 'Save person' }).click();
+  await page.getByTestId('entity-form-save').click();
 
   // The person persisted to Dexie despite Drive being in the reconnect state.
   await expect

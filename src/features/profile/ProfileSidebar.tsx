@@ -1,53 +1,92 @@
-// ProfileSidebar — the right-docked dossier panel that opens on marker selection.
+// ProfileSidebar — the right-docked dossier panel that opens on marker selection (map
+// context) OR on a browse-row click (list context, plan 02-03).
 //
-// Reads the selected person reactively via useLiveQuery (Dexie is source of truth). Shows
-// the round thumbnail (avatar or initials), the entity name (Fraunces display), and all
-// DATA-02 fields read-only (empty rows omitted), plus the PhotoGallery mount point and
-// Edit / Delete actions.
+// Reads the selected entity reactively via useLiveQuery (Dexie is source of truth). It is
+// entity-generic over the four first-class types: People keep their full DATA-02 rendering
+// (phone/description/tags), while Locations/Groups/Relationship-links render the shared spine
+// (name + notes + gallery) plus their type-specific spine fields. The round thumbnail shows
+// the avatar, the People initials fallback, or — for non-People — a paper-shade square with
+// the type's Lucide glyph (U2). The entity name uses the Fraunces display face.
 //
 // Canvas->AT bridge (UI-SPEC): the canvas is opaque to screen readers, so opening the
 // sidebar moves focus into it AND announces "Selected {Name}" via a visually-hidden
-// aria-live region — that is how a marker click reaches keyboard/AT users in Phase 1.
+// aria-live region — that is how a marker click reaches keyboard/AT users.
 //
-// Security: all user text (name, phone, description, tags, notes) is rendered as React
-// children — never dangerouslySetInnerHTML (T-03-01: an XSS could exfiltrate the Drive token).
+// Security: all user text (name, phone, description, tags, notes, label, date) is rendered as
+// React children — never dangerouslySetInnerHTML (T-03-01: an XSS could exfiltrate the Drive token).
 
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Building2, UsersRound, ArrowLeftRight } from 'lucide-react';
 import { db } from '@/db/schema';
 import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
 import { PhotoGallery } from './PhotoGallery';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
-import type { Person } from '@/domain/types';
+import type { Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
 import styles from './ProfileSidebar.module.css';
 
+/** The deletable entity families a profile can render (markers are a separate concern). */
+export type ProfileEntityType = 'people' | 'maps' | 'groups' | 'relationship-links';
+
+/** Any entity record this sidebar can render — they share the spine fields it reads. */
+type AnyEntity = Person | MapDoc | Group | RelationshipLink;
+
+/** Human singular for an entity type, used in titles + the "Delete {entity}" copy. */
+const SINGULAR: Record<ProfileEntityType, string> = {
+  people: 'person',
+  maps: 'location',
+  groups: 'group',
+  'relationship-links': 'relationship-link',
+};
+
 export interface ProfileSidebarProps {
-  personId: string | null;
+  /** Legacy/marker path: the selected person id. Sugar for entityType='people'. */
+  personId?: string | null;
+  /** List path (plan 02-03): the entity family being shown. Defaults to 'people'. */
+  entityType?: ProfileEntityType;
+  /** List path: the entity id being shown. Falls back to `personId` when absent. */
+  entityId?: string | null;
   /**
    * Which context opened the sidebar (D-11/D-12, S21). Decides the single destructive action:
    * `'marker'` shows neutral "Remove from map" (marker-only, non-destructive to the entity);
-   * `'list'` shows brick "Delete {entity}" (full cascade). Defaults to `'marker'` until the
-   * browse/list surface (plan 02-03) passes `'list'`.
+   * `'list'` shows brick "Delete {entity}" (full cascade). Defaults to `'marker'`.
    */
   openedFrom?: 'marker' | 'list';
   /** The marker to remove when `openedFrom === 'marker'`. Required for "Remove from map". */
   markerId?: string;
   onClose: () => void;
-  onEdit: (personId: string) => void;
+  onEdit: (entityId: string) => void;
   /** Raised after a successful delete so the host can clear selection. */
-  onDeleted: (personId: string) => void;
+  onDeleted: (entityId: string) => void;
 }
 
-function initialsOf(name: string): string {
+export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+/** Narrowers for spine fields that only exist on some entities (the type decides the table). */
+function asPerson(entity: AnyEntity, type: ProfileEntityType): Person | null {
+  return type === 'people' ? (entity as Person) : null;
+}
+function asLink(entity: AnyEntity, type: ProfileEntityType): RelationshipLink | null {
+  return type === 'relationship-links' ? (entity as RelationshipLink) : null;
+}
+
+/** The non-People type glyph for the header thumbnail (U2). */
+function TypeGlyph({ type }: { type: ProfileEntityType }) {
+  if (type === 'maps') return <Building2 size={22} strokeWidth={1.75} aria-hidden="true" />;
+  if (type === 'groups') return <UsersRound size={22} strokeWidth={1.75} aria-hidden="true" />;
+  return <ArrowLeftRight size={22} strokeWidth={1.75} aria-hidden="true" />;
+}
+
 export function ProfileSidebar({
   personId,
+  entityType,
+  entityId,
   openedFrom = 'marker',
   markerId,
   onClose,
@@ -59,17 +98,23 @@ export function ProfileSidebar({
   const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
 
   const isMarkerContext = openedFrom === 'marker';
+  const type: ProfileEntityType = entityType ?? 'people';
+  const id = entityId ?? personId ?? null;
 
-  const person = useLiveQuery<Person | undefined>(
-    async () => (personId ? db.people.get(personId) : undefined),
-    [personId],
-  );
+  // Read the entity reactively from its table (Dexie is source of truth).
+  const entity = useLiveQuery<AnyEntity | undefined>(async () => {
+    if (!id) return undefined;
+    if (type === 'people') return db.people.get(id);
+    if (type === 'maps') return db.maps.get(id);
+    if (type === 'groups') return db.groups.get(id);
+    return db.relationshipLinks.get(id);
+  }, [id, type]);
 
   // Load the avatar thumbnail blob for the header.
   useEffect(() => {
     let cancelled = false;
-    if (person?.photo) {
-      void getMedia(person.photo.hash).then((b) => {
+    if (entity?.photo) {
+      void getMedia(entity.photo.hash).then((b) => {
         if (!cancelled) setPhotoBlob(b);
       });
     } else {
@@ -78,51 +123,61 @@ export function ProfileSidebar({
     return () => {
       cancelled = true;
     };
-  }, [person?.photo?.hash, person?.id]);
+  }, [entity?.photo?.hash, entity?.id]);
 
   const avatar = useBlobImage(photoBlob);
 
   // Move focus into the panel when it opens (canvas->AT bridge).
   useEffect(() => {
-    if (person) panelRef.current?.focus();
-  }, [person?.id]);
+    if (entity) panelRef.current?.focus();
+  }, [entity?.id]);
 
   // Esc closes (returns focus to a stable anchor handled by the host).
   useEffect(() => {
-    if (!person) return;
+    if (!entity) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape' && !confirmOpen) onClose();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [person?.id, confirmOpen, onClose]);
+  }, [entity?.id, confirmOpen, onClose]);
 
-  if (!personId || !person) return null;
+  if (!id || !entity) return null;
+
+  const singular = SINGULAR[type];
+  const person = asPerson(entity, type);
+  const link = asLink(entity, type);
+  // The gallery component expects a `{ gallery: MediaRef[] }` shape — every entity has it.
+  const galleryHost = { gallery: entity.gallery as MediaRef[] } as Person;
 
   return (
     <>
       {/* Visually-hidden live region: announces selection to screen readers. */}
       <div className={styles.srOnly} aria-live="polite" role="status">
-        Selected {person.name}
+        Selected {entity.name}
       </div>
 
       <aside
         ref={panelRef}
         className={styles.panel}
         tabIndex={-1}
-        aria-label={`Profile: ${person.name}`}
+        aria-label={`Profile: ${entity.name}`}
         data-testid="profile-sidebar"
       >
         <div className={styles.header}>
           <span className={styles.thumb}>
             {avatar ? (
               <img src={avatar.src} alt="" className={styles.thumbImg} />
+            ) : type === 'people' ? (
+              <span className={styles.thumbInitials}>{initialsOf(entity.name)}</span>
             ) : (
-              <span className={styles.thumbInitials}>{initialsOf(person.name)}</span>
+              <span className={styles.thumbInitials} aria-hidden="true">
+                <TypeGlyph type={type} />
+              </span>
             )}
           </span>
           <h2 className={styles.name} data-testid="profile-name">
-            {person.name}
+            {entity.name}
           </h2>
           <button type="button" className={styles.close} aria-label="Close" onClick={onClose}>
             ×
@@ -130,7 +185,8 @@ export function ProfileSidebar({
         </div>
 
         <div className={styles.body}>
-          {person.phone && (
+          {/* Person-only DATA-02 fields. */}
+          {person?.phone && (
             <div className={styles.row}>
               <span className={styles.rowLabel}>Phone</span>
               <span className={styles.rowValue} data-testid="profile-phone">
@@ -138,7 +194,7 @@ export function ProfileSidebar({
               </span>
             </div>
           )}
-          {person.description && (
+          {person?.description && (
             <div className={styles.row}>
               <span className={styles.rowLabel}>Description</span>
               <span className={styles.rowValue} data-testid="profile-description">
@@ -146,7 +202,7 @@ export function ProfileSidebar({
               </span>
             </div>
           )}
-          {person.tags.length > 0 && (
+          {person && person.tags.length > 0 && (
             <div className={styles.row}>
               <span className={styles.rowLabel}>Tags</span>
               <span className={styles.chips} data-testid="profile-tags">
@@ -158,18 +214,38 @@ export function ProfileSidebar({
               </span>
             </div>
           )}
-          {person.notes && (
+
+          {/* Relationship-link spine fields (REL-02). */}
+          {link?.label && (
+            <div className={styles.row}>
+              <span className={styles.rowLabel}>Label</span>
+              <span className={styles.rowValue} data-testid="profile-label">
+                {link.label}
+              </span>
+            </div>
+          )}
+          {link?.date && (
+            <div className={styles.row}>
+              <span className={styles.rowLabel}>Date</span>
+              <span className={styles.rowValue} data-testid="profile-date">
+                {link.date}
+              </span>
+            </div>
+          )}
+
+          {/* Shared spine: notes (all types). */}
+          {entity.notes && (
             <div className={styles.row}>
               <span className={styles.rowLabel}>Notes</span>
               <span className={styles.rowValue} data-testid="profile-notes">
-                {person.notes}
+                {entity.notes}
               </span>
             </div>
           )}
 
           <div className={styles.row}>
             <span className={styles.rowLabel}>Photos</span>
-            <PhotoGallery person={person} />
+            <PhotoGallery person={galleryHost} />
           </div>
         </div>
 
@@ -177,7 +253,7 @@ export function ProfileSidebar({
           <button
             type="button"
             className={styles.edit}
-            onClick={() => onEdit(person.id)}
+            onClick={() => onEdit(entity.id)}
             data-testid="profile-edit"
           >
             Edit
@@ -200,7 +276,7 @@ export function ProfileSidebar({
               onClick={() => setConfirmOpen(true)}
               data-testid="profile-delete"
             >
-              Delete person
+              Delete {singular}
             </button>
           )}
         </div>
@@ -212,7 +288,7 @@ export function ProfileSidebar({
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           title="Remove from this map?"
-          body={`${person.name} stays in your database and lists — only the marker on this map is removed.`}
+          body={`${entity.name} stays in your database and lists — only the marker on this map is removed.`}
           confirmLabel="Remove from map"
           cancelLabel="Cancel"
           onConfirm={() => {
@@ -225,13 +301,13 @@ export function ProfileSidebar({
         <ConfirmDialog
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
-          title="Delete this person?"
-          body={`${person.name} will be removed from your database and every map it appears on. This can't be undone unless you restore a backup.`}
-          confirmLabel="Delete person"
+          title={`Delete this ${singular}?`}
+          body={`${entity.name} will be removed from your database and every map it appears on. This can't be undone unless you restore a backup.`}
+          confirmLabel={`Delete ${singular}`}
           cancelLabel="Cancel"
           onConfirm={() => {
-            const id = person.id;
-            void deleteEntity('people', id).then(() => onDeleted(id));
+            const victimId = entity.id;
+            void deleteEntity(type, victimId).then(() => onDeleted(victimId));
           }}
         />
       )}

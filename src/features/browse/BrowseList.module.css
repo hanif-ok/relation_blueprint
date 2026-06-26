@@ -1,0 +1,335 @@
+/* Browse list (S11) + row (S12). Paper surface; sticky header with count + neutral sort
+ * toggle; constant 64px rows for cheap windowing. Amber appears ONLY on the empty-state CTA. */
+
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+/* ---- Sticky header --------------------------------------------------------- */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--paper);
+  border-bottom: var(--border-hairline);
+}
+
+.title {
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.titleCount {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/* Neutral segmented sort toggle — active segment = paper-pull + ink, NEVER amber (U4). */
+.sortToggle {
+  display: inline-flex;
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.sortSeg {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+}
+
+.sortSegActive {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--elevation-1);
+}
+
+.sortSeg:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+/* ---- Scroll body ----------------------------------------------------------- */
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---- Row (S12) ------------------------------------------------------------- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  height: 64px;
+  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: var(--border-hairline);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--paper-shade);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.thumbRound,
+.thumbSquare {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+}
+
+.thumbRound {
+  border-radius: var(--radius-pill);
+}
+
+.thumbSquare {
+  border-radius: var(--radius-md);
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbInitials {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rowMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.rowName {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSecondary {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  min-height: 18px;
+}
+
+.rowTags {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: var(--space-xs);
+  overflow: hidden;
+}
+
+.rowTag {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-sm);
+  white-space: nowrap;
+}
+
+.rowMeta {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/* Neutral icon buttons on the right (≥44px hit area). NEVER amber. */
+.showOnMap,
+.overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.showOnMap:hover:not(:disabled),
+.overflow:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.showOnMap:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.showOnMap:focus-visible,
+.overflow:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+/* ---- Overflow dropdown menu ------------------------------------------------ */
+
+.menu {
+  min-width: 180px;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-xs);
+  z-index: 50;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.menuItem[data-highlighted] {
+  background: var(--paper-shade);
+}
+
+/* Delete is brick text (destructive cascade). */
+.menuItemDanger {
+  color: var(--brick);
+}
+
+/* ---- Loading shimmer ------------------------------------------------------- */
+
+.shimmerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  height: 64px;
+  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: var(--border-hairline);
+}
+
+.shimmerThumb {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  background: var(--paper-shade);
+}
+
+.shimmerText {
+  flex: 1 1 auto;
+  height: 16px;
+  max-width: 240px;
+  border-radius: var(--radius-sm);
+  background: var(--paper-shade);
+}
+
+/* ---- Empty state ----------------------------------------------------------- */
+
+.empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-3xl) var(--space-lg) var(--space-2xl);
+  text-align: center;
+}
+
+.emptyGlyph {
+  color: var(--ink-muted);
+}
+
+.emptyHeading {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.emptyBody {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink-muted);
+  margin: 0;
+  max-width: 380px;
+}
+
+/* The ONE amber control on this surface — the create CTA (U5). */
+.emptyCta {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--paper);
+  background: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+  margin-top: var(--space-sm);
+}
+
+.emptyCta:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
