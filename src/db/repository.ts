@@ -481,9 +481,17 @@ export async function updateFieldDef(id: string, patch: UpdateFieldDefPatch): Pr
  */
 export const QUARANTINE_KEY_PREFIX = '__quarantine:';
 
-/** Build the reserved per-field quarantine key for `fieldId` (single source of truth, D-05). */
-export function quarantineKey(fieldId: string): string {
-  return `${QUARANTINE_KEY_PREFIX}${fieldId}`;
+/**
+ * Build the reserved quarantine key for `fieldId` set aside FROM `sourceType` (single source of
+ * truth, D-05 / CR-01). Keying by the source field-type means at most one original can exist per
+ * (field, sourceType) pair, so two successive quarantining type changes from DIFFERENT source
+ * types never collide — closing the data-loss BLOCKER where one reserved slot per field let a
+ * later quarantine clobber an earlier original. A nanoid `FieldDef.id` and every `FieldType` value
+ * are colon-free, so the `:<sourceType>` suffix parses unambiguously and the key still begins with
+ * `QUARANTINE_KEY_PREFIX` (the prefix-skip contract holds). Never hand-roll the key at a call site.
+ */
+export function quarantineKey(fieldId: string, sourceType: FieldType): string {
+  return `${QUARANTINE_KEY_PREFIX}${fieldId}:${sourceType}`;
 }
 
 /** An entity family that carries a `custom` map (everything except markers). */
@@ -491,13 +499,17 @@ type CustomBearingEntity = Person | MapDoc | Group | RelationshipLink;
 
 /**
  * Rewrite one entity's `custom` map for a field type change: coerce the live value (keep, maybe
- * reshaped, or set the original aside under `qKey`), then restore a previously-quarantined
- * original that now fits the new type. Returns the new `custom` map plus whether it changed.
+ * reshaped, or set the original aside under the FROM-type's reserved key), then restore the
+ * original that was previously set aside FROM the new (target) type. Originals are keyed by their
+ * SOURCE field-type (`quarantineKey(fieldId, fromType)`), so a quarantine from one source type can
+ * never overwrite an original set aside from a different source type — the CR-01 preserve-all
+ * guarantee. Restore resolves from `quarantineKey(fieldId, toType)`: that original was set aside
+ * when the field last WAS `toType`, so it fits `toType` by construction (no in-flight from->to
+ * fitness guess — the WARNING fix). Returns the new `custom` map plus whether it changed.
  */
 function coerceEntityCustom(
   custom: CustomValues,
   fieldId: string,
-  qKey: string,
   fromType: FieldType,
   toType: FieldType,
 ): { custom: CustomValues; changed: boolean } {
@@ -505,28 +517,35 @@ function coerceEntityCustom(
   const liveValue = next[fieldId];
   let changed = false;
 
+  // STORE: a non-convertible live original is set aside under its SOURCE type's reserved key. This
+  // key is unique per (field, fromType), so it can never clobber an original quarantined from a
+  // different source type — the data-loss BLOCKER fix.
   if (liveValue !== undefined && liveValue !== null) {
     const result = coerceOnTypeChange(fromType, toType, liveValue);
     if ('kept' in result) {
+      // IN-01: dirty-flag accounting hinges on `coerceOnTypeChange` returning the SAME reference
+      // for an unchanged value (it does today), so reference identity is a correct "changed" test.
+      // Do not change `coerceOnTypeChange` to return a fresh object for unchanged values without
+      // revisiting this check.
       if (result.kept !== next[fieldId]) {
         next[fieldId] = result.kept;
         changed = true;
       }
     } else {
-      next[qKey] = result.quarantined;
+      next[quarantineKey(fieldId, fromType)] = result.quarantined;
       next[fieldId] = null;
       changed = true;
     }
   }
 
-  const quarantined = next[qKey];
+  // RESTORE: bring back the original set aside FROM the target type (keyed by toType). It fits
+  // toType by construction, so it becomes the live value verbatim and its reserved key is removed.
+  const restoreKey = quarantineKey(fieldId, toType);
+  const quarantined = next[restoreKey];
   if (quarantined !== undefined && quarantined !== null) {
-    const restore = coerceOnTypeChange(fromType, toType, quarantined);
-    if ('kept' in restore) {
-      next[fieldId] = restore.kept;
-      delete next[qKey];
-      changed = true;
-    }
+    next[fieldId] = quarantined;
+    delete next[restoreKey];
+    changed = true;
   }
 
   return { custom: next, changed };
@@ -550,7 +569,6 @@ export async function applyFieldTypeChange(
   patch: UpdateFieldDefPatch,
 ): Promise<FieldDef> {
   const table = DELETABLE_TABLES[entityType]();
-  const qKey = quarantineKey(fieldId);
   const touchedEntityIds: string[] = [];
   let updatedDef: FieldDef | undefined;
 
@@ -574,7 +592,7 @@ export async function applyFieldTypeChange(
     // re-validated through its own schema + stamped before the typed put (no raw un-stamped put).
     const rows = (await table.toArray()) as CustomBearingEntity[];
     for (const row of rows) {
-      const { custom, changed } = coerceEntityCustom(row.custom, fieldId, qKey, fromType, toType);
+      const { custom, changed } = coerceEntityCustom(row.custom, fieldId, fromType, toType);
       if (!changed) continue;
       const stamped = { ...row, custom, updatedAt: Date.now(), dirty: true };
       switch (entityType) {
