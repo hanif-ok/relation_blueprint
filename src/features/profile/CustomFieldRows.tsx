@@ -205,7 +205,9 @@ export function CustomFieldRows({
   return (
     <>
       {list.map((def) => {
-        const value = custom[def.id] ?? null;
+        // `?? {}` guards a legacy record whose `custom` map is absent (pre-version-3 data): indexing
+        // an undefined map here would throw and white-screen the profile (02-UAT test 2).
+        const value = (custom ?? {})[def.id] ?? null;
         if (isEmpty(value)) return null; // empty rows omitted (consistent with built-ins, U8)
         return (
           <div className={styles.row} key={def.id} data-testid="custom-row">

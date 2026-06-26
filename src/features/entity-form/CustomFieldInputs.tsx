@@ -247,7 +247,9 @@ export function CustomFieldInputs({ entityType, custom, onChange, errors }: Cust
         <FieldInput
           key={def.id}
           def={def}
-          value={custom[def.id] ?? null}
+          // `?? {}` guards a legacy record whose `custom` map is absent (pre-version-3 data):
+          // indexing an undefined map here would throw and white-screen the form (02-UAT test 2).
+          value={(custom ?? {})[def.id] ?? null}
           onChange={(v) => onChange(def.id, v)}
           error={errors?.[def.id]}
         />

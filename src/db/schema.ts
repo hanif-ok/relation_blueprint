@@ -73,6 +73,19 @@ export class RelationBlueprintDB extends Dexie {
       relationshipLinks: 'id, name, updatedAt, dirty',
       fieldDefs: 'id, entityType, order, updatedAt, dirty',
     });
+    // Phase 2 hardening (02-08): legacy version(1) `people`/`maps` records pre-date the custom-value
+    // map (introduced with the version-2 type model). Backfill `custom = {}` where it is absent so
+    // the "custom always present" invariant holds for OLD data too. Without it, the profile read
+    // path dereferences `entity.custom[def.id]` on an `undefined` map and white-screens the instant
+    // the first custom field is added (02-UAT test 2). `stores({})` = no schema change, upgrade only.
+    // Idempotent: it only fills records that are missing the key.
+    this.version(3).stores({}).upgrade(async (tx) => {
+      for (const table of [tx.table('people'), tx.table('maps')]) {
+        await table.toCollection().modify((record: { custom?: unknown }) => {
+          if (record.custom === undefined || record.custom === null) record.custom = {};
+        });
+      }
+    });
   }
 }
 
