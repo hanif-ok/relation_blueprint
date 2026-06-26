@@ -26,6 +26,7 @@ import type {
   Group,
   MapDoc,
   Marker,
+  MarkerKind,
   MediaRef,
   Person,
   RelationshipLink,
@@ -255,7 +256,12 @@ export async function createMap(input: CreateMapInput): Promise<MapDoc> {
   return map;
 }
 
-/** Patchable Location (map) fields; identity + sync metadata are managed by the repository. */
+/**
+ * Patchable Location (map) fields; identity + sync metadata are managed by the repository.
+ * Phase-3: because this is `Partial<Omit<MapDoc, ...>>`, it AUTOMATICALLY covers the new MapDoc
+ * sub-objects (`shapes`/`layers`/`parentId`/`backgroundTransform`) — they write through the
+ * existing `updateMap` with NO new repository function (RESEARCH Don't-Hand-Roll; PATTERNS).
+ */
 export type UpdateMapPatch = Partial<Omit<MapDoc, 'id' | 'updatedAt' | 'dirty'>>;
 
 /** The Location edit path (D-07): enrich an existing map in place (photo/notes/custom/gallery)
@@ -275,13 +281,22 @@ export async function updateMap(id: string, patch: UpdateMapPatch): Promise<MapD
   return updated;
 }
 
-/** Fields a caller supplies for a marker; `id` is generated when absent. */
+/**
+ * Fields a caller supplies for a marker; `id` is generated when absent. Phase-3 widens this with
+ * the marker `kind` discriminant (defaults to `'person'`), the portal `targetMapId`, and the
+ * Transformer `width`/`height`/`rotation`. `personId` is now OPTIONAL — a portal carries none.
+ */
 export type UpsertMarkerInput = {
   id?: string;
   mapId: string;
-  personId: string;
+  kind?: MarkerKind;
+  personId?: string;
+  targetMapId?: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
 };
 
 export async function upsertMarker(input: UpsertMarkerInput): Promise<Marker> {
@@ -290,9 +305,15 @@ export async function upsertMarker(input: UpsertMarkerInput): Promise<Marker> {
   const marker: Marker = MarkerSchema.parse({
     id,
     mapId: input.mapId,
+    // The schema defaults `kind` to 'person'; pass it through explicitly for clarity.
+    kind: input.kind ?? 'person',
     personId: input.personId,
+    targetMapId: input.targetMapId,
     x: input.x,
     y: input.y,
+    width: input.width,
+    height: input.height,
+    rotation: input.rotation,
     updatedAt: Date.now(),
     dirty: true,
   });

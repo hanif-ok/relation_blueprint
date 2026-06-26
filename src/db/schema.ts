@@ -11,6 +11,7 @@
 // browser — this is a Dexie schema, NOT a Drizzle/Prisma migration, so there is no push step.
 
 import Dexie, { type EntityTable } from 'dexie';
+import { nanoid } from 'nanoid';
 import type { FieldDef, Group, MapDoc, Marker, Person, RelationshipLink } from '@/domain/types';
 
 /**
@@ -85,6 +86,38 @@ export class RelationBlueprintDB extends Dexie {
           if (record.custom === undefined || record.custom === null) record.custom = {};
         });
       }
+    });
+    // Phase 3 (MAP-02/03/06/07): the map-editor data foundation. Backfill DEFAULTS for the new
+    // Marker + MapDoc fields on legacy rows. `stores({})` = no index change — a Dexie auto-upgrade,
+    // NOT a Drizzle/Prisma migration, so there is NO push step (see the file header + the
+    // schema-gate-dexie-false-positive memory note). Idempotent: only missing keys are filled.
+    //
+    // CRITICAL (RESEARCH Pattern 7 / A1): marker `x`/`y` are NOT rewritten. At the identity
+    // background transform that we backfill here, an old stage-space coordinate is already a valid
+    // image-space coordinate — composing the identity transform onto it yields the same point. A
+    // per-marker coordinate rewrite would visibly jump every existing marker on first open.
+    this.version(4).stores({}).upgrade(async (tx) => {
+      // (a) Existing markers are person markers; set `kind = 'person'` where absent. x/y untouched.
+      await tx
+        .table('markers')
+        .toCollection()
+        .modify((record: { kind?: unknown }) => {
+          if (record.kind === undefined || record.kind === null) record.kind = 'person';
+        });
+      // (b) Maps gain an identity backgroundTransform, an empty shapes array, and a default
+      //     "Markers" layer (UI-SPEC S11) — each filled only when absent.
+      await tx
+        .table('maps')
+        .toCollection()
+        .modify((record: { backgroundTransform?: unknown; shapes?: unknown; layers?: unknown }) => {
+          if (record.backgroundTransform === undefined || record.backgroundTransform === null) {
+            record.backgroundTransform = { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 };
+          }
+          if (record.shapes === undefined || record.shapes === null) record.shapes = [];
+          if (record.layers === undefined || record.layers === null) {
+            record.layers = [{ id: nanoid(), name: 'Markers', visible: true, locked: false, order: 0 }];
+          }
+        });
     });
   }
 }
