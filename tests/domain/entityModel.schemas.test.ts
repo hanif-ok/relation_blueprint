@@ -9,6 +9,7 @@ import {
   CustomValuesSchema,
   FieldDefSchema,
   GroupSchema,
+  ManifestSchema,
   MapDocSchema,
   RelationshipLinkSchema,
 } from '@/domain/schemas';
@@ -146,6 +147,47 @@ describe('FieldDefSchema (D-02/D-05/D-06)', () => {
   it('rejects a non-integer order', () => {
     const bad = { ...validFieldDef('text'), order: 1.5 };
     expect(FieldDefSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe('ManifestSchema field-defs pointer (DATA-03 cloud-sync backward-compat)', () => {
+  const pointer = { fileId: 'file-1', hash: 'h', updatedAt: 100 };
+  function manifestWithoutFieldDefs() {
+    return {
+      version: 1,
+      updatedAt: 100,
+      shards: {
+        people: pointer,
+        maps: pointer,
+        markers: pointer,
+        groups: pointer,
+        'relationship-links': pointer,
+      },
+    };
+  }
+
+  it('accepts an OLD manifest whose shards omit the field-defs pointer (no crash on reconnect)', () => {
+    // The exact second-device scenario this phase fixes: a manifest written before the field-defs
+    // shard was threaded through the cloud path must still validate (the pointer is .optional()).
+    expect(ManifestSchema.safeParse(manifestWithoutFieldDefs()).success).toBe(true);
+  });
+
+  it('accepts a NEW manifest carrying a well-formed field-defs pointer', () => {
+    const manifest = {
+      ...manifestWithoutFieldDefs(),
+      shards: { ...manifestWithoutFieldDefs().shards, 'field-defs': pointer },
+    };
+    expect(ManifestSchema.safeParse(manifest).success).toBe(true);
+  });
+
+  it('rejects a manifest whose PRESENT field-defs pointer is malformed (gate stays strict)', () => {
+    // A present pointer is still fully validated by ShardPointerSchema (threat T-02.1-01): a
+    // malformed one (missing fileId) is rejected, so the optional key does not weaken the gate.
+    const manifest = {
+      ...manifestWithoutFieldDefs(),
+      shards: { ...manifestWithoutFieldDefs().shards, 'field-defs': { hash: 'h', updatedAt: 1 } },
+    };
+    expect(ManifestSchema.safeParse(manifest).success).toBe(false);
   });
 });
 

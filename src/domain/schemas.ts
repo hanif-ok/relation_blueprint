@@ -143,6 +143,12 @@ export const ManifestSchema = z.object({
     markers: ShardPointerSchema,
     groups: ShardPointerSchema,
     'relationship-links': ShardPointerSchema,
+    // Custom-field DEFINITIONS shard (DATA-03). OPTIONAL: a manifest written before field-defs
+    // were threaded through the cloud path has no such key, and a required key would crash
+    // `readManifest` on that pre-existing cloud manifest (the second-device reconnect this phase
+    // fixes). A PRESENT pointer is still fully validated by `ShardPointerSchema`, so the
+    // untrusted-at-rest gate (threat T-02.1-01) stays strict.
+    'field-defs': ShardPointerSchema.optional(),
   }),
   // No `backups` field: rolling backups are discovered by listing the `backups/` folder, the
   // single source of truth. Zod ignores unknown keys, so older on-disk manifests that still

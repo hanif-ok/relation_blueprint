@@ -21,10 +21,13 @@ export interface EntitySet {
 }
 
 // Canonical shard file names — one bucket (000) per type for the skeleton. Keyed by
-// `EntityType` (kebab-case, so `SHARD_NAMES[type]` is well-typed in the sync engine) PLUS a
-// `fieldDefs` slot. NOTE: the manifest tracks only the five entity-type shards; the field
-// definitions ride in export/restore + reconcile but are not a manifest EntityType (they
-// describe schema, not entities).
+// `EntityType` (kebab-case, so `SHARD_NAMES[type]` is well-typed in the sync engine) PLUS the
+// field-definition slot. Field definitions are a FIRST-CLASS manifest shard: they are tracked
+// under the manifest's `'field-defs'` pointer (sync-local `SyncShardType` token) and flow
+// through the same commit()/reconcileOnOpen() machinery as the five entity types — they no
+// longer merely "ride in export/restore". The `fieldDefs` (camelCase) key is the historical
+// property the serializer reads/writes by; the `'field-defs'` (kebab) alias matches the manifest
+// pointer key so the sync engine can index `SHARD_NAMES['field-defs']` for the shard file name.
 export const SHARD_NAMES = {
   people: 'people-000.json',
   maps: 'maps-000.json',
@@ -32,6 +35,9 @@ export const SHARD_NAMES = {
   groups: 'groups-000.json',
   'relationship-links': 'relationship-links-000.json',
   fieldDefs: 'field-defs-000.json',
+  // Kebab alias of `fieldDefs` so the engine resolves the manifest `'field-defs'` token to the
+  // same `field-defs-000.json` file (serialize/deserialize still reference `SHARD_NAMES.fieldDefs`).
+  'field-defs': 'field-defs-000.json',
 } as const;
 
 const JSON_TYPE = 'application/json';

@@ -3,9 +3,8 @@
 // plain object snapshot, without dragging Dexie/fake-indexeddb into the failure-injection
 // loop. The reconcile test exercises the REAL Dexie-backed port (`createDexieRepoPort`).
 
-import type { RepositoryPort } from '@/sync/syncEngine';
+import type { RepositoryPort, SyncShardType } from '@/sync/syncEngine';
 import type { EntitySet } from '@/sync/serializer';
-import type { EntityType } from '@/domain/types';
 
 export interface MemoryRepo extends RepositoryPort {
   /** Mark every entity dirty so the next push writes all shards. */
@@ -17,19 +16,20 @@ export interface MemoryRepo extends RepositoryPort {
 /** Build an in-memory port over a fixed entity set (clones so the test's seed is untouched). */
 export function makeMemoryPort(seed: EntitySet): MemoryRepo {
   const set: EntitySet = structuredClone(seed);
-  const shardMeta = new Map<EntityType, number>();
+  const shardMeta = new Map<SyncShardType, number>();
 
   return {
     async getEntities(): Promise<EntitySet> {
       return structuredClone(set);
     },
-    async getDirtyTypes(): Promise<EntityType[]> {
-      const types: EntityType[] = [];
+    async getDirtyTypes(): Promise<SyncShardType[]> {
+      const types: SyncShardType[] = [];
       if (set.people.some((e) => e.dirty)) types.push('people');
       if (set.maps.some((e) => e.dirty)) types.push('maps');
       if (set.markers.some((e) => e.dirty)) types.push('markers');
       if (set.groups.some((e) => e.dirty)) types.push('groups');
       if (set.relationshipLinks.some((e) => e.dirty)) types.push('relationship-links');
+      if (set.fieldDefs.some((e) => e.dirty)) types.push('field-defs');
       return types;
     },
     async getNewMedia(): Promise<Record<string, Blob>> {
@@ -53,6 +53,7 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       clearMatching(set.markers, synced.markers);
       clearMatching(set.groups, synced.groups);
       clearMatching(set.relationshipLinks, synced.relationshipLinks);
+      clearMatching(set.fieldDefs, synced.fieldDefs);
     },
     async upsert(incoming: Partial<EntitySet>): Promise<void> {
       if (incoming.people) set.people = structuredClone(incoming.people);
@@ -62,11 +63,12 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       if (incoming.relationshipLinks) {
         set.relationshipLinks = structuredClone(incoming.relationshipLinks);
       }
+      if (incoming.fieldDefs) set.fieldDefs = structuredClone(incoming.fieldDefs);
     },
-    async getShardMeta(type: EntityType): Promise<number> {
+    async getShardMeta(type: SyncShardType): Promise<number> {
       return shardMeta.get(type) ?? 0;
     },
-    async setShardMeta(type: EntityType, updatedAt: number): Promise<void> {
+    async setShardMeta(type: SyncShardType, updatedAt: number): Promise<void> {
       shardMeta.set(type, updatedAt);
     },
 
@@ -76,6 +78,7 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
       for (const e of set.markers) e.dirty = true;
       for (const e of set.groups) e.dirty = true;
       for (const e of set.relationshipLinks) e.dirty = true;
+      for (const e of set.fieldDefs) e.dirty = true;
     },
     allClean(): boolean {
       return (
@@ -83,7 +86,8 @@ export function makeMemoryPort(seed: EntitySet): MemoryRepo {
         set.maps.every((e) => !e.dirty) &&
         set.markers.every((e) => !e.dirty) &&
         set.groups.every((e) => !e.dirty) &&
-        set.relationshipLinks.every((e) => !e.dirty)
+        set.relationshipLinks.every((e) => !e.dirty) &&
+        set.fieldDefs.every((e) => !e.dirty)
       );
     },
   };
