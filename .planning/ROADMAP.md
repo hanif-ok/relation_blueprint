@@ -78,7 +78,7 @@ Plans:
   5. User can click a photo in any profile gallery to open it full-size in an expand/lightbox view, then dismiss back to the profile (deferred from Phase 1 UAT)
   6. User can reorder or sort the photos in a profile gallery, and the chosen order persists (deferred from Phase 1 UAT)
 
-**Plans**: 5/5 plans complete
+**Plans**: 6 plans (5/5 base complete; 1 gap-closure pending)
 Plans:
 
 **Wave 1**
@@ -100,6 +100,10 @@ Plans:
 **Wave 5** *(blocked on Wave 4)*
 
 - [x] 02-05-PLAN.md — Deferred Phase-1 UAT media: photo lightbox (criterion 5) + persisted gallery drag/keyboard reorder (criterion 6)
+
+**Gap closure** *(from 02-VERIFICATION.md — Wave 1, no executed-plan dependencies)*
+
+- [ ] 02-06-PLAN.md — BLOCKER CR-01/DATA-03/D-05: wire `coerceOnTypeChange` into the field type-change save path (`applyFieldTypeChange` repository mutation + zero-schema quarantine + wired test), plus warning fixes WR-01/WR-02/WR-04/WR-06
 
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
 **UI hint**: yes
