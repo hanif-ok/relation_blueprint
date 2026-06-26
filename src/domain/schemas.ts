@@ -8,11 +8,13 @@
 
 import { z } from 'zod';
 import type {
+  BackgroundTransform,
   Backup,
   CustomValue,
   CustomValues,
   FieldDef,
   Group,
+  Layer,
   Manifest,
   MapDoc,
   Marker,
@@ -20,6 +22,7 @@ import type {
   Person,
   RelationshipLink,
   ShardPointer,
+  Shape,
 } from './types';
 
 export const MediaRefSchema = z.object({
@@ -60,6 +63,43 @@ export const PersonSchema = z.object({
   dirty: z.boolean(),
 });
 
+/** Phase-3 (D-16): background placement descriptor. All four fields required (rotation in radians). */
+export const BackgroundTransformSchema = z.object({
+  offsetX: z.number(),
+  offsetY: z.number(),
+  scale: z.number(),
+  rotation: z.number(),
+});
+
+/** Phase-3 (D-04): one editor layer. */
+export const LayerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  visible: z.boolean(),
+  locked: z.boolean(),
+  order: z.number(),
+});
+
+/**
+ * Phase-3 (D-01/D-02/D-03): a drawing primitive. `kind` is the closed rect|ellipse|line|polygon
+ * union; rect/ellipse carry the x/y/width/height box, line/polygon carry `points`. A non-empty
+ * `label` makes the shape a zone (D-02) — no separate Zone schema.
+ */
+export const ShapeSchema = z.object({
+  id: z.string(),
+  layerId: z.string(),
+  kind: z.enum(['rect', 'ellipse', 'line', 'polygon']),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  points: z.array(z.number()).optional(),
+  rotation: z.number(),
+  preset: z.string(),
+  fill: z.boolean(),
+  label: z.string().optional(),
+});
+
 export const MapDocSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -70,6 +110,13 @@ export const MapDocSchema = z.object({
   gallery: z.array(MediaRefSchema),
   notes: z.string().optional(),
   custom: CustomValuesSchema,
+  // Phase-3 sub-objects — ALL optional-with-default so a pre-Phase-3 cloud shard/backup still
+  // validates (RESEARCH Pitfall 7; mirrors the `'field-defs'` optional precedent). parentId +
+  // backgroundTransform are plain-optional (absent = top-level / identity).
+  parentId: z.string().optional(),
+  backgroundTransform: BackgroundTransformSchema.optional(),
+  shapes: z.array(ShapeSchema).default([]),
+  layers: z.array(LayerSchema).default([]),
   updatedAt: z.number(),
   dirty: z.boolean(),
 });
@@ -98,12 +145,23 @@ export const RelationshipLinkSchema = z.object({
   dirty: z.boolean(),
 });
 
+/** Phase-3 (RESEARCH Pattern 5a): the closed person|portal marker discriminant. */
+export const MarkerKindSchema = z.enum(['person', 'portal']);
+
 export const MarkerSchema = z.object({
   id: z.string(),
   mapId: z.string(),
-  personId: z.string(),
+  // Phase-3: `kind` defaults to 'person' so a pre-Phase-3 marker (no kind) parses as a person
+  // marker (RESEARCH Pitfall 7). `personId` is now optional (a portal has none); targetMapId +
+  // width/height/rotation are the portal target + Transformer state.
+  kind: MarkerKindSchema.default('person'),
+  personId: z.string().optional(),
+  targetMapId: z.string().optional(),
   x: z.number(),
   y: z.number(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  rotation: z.number().optional(),
   updatedAt: z.number(),
   dirty: z.boolean(),
 });
@@ -177,6 +235,9 @@ export type MediaRefInput = z.infer<typeof MediaRefSchema>;
 export type PersonInput = z.infer<typeof PersonSchema>;
 export type MapDocInput = z.infer<typeof MapDocSchema>;
 export type MarkerInput = z.infer<typeof MarkerSchema>;
+export type BackgroundTransformInput = z.infer<typeof BackgroundTransformSchema>;
+export type LayerInput = z.infer<typeof LayerSchema>;
+export type ShapeInput = z.infer<typeof ShapeSchema>;
 export type GroupInput = z.infer<typeof GroupSchema>;
 export type RelationshipLinkInput = z.infer<typeof RelationshipLinkSchema>;
 export type FieldDefInput = z.infer<typeof FieldDefSchema>;
@@ -190,6 +251,9 @@ const _mediaRefCheck = {} as MediaRefInput satisfies MediaRef;
 const _personCheck = {} as PersonInput satisfies Person;
 const _mapDocCheck = {} as MapDocInput satisfies MapDoc;
 const _markerCheck = {} as MarkerInput satisfies Marker;
+const _backgroundTransformCheck = {} as BackgroundTransformInput satisfies BackgroundTransform;
+const _layerCheck = {} as LayerInput satisfies Layer;
+const _shapeCheck = {} as ShapeInput satisfies Shape;
 const _groupCheck = {} as GroupInput satisfies Group;
 const _relationshipLinkCheck = {} as RelationshipLinkInput satisfies RelationshipLink;
 const _fieldDefCheck = {} as FieldDefInput satisfies FieldDef;
@@ -202,6 +266,9 @@ void _mediaRefCheck;
 void _personCheck;
 void _mapDocCheck;
 void _markerCheck;
+void _backgroundTransformCheck;
+void _layerCheck;
+void _shapeCheck;
 void _groupCheck;
 void _relationshipLinkCheck;
 void _fieldDefCheck;

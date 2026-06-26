@@ -48,12 +48,14 @@ function map(id: string, updatedAt = 100): MapDoc {
     height: 100,
     gallery: [],
     custom: {},
+    shapes: [],
+    layers: [],
     updatedAt,
     dirty: false,
   };
 }
 function marker(id: string, updatedAt = 100): Marker {
-  return { id, mapId: 'm1', personId: 'p1', x: 1, y: 2, updatedAt, dirty: false };
+  return { id, mapId: 'm1', kind: 'person', personId: 'p1', x: 1, y: 2, updatedAt, dirty: false };
 }
 
 /**

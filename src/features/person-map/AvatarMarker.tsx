@@ -40,10 +40,13 @@ export function AvatarMarker({ marker, person, selected, onSelect }: AvatarMarke
 
   // Persist the dragged position to the repository on drag end (Dexie is source of truth).
   function handleDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
+    // This is a person marker (it renders an avatar for `person`), so `personId` is the rendered
+    // person's id — `marker.personId` is now optional on the widened Phase-3 Marker, but `person.id`
+    // is the authoritative non-null value here.
     void upsertMarker({
       id: marker.id,
       mapId: marker.mapId,
-      personId: marker.personId,
+      personId: person.id,
       x: e.target.x(),
       y: e.target.y(),
     });
