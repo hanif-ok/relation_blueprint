@@ -143,6 +143,12 @@ None - no external service configuration required.
 - Phase-2 success criteria 5 & 6 are satisfied; the gallery surfaces are now fully interactive (expand + reorder), both keyboard-accessible.
 - `tsc --noEmit` clean; new specs green; all 11 prior E2E (profile, custom-fields, browse-and-create) still green — no regressions in the shared profile/gallery components.
 
+## Self-Check: PASSED
+
+All created files exist on disk; all task + metadata commits present in history:
+- Files: PhotoLightbox.tsx, PhotoLightbox.module.css, e2e/lightbox.spec.ts, e2e/gallery-reorder.spec.ts, 02-05-SUMMARY.md — FOUND
+- Commits: 84d6cf1 (Task 1), 810e050 (Task 2), d8cd554 (docs) — FOUND
+
 ---
 *Phase: 02-custom-fields-full-entity-model*
 *Completed: 2026-06-26*
