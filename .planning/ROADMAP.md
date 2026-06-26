@@ -109,6 +109,19 @@ Plans:
 **Research flag:** Standard patterns — skip research phase. Typed field systems are well-documented; Zod for runtime validation of typed values.
 **UI hint**: yes
 
+### Phase 02.1: Close gap: DATA-03 — sync fieldDefs through the manifest cloud path (ENTITY_TYPES + reconcile + ManifestSchema) + push/reconcile regression test (INSERTED)
+
+**Goal:** Close the DATA-03 cloud-sync BLOCKER — custom-field DEFINITIONS (`db.fieldDefs`) are serialized but never pushed to / pulled from the cloud because the SyncEngine's hand-listed entity-type machinery omits `'field-defs'`. Thread a sync-local `field-defs` shard token through ENTITY_TYPES + commit + reconcileOnOpen + getDirtyTypes/markSynced/upsert, add an optional `field-defs` pointer to ManifestSchema, and prove it with a push→fresh-reconcile round-trip regression test.
+**Requirements**: DATA-03 (also unblocks STOR-02, STOR-03)
+**Depends on:** Phase 2
+**Plans:** 1 plan
+
+Plans:
+
+**Wave 1**
+
+- [ ] 02.1-01-PLAN.md — Thread the `field-defs` shard token through SyncEngine + ManifestSchema (symmetric six-branch wiring, optional manifest pointer, sync-local `SyncShardType` — EntityType untouched, NO migration) + push→fresh-reconcile round-trip regression test + atomicity/backward-compat assertions
+
 ### Phase 3: Map Editor — Spaces & Navigation
 
 **Goal**: A user can build real spatial maps — drawing rooms/areas with shapes/zones on layers, linking maps together with portal markers into floor→building→street hierarchies, and placing one person across multiple maps at once.
