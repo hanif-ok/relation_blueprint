@@ -26,7 +26,18 @@ import {
 } from '@/db/repository';
 import { storeMedia } from '@/media/mediaManager';
 import { PhotoUpload } from '@/features/person-form/PhotoUpload';
-import type { Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
+import { CustomFieldInputs, type CustomFieldErrors } from './CustomFieldInputs';
+import { validateCustomValue } from '@/features/fields/customValue';
+import { listFieldDefs } from '@/db/repository';
+import type {
+  CustomValue,
+  CustomValues,
+  Group,
+  MapDoc,
+  MediaRef,
+  Person,
+  RelationshipLink,
+} from '@/domain/types';
 import styles from './EntityForm.module.css';
 
 /** The four entity families this form can create/edit. */
@@ -76,6 +87,8 @@ interface FormState {
   // Relationship-link-only (REL-02 shell):
   label: string;
   date: string;
+  // DATA-03 custom-field values, keyed by stable field id (D-01).
+  custom: CustomValues;
 }
 
 function initialState(
@@ -101,6 +114,7 @@ function initialState(
     height: map?.height,
     label: link?.label ?? '',
     date: link?.date ?? '',
+    custom: entity?.custom ? { ...entity.custom } : {},
   };
 }
 
@@ -109,6 +123,7 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
   const [state, setState] = useState<FormState>(() => initialState(entityType, entity));
   const [tagDraft, setTagDraft] = useState('');
   const [bgBusy, setBgBusy] = useState(false);
+  const [customErrors, setCustomErrors] = useState<CustomFieldErrors>({});
   const nameRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const singular = SINGULAR[entityType];
@@ -118,6 +133,7 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
     if (open) {
       setState(initialState(entityType, entity));
       setTagDraft('');
+      setCustomErrors({});
     }
   }, [open, entity, entityType]);
 
@@ -155,8 +171,25 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
 
   async function handleSave() {
     if (saveDisabled) return;
+
+    // Validate custom fields by type + required only (D-06). A failure blocks save and surfaces
+    // the per-field error beneath its input. Defs are read live so this matches what's rendered.
+    const defs = await listFieldDefs(entityType);
+    const errors: CustomFieldErrors = {};
+    for (const def of defs) {
+      const value: CustomValue = state.custom[def.id] ?? null;
+      const result = validateCustomValue(def, value);
+      if (!result.ok) errors[def.id] = result.message;
+    }
+    if (Object.keys(errors).length > 0) {
+      setCustomErrors(errors);
+      return;
+    }
+    setCustomErrors({});
+
     const name = state.name.trim();
     const notes = state.notes.trim() || undefined;
+    const custom = state.custom;
     let savedId: string;
 
     if (entityType === 'people') {
@@ -168,6 +201,7 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
         tags: state.tags,
         notes,
         gallery: state.gallery,
+        custom,
       };
       savedId = isEdit
         ? (await updatePerson((entity as Person).id, payload)).id
@@ -180,6 +214,7 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
             photo: state.photo,
             gallery: state.gallery,
             notes,
+            custom,
           })
         ).id;
       } else {
@@ -193,11 +228,12 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
             photo: state.photo,
             gallery: state.gallery,
             notes,
+            custom,
           })
         ).id;
       }
     } else if (entityType === 'groups') {
-      const payload = { name, photo: state.photo, gallery: state.gallery, notes };
+      const payload = { name, photo: state.photo, gallery: state.gallery, notes, custom };
       savedId = isEdit
         ? (await updateGroup((entity as Group).id, payload)).id
         : (await createGroup(payload)).id;
@@ -209,6 +245,7 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
         notes,
         label: state.label.trim() || undefined,
         date: state.date.trim() || undefined,
+        custom,
       };
       savedId = isEdit
         ? (await updateRelationshipLink((entity as RelationshipLink).id, payload)).id
@@ -389,9 +426,15 @@ export function EntityForm({ open, onOpenChange, entityType, entity, onSaved }: 
               />
             </label>
 
-            {/* CUSTOM-FIELD INPUTS EXTENSION POINT (plan 02-04 — S16):
-                Custom-field inputs for this entity type render here, after the spine fields,
-                in schema order. Intentionally empty this plan. */}
+            {/* Custom-field inputs (S16) — typed inputs in schema order, after the spine. */}
+            <CustomFieldInputs
+              entityType={entityType}
+              custom={state.custom}
+              onChange={(fieldId, value) =>
+                setState((s) => ({ ...s, custom: { ...s.custom, [fieldId]: value } }))
+              }
+              errors={customErrors}
+            />
           </div>
 
           <div className={styles.footer}>
