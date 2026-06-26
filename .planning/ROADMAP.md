@@ -138,10 +138,10 @@ Plans:
   6. User can select a placed marker and resize (and rotate) it via on-canvas transform handles, with the new size/rotation persisting across reloads (deferred from Phase 1 UAT)
   7. User can resize/transform the map background image via handles (beyond view pan/zoom), and the change persists (deferred from Phase 1 UAT)
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Data foundation: Marker transform/portal fields + MapDoc sub-objects, Dexie version(4) backfill, migration round-trip (Wave 0)
+- [x] 03-01-PLAN.md — Data foundation: Marker transform/portal fields + MapDoc sub-objects, Dexie version(4) backfill, migration round-trip (Wave 0)
 - [ ] 03-02-PLAN.md — Active-map model: coords composition, viewport culling, map switcher, breadcrumb up-navigation (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -224,7 +224,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
-| 3. Map Editor — Spaces & Navigation | 0/TBD | Not started | - |
+| 3. Map Editor — Spaces & Navigation | 1/7 | In Progress|  |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
