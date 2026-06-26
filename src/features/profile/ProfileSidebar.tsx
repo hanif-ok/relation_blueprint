@@ -22,8 +22,9 @@ import { db } from '@/db/schema';
 import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
 import { PhotoGallery } from './PhotoGallery';
+import { CustomFieldRows } from './CustomFieldRows';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
-import type { Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
+import type { EntityType, Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
 import styles from './ProfileSidebar.module.css';
 
 /** The deletable entity families a profile can render (markers are a separate concern). */
@@ -59,6 +60,8 @@ export interface ProfileSidebarProps {
   onEdit: (entityId: string) => void;
   /** Raised after a successful delete so the host can clear selection. */
   onDeleted: (entityId: string) => void;
+  /** Open another entity's profile — drives link-to-entity navigation (D-10, one-way). */
+  onOpenEntity?: (type: EntityType, id: string) => void;
 }
 
 export function initialsOf(name: string): string {
@@ -92,23 +95,38 @@ export function ProfileSidebar({
   onClose,
   onEdit,
   onDeleted,
+  onOpenEntity,
 }: ProfileSidebarProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
 
   const isMarkerContext = openedFrom === 'marker';
-  const type: ProfileEntityType = entityType ?? 'people';
+  const requestedType: ProfileEntityType = entityType ?? 'people';
   const id = entityId ?? personId ?? null;
 
-  // Read the entity reactively from its table (Dexie is source of truth).
-  const entity = useLiveQuery<AnyEntity | undefined>(async () => {
-    if (!id) return undefined;
-    if (type === 'people') return db.people.get(id);
-    if (type === 'maps') return db.maps.get(id);
-    if (type === 'groups') return db.groups.get(id);
-    return db.relationshipLinks.get(id);
-  }, [id, type]);
+  // Read the entity reactively from its table (Dexie is source of truth). The resolved record is
+  // returned TOGETHER WITH the type it was read for: useLiveQuery yields the PREVIOUS result while
+  // re-running after a [id,type] change, so pairing them keeps the rendered record and the type it
+  // is narrowed against consistent — otherwise a profile switching across families (e.g. group ->
+  // person) would briefly narrow the stale group as a Person and crash on `person.tags` (Rule 1).
+  const resolved = useLiveQuery<{ type: ProfileEntityType; entity: AnyEntity } | undefined>(
+    async () => {
+      if (!id) return undefined;
+      const record =
+        requestedType === 'people'
+          ? await db.people.get(id)
+          : requestedType === 'maps'
+            ? await db.maps.get(id)
+            : requestedType === 'groups'
+              ? await db.groups.get(id)
+              : await db.relationshipLinks.get(id);
+      return record ? { type: requestedType, entity: record } : undefined;
+    },
+    [id, requestedType],
+  );
+  const type = resolved?.type ?? requestedType;
+  const entity = resolved?.entity;
 
   // Load the avatar thumbnail blob for the header.
   useEffect(() => {
@@ -242,6 +260,13 @@ export function ProfileSidebar({
               </span>
             </div>
           )}
+
+          {/* Custom-field read rows (S15) — appended after built-ins, before the gallery (U8). */}
+          <CustomFieldRows
+            entityType={type}
+            custom={entity.custom}
+            onOpenEntity={onOpenEntity}
+          />
 
           <div className={styles.row}>
             <span className={styles.rowLabel}>Photos</span>

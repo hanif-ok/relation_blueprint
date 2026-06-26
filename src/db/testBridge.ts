@@ -16,6 +16,14 @@ import {
   listPeople,
   createMap,
   upsertMarker,
+  createGroup,
+  createRelationshipLink,
+  deleteEntity,
+  createFieldDef,
+  updateFieldDef,
+  reorderFieldDefs,
+  softDeleteFieldDef,
+  listFieldDefs,
 } from './repository';
 import { storeMediaRaw } from './media';
 import {
@@ -51,6 +59,14 @@ export interface TestBridge {
   listPeople: typeof listPeople;
   createMap: typeof createMap;
   upsertMarker: typeof upsertMarker;
+  createGroup: typeof createGroup;
+  createRelationshipLink: typeof createRelationshipLink;
+  deleteEntity: typeof deleteEntity;
+  createFieldDef: typeof createFieldDef;
+  updateFieldDef: typeof updateFieldDef;
+  reorderFieldDefs: typeof reorderFieldDefs;
+  softDeleteFieldDef: typeof softDeleteFieldDef;
+  listFieldDefs: typeof listFieldDefs;
   /** Raw (no-resize) media store for seeding pre-made blobs in E2E specs. */
   storeMedia: typeof storeMediaRaw;
   connect: ConnectTestBridge;
@@ -77,6 +93,14 @@ export function installTestBridge(): void {
     listPeople,
     createMap,
     upsertMarker,
+    createGroup,
+    createRelationshipLink,
+    deleteEntity,
+    createFieldDef,
+    updateFieldDef,
+    reorderFieldDefs,
+    softDeleteFieldDef,
+    listFieldDefs,
     storeMedia: storeMediaRaw,
     connect: {
       markConnected,

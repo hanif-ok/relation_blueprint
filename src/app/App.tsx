@@ -256,6 +256,13 @@ export function App() {
         onDeleted={(deletedId) => {
           if (profile?.id === deletedId) setProfile(null);
         }}
+        onOpenEntity={(type, id) => {
+          // link-to-entity navigation (D-10): markers/relationship-links aren't profile types,
+          // so only the four first-class families open a profile (list context).
+          if (type !== 'markers') {
+            setProfile({ type: type as ProfileEntityType, id, openedFrom: 'list' });
+          }
+        }}
       />
 
       {/* Always-mounted so Radix can animate/clean up its overlay on close (restoring body
