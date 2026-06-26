@@ -141,6 +141,10 @@ None - no external service configuration required.
 - The full map-editor data foundation (types, schemas, Dexie v4, repository) is in place and gated by passing tests; later plans can build the Konva editor on these symbols.
 - `coords.ts` does NOT yet exist — the background-transform composition arithmetic is asserted inline in the migration/anchor tests and should be centralized into `coords.ts` when a later plan introduces it (the two inline `compose` helpers are the reference implementation).
 
+## Self-Check: PASSED
+
+All 6 created files exist on disk; all 5 commits (26ccc30, 465fb6f, 2642b6e, f33e1df, 564a11a) present in git history. tsc clean; full suite 199/199 green.
+
 ---
 *Phase: 03-map-editor-spaces-navigation*
 *Completed: 2026-06-27*
