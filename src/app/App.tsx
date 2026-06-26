@@ -11,6 +11,7 @@ import { PrivacyNotice } from '@/features/onboarding/PrivacyNotice';
 import { ViewSwitcher, type ViewKey } from '@/features/nav/ViewSwitcher';
 import { NewEntityMenu } from '@/features/nav/NewEntityMenu';
 import { EntityForm, type EntityFormType } from '@/features/entity-form/EntityForm';
+import { FieldManager } from '@/features/fields/FieldManager';
 import { ProfileSidebar, type ProfileEntityType } from '@/features/profile/ProfileSidebar';
 import { UpdateToast } from '@/features/pwa/UpdateToast';
 import { InstallPrompt } from '@/features/pwa/InstallPrompt';
@@ -50,6 +51,10 @@ export function App() {
 
   // aria-live announcement for "Show on map" (the DOM-accessible path to a canvas action).
   const [announce, setAnnounce] = useState('');
+
+  // The per-type field manager (S13, plan 02-04). When open, it edits the field-managed entity
+  // type below (the active view, or People when the Map view is active — Map has no custom fields).
+  const [fieldsOpen, setFieldsOpen] = useState(false);
 
   // Privacy notice (S20, D-19). The one-time dismissal persists in the Dexie `meta` table so it
   // round-trips with the DB; `reviewPrivacy` is a transient re-view that never rewrites the flag.
@@ -206,9 +211,7 @@ export function App() {
         <ViewSwitcher
           active={activeView}
           onSelectView={setActiveView}
-          onOpenFields={() => {
-            /* Field manager is plan 02-04. */
-          }}
+          onOpenFields={() => setFieldsOpen(true)}
           onOpenPrivacy={() => setReviewPrivacy(true)}
         />
 
@@ -265,6 +268,14 @@ export function App() {
         entityType={form?.type ?? 'people'}
         entity={form?.editingId ? editingEntity : null}
         onSaved={(id) => void handleSaved(id)}
+      />
+
+      {/* Per-type field manager (S13) — edits the active view's schema; Map → People (no custom
+          fields on the Map surface itself). Opened from the nav "Fields" item. */}
+      <FieldManager
+        open={fieldsOpen}
+        onOpenChange={setFieldsOpen}
+        entityType={activeView === 'map' ? 'people' : (activeView as EntityView)}
       />
 
       {/* Browse-row "Delete {entity}" — brick, full cascade (S21). */}
