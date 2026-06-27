@@ -271,6 +271,13 @@ export interface Marker {
   personId?: string;
   /** Portal destination map — present for `kind:'portal'`. */
   targetMapId?: string;
+  /**
+   * Phase-3 (D-04): the editor layer this marker belongs to (markers carry a `layerId` like
+   * shapes). OPTIONAL — an absent layerId resolves to the map's default/first layer at render
+   * time, so a pre-Phase-3 marker needs NO migration (RESEARCH Pitfall 7; mirrors the
+   * optional-with-default precedent for the other Phase-3 sub-objects).
+   */
+  layerId?: string;
   /** IMAGE-space x (see interface doc — composed onto backgroundTransform at render). */
   x: number;
   /** IMAGE-space y. */

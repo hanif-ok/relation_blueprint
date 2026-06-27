@@ -157,6 +157,9 @@ export const MarkerSchema = z.object({
   kind: MarkerKindSchema.default('person'),
   personId: z.string().optional(),
   targetMapId: z.string().optional(),
+  // Phase-3 (D-04): the editor layer this marker belongs to. OPTIONAL — an absent layerId resolves
+  // to the map's default layer at render time, so no migration is required for pre-Phase-3 markers.
+  layerId: z.string().optional(),
   x: z.number(),
   y: z.number(),
   width: z.number().optional(),

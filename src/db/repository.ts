@@ -283,8 +283,15 @@ export async function updateMap(id: string, patch: UpdateMapPatch): Promise<MapD
 
 /**
  * Fields a caller supplies for a marker; `id` is generated when absent. Phase-3 widens this with
- * the marker `kind` discriminant (defaults to `'person'`), the portal `targetMapId`, and the
- * Transformer `width`/`height`/`rotation`. `personId` is now OPTIONAL — a portal carries none.
+ * the marker `kind` discriminant (defaults to `'person'`), the portal `targetMapId`, the Transformer
+ * `width`/`height`/`rotation`, and the editor `layerId`. `personId` is now OPTIONAL — a portal
+ * carries none.
+ *
+ * Note on layers (D-04, MAP-03): a marker carries a `layerId` exactly like a Shape, but layer CRUD
+ * itself (create/rename/reorder/show/hide/lock/delete) is NOT a marker operation — layers are
+ * MapDoc sub-objects written through `updateMap(mapId, { layers })` (RESEARCH Don't-Hand-Roll), so
+ * there is no new repository function for it. An absent `layerId` resolves to the map's default
+ * layer at render time, so this field is optional.
  */
 export type UpsertMarkerInput = {
   id?: string;
@@ -292,6 +299,7 @@ export type UpsertMarkerInput = {
   kind?: MarkerKind;
   personId?: string;
   targetMapId?: string;
+  layerId?: string;
   x: number;
   y: number;
   width?: number;
@@ -309,6 +317,7 @@ export async function upsertMarker(input: UpsertMarkerInput): Promise<Marker> {
     kind: input.kind ?? 'person',
     personId: input.personId,
     targetMapId: input.targetMapId,
+    layerId: input.layerId,
     x: input.x,
     y: input.y,
     width: input.width,

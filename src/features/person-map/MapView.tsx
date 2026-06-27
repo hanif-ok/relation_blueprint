@@ -15,7 +15,7 @@
 // markers render at composed positions now via the `position` prop.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Image as KonvaImage, Rect as KonvaRect, Ellipse, Line } from 'react-konva';
+import { Stage, Layer, Group, Image as KonvaImage, Rect as KonvaRect, Ellipse, Line } from 'react-konva';
 import type Konva from 'konva';
 import { nanoid } from 'nanoid';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -36,6 +36,8 @@ import { ShapeNode } from './editor/ShapeNode';
 import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
 import { TransformerOverlay } from './editor/TransformerOverlay';
+import { LayersPanel } from './editor/LayersPanel';
+import { orderObjectsForRender, resolveLayer } from './editor/layers';
 import {
   useToolMode,
   beginDraw,
@@ -309,9 +311,20 @@ export function MapView({
     setSelectedShapeId(null);
   }, []);
 
-  // D-20: show person-name labels on the canvas. Wired to the layers-panel toggle in 03-05; the
-  // default is hidden here (the prop threads through so the wiring seam is real, not a stub).
-  const showLabels = false;
+  // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
+  const [showLabels, setShowLabels] = useState(false);
+
+  // D-04: the layers the content render is organized by (always at least the default layer).
+  const layers = map?.layers ?? [];
+
+  // D-04: the ACTIVE layer — new shapes/markers land on it. Resolves to the topmost layer when unset
+  // or stale (the selected layer was deleted). The panel sets this when a row is selected/created.
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  const effectiveActiveLayerId = useMemo(() => {
+    if (activeLayerId && layers.some((l) => l.id === activeLayerId)) return activeLayerId;
+    if (layers.length === 0) return null;
+    return layers.slice().sort((a, b) => b.order - a.order)[0].id;
+  }, [activeLayerId, layers]);
 
   // Convert a Stage pointer position to IMAGE space (undo the Stage pan/zoom, then the bg transform).
   const pointerToImage = useCallback(
@@ -331,7 +344,14 @@ export function MapView({
   const commitShape = useCallback(
     (draft: DraftShape) => {
       if (!map) return;
-      const { layers, layerId } = ensureDefaultLayer(map.layers);
+      // Ensure a layer exists, then land the shape on the ACTIVE layer (D-04). When no layer is
+      // active yet (fresh map), `ensureDefaultLayer` materializes the default "Markers" layer.
+      const ensured = ensureDefaultLayer(map.layers);
+      const layers = ensured.layers;
+      const layerId =
+        effectiveActiveLayerId && layers.some((l) => l.id === effectiveActiveLayerId)
+          ? effectiveActiveLayerId
+          : ensured.layerId;
       const shape: Shape = {
         id: nanoid(),
         layerId,
@@ -350,7 +370,7 @@ export function MapView({
       // Select the just-drawn shape so the StylePopover opens for immediate styling.
       setSelectedShapeId(shape.id);
     },
-    [map],
+    [map, effectiveActiveLayerId],
   );
 
   // Pointer-down: in a draw mode, begin a drag-draw at the image-space point. (Polygon multi-click
@@ -438,12 +458,30 @@ export function MapView({
     [map],
   );
 
+  // ── Logical-layer render set (MAP-03, RESEARCH Pattern 3) ───────────────────────────────────
+  // Both shapes AND markers are organized by `MapDoc.layers`: each object's effective layer is its
+  // `layerId` resolved against the map's layers (absent/dangling → default layer). Objects on a
+  // HIDDEN layer are excluded; objects on a LOCKED layer render dimmed (opacity 0.6) and
+  // non-interactive (listening=false). The whole set renders into the SINGLE physical L1 content
+  // layer, sorted by logical layer order (bottom→top) — NEVER one Konva Layer per user layer.
+  const orderedShapes = useMemo(
+    () => orderObjectsForRender(map?.shapes ?? [], layers),
+    [map?.shapes, layers],
+  );
+
   // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
-  // markers BEFORE rendering them (so they are never mounted as Konva nodes). The cull box is the
-  // composed stage point ± MARKER_HALF_EXTENT.
+  // markers BEFORE rendering them (so they are never mounted as Konva nodes). Hidden-layer markers
+  // are already excluded by `orderObjectsForRender`; the cull box is the composed stage point ±
+  // MARKER_HALF_EXTENT.
   const visibleMarkers = useMemo(() => {
-    return (markers ?? [])
-      .map((mk) => ({ mk, pos: imageToStage({ x: mk.x, y: mk.y }, transform) }))
+    const ordered = orderObjectsForRender(markers ?? [], layers);
+    return ordered
+      .map((item) => ({
+        mk: item.object,
+        locked: item.locked,
+        opacity: item.opacity,
+        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
+      }))
       .filter(({ pos }) => {
         const box: Rect = {
           x: pos.x - MARKER_HALF_EXTENT,
@@ -453,7 +491,22 @@ export function MapView({
         };
         return culling.isVisible(box);
       });
-  }, [markers, transform, culling]);
+  }, [markers, layers, transform, culling]);
+
+  // Per-layer object count (shapes + markers resolved to a layer) for the panel count pills. An
+  // object with an absent/dangling layerId is counted against the default layer (resolveLayer).
+  const objectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (layers.length === 0) return counts;
+    const bump = (layerId?: string) => {
+      const layer = resolveLayer({ id: '', layerId }, layers);
+      if (!layer) return;
+      counts[layer.id] = (counts[layer.id] ?? 0) + 1;
+    };
+    for (const s of map?.shapes ?? []) bump(s.layerId);
+    for (const mk of markers ?? []) bump(mk.layerId);
+    return counts;
+  }, [layers, map?.shapes, markers]);
 
   const hasMap = !!map;
   const hasAnyMap = (mapCount ?? 0) > 0;
@@ -499,6 +552,19 @@ export function MapView({
         </div>
       )}
 
+      {/* Layers panel (S11, MAP-03) — create/rename/reorder/show/hide/lock + the D-20 label toggle.
+          Only meaningful once the map has at least one layer (drawing/placing creates one). */}
+      {hasMap && map && layers.length > 0 && (
+        <LayersPanel
+          map={map}
+          activeLayerId={effectiveActiveLayerId}
+          onActiveLayerChange={setActiveLayerId}
+          showLabels={showLabels}
+          onShowLabelsChange={setShowLabels}
+          objectCounts={objectCounts}
+        />
+      )}
+
       {hasMap && size.width > 0 && (
         <Stage
           width={size.width}
@@ -542,62 +608,67 @@ export function MapView({
             )}
           </Layer>
 
-          {/* L1 — content. Shapes render first (below markers, in array order — full per-layer
-              z-ordering arrives in 03-05), then a live draw preview, then the markers (each
-              composed from IMAGE space + culled). Markers stay visually on top of zones. */}
+          {/* L1 — content. ALL objects (shapes + markers) live in this SINGLE physical Konva layer
+              and are ordered by their LOGICAL layer (RESEARCH Pattern 3 — never one Konva Layer per
+              user layer). Shapes render bottom→top by layer order (then a draw preview), then the
+              markers (each composed from IMAGE space + culled), so markers stay visually above
+              same-layer zones. Hidden-layer objects are already filtered out; locked-layer objects
+              render dimmed (opacity 0.6) and non-interactive (listening=false). */}
           <Layer>
-            {(map?.shapes ?? []).map((shape) => (
-              <ShapeNode
-                key={shape.id}
-                map={map!}
-                shape={shape}
-                transform={transform}
-                selected={shape.id === selectedShapeId}
-                onSelect={(id) => {
-                  // Selecting a shape is single-select: clear any marker selection, exit bg-edit.
-                  setSelectedShapeId(id);
-                  setSelectedMarkerId(null);
-                  setEditingBackground(false);
-                }}
-                onNodeRef={
-                  shape.id === selectedShapeId ? (node) => setSelectedNode(node) : undefined
-                }
-              />
+            {orderedShapes.map(({ object: shape, locked, opacity }) => (
+              <Group key={shape.id} opacity={opacity} listening={!locked}>
+                <ShapeNode
+                  map={map!}
+                  shape={shape}
+                  transform={transform}
+                  selected={shape.id === selectedShapeId}
+                  onSelect={(id) => {
+                    // Selecting a shape is single-select: clear any marker selection, exit bg-edit.
+                    setSelectedShapeId(id);
+                    setSelectedMarkerId(null);
+                    setEditingBackground(false);
+                  }}
+                  onNodeRef={
+                    shape.id === selectedShapeId ? (node) => setSelectedNode(node) : undefined
+                  }
+                />
+              </Group>
             ))}
-            {/* Zone label chips for any shape carrying a non-empty label (D-02). */}
-            {(map?.shapes ?? [])
-              .filter((s) => (s.label ?? '').trim().length > 0)
-              .map((s) => {
+            {/* Zone label chips for any VISIBLE-layer shape carrying a non-empty label (D-02). */}
+            {orderedShapes
+              .filter(({ object: s }) => (s.label ?? '').trim().length > 0)
+              .map(({ object: s }) => {
                 const c = shapeCenter(s, transform);
                 return <ZoneLabel key={`label-${s.id}`} label={s.label!} x={c.x} y={c.y} />;
               })}
             {/* In-progress draw preview (rect/ellipse/line). */}
             {draw && <DrawPreview draw={draw} transform={transform} />}
 
-            {visibleMarkers.map(({ mk, pos }) => {
+            {visibleMarkers.map(({ mk, pos, locked, opacity }) => {
               const person = (people ?? []).find((p) => p.id === mk.personId);
               if (!person) return null;
               return (
-                <AvatarMarker
-                  key={mk.id}
-                  marker={mk}
-                  person={person}
-                  position={pos}
-                  transform={transform}
-                  selected={person.id === selectedPersonId}
-                  showLabels={showLabels}
-                  onSelect={(personId) => {
-                    // Selecting a marker opens its profile AND selects it for the Transformer
-                    // (single-select: clear any shape selection, exit bg-edit).
-                    onSelect(personId);
-                    setSelectedMarkerId(mk.id);
-                    setSelectedShapeId(null);
-                    setEditingBackground(false);
-                  }}
-                  onNodeRef={
-                    mk.id === selectedMarkerId ? (node) => setSelectedNode(node) : undefined
-                  }
-                />
+                <Group key={mk.id} opacity={opacity} listening={!locked}>
+                  <AvatarMarker
+                    marker={mk}
+                    person={person}
+                    position={pos}
+                    transform={transform}
+                    selected={person.id === selectedPersonId}
+                    showLabels={showLabels}
+                    onSelect={(personId) => {
+                      // Selecting a marker opens its profile AND selects it for the Transformer
+                      // (single-select: clear any shape selection, exit bg-edit).
+                      onSelect(personId);
+                      setSelectedMarkerId(mk.id);
+                      setSelectedShapeId(null);
+                      setEditingBackground(false);
+                    }}
+                    onNodeRef={
+                      mk.id === selectedMarkerId ? (node) => setSelectedNode(node) : undefined
+                    }
+                  />
+                </Group>
               );
             })}
           </Layer>

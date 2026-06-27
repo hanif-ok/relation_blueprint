@@ -27,6 +27,7 @@ import {
   listFieldDefs,
 } from './repository';
 import { storeMediaRaw } from './media';
+import { orderObjectsForRender, resolveLayer } from '@/features/person-map/editor/layers';
 import type { BackgroundTransform } from '@/domain/types';
 import {
   markConnected,
@@ -88,6 +89,15 @@ export interface TestBridge {
    * their stored image-space x/y unchanged (the anchoring property the E2E asserts).
    */
   setBackgroundTransform: (mapId: string, t: BackgroundTransform) => Promise<void>;
+  /**
+   * The map's VISIBLE render set (MAP-03), in canvas z-order (bottom→top): every shape + marker
+   * whose resolved layer is visible, ordered by logical layer order then array order. Hidden-layer
+   * objects are excluded. Computed via the SAME pure `orderObjectsForRender` the editor renders
+   * through, so the E2E asserts the real layer-driven behavior without brittle canvas pixel math.
+   */
+  visibleObjectIds: (mapId: string) => Promise<string[]>;
+  /** The ids of objects on a LOCKED layer (rendered dimmed + non-interactive — listening=false). */
+  lockedObjectIds: (mapId: string) => Promise<string[]>;
   connect: ConnectTestBridge;
 }
 
@@ -140,6 +150,48 @@ export function installTestBridge(): void {
     },
     setBackgroundTransform: async (mapId, t) => {
       await updateMap(mapId, { backgroundTransform: t });
+    },
+    visibleObjectIds: async (mapId) => {
+      const map = await db.maps.get(mapId);
+      if (!map) return [];
+      const markers = await db.markers.where('mapId').equals(mapId).toArray();
+      // Combined z-order: order ALL objects (shapes + markers) by their resolved layer's order
+      // (bottom→top), with markers ranked just ABOVE same-layer shapes (mirroring the MapView L1
+      // content layer, which renders shapes then markers). Tag each object with a class rank so the
+      // sort is fully deterministic, then reduce to ids. This makes a layer REORDER observable in
+      // the returned z-order (a shape on a layer moved below a marker's layer now sorts after it).
+      const combined: Array<{ id: string; layerId?: string; classRank: number }> = [
+        ...map.shapes.map((s) => ({ id: s.id, layerId: s.layerId, classRank: 0 })),
+        ...markers.map((m) => ({ id: m.id, layerId: m.layerId, classRank: 1 })),
+      ];
+      const orderById = new Map(map.layers.map((l) => [l.id, l.order]));
+      return orderObjectsForRender(combined, map.layers)
+        .slice()
+        .sort((a, b) => {
+          const la = resolveLayer({ id: a.object.id, layerId: a.object.layerId }, map.layers);
+          const lb = resolveLayer({ id: b.object.id, layerId: b.object.layerId }, map.layers);
+          const oa = la ? (orderById.get(la.id) ?? 0) : 0;
+          const ob = lb ? (orderById.get(lb.id) ?? 0) : 0;
+          if (oa !== ob) return oa - ob;
+          // Within a layer, markers (classRank 1) render above shapes (classRank 0).
+          return a.object.classRank - b.object.classRank;
+        })
+        .map((r) => r.object.id);
+    },
+    lockedObjectIds: async (mapId) => {
+      const map = await db.maps.get(mapId);
+      if (!map) return [];
+      const markers = await db.markers.where('mapId').equals(mapId).toArray();
+      const ids: string[] = [];
+      for (const s of map.shapes) {
+        const layer = resolveLayer({ id: s.id, layerId: s.layerId }, map.layers);
+        if (layer?.locked) ids.push(s.id);
+      }
+      for (const mk of markers) {
+        const layer = resolveLayer({ id: mk.id, layerId: mk.layerId }, map.layers);
+        if (layer?.locked) ids.push(mk.id);
+      }
+      return ids;
     },
     connect: {
       markConnected,
