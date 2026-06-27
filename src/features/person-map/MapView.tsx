@@ -15,21 +15,34 @@
 // markers render at composed positions now via the `position` prop.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Rect as KonvaRect, Ellipse, Line } from 'react-konva';
 import type Konva from 'konva';
+import { nanoid } from 'nanoid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
-import type { BackgroundTransform, Marker } from '@/domain/types';
-import { createMap } from '@/db/repository';
+import type { BackgroundTransform, Layer as MapLayer, Marker, Shape } from '@/domain/types';
+import { createMap, updateMap } from '@/db/repository';
 import { storeMedia } from '@/media/mediaManager';
-import { colors } from '@/app/tokens';
+import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
 import { useMapImage, useBlobImage } from './useMapImage';
-import { imageToStage } from './coords';
+import { imageToStage, stageToImage } from './coords';
 import { useViewportCulling, type Rect } from './editor/useViewportCulling';
 import { MapSwitcher } from './editor/MapSwitcher';
 import { Breadcrumb } from './editor/Breadcrumb';
+import { ToolPalette } from './editor/ToolPalette';
+import { ShapeNode } from './editor/ShapeNode';
+import { ZoneLabel } from './editor/ZoneLabel';
+import { StylePopover } from './editor/StylePopover';
+import {
+  useToolMode,
+  beginDraw,
+  updateDraw,
+  commitDraw,
+  type DraftShape,
+  type DrawState,
+} from './editor/useToolMode';
 import styles from './MapView.module.css';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB cap (UI-SPEC A10)
@@ -42,6 +55,71 @@ const IDENTITY_TRANSFORM: BackgroundTransform = { offsetX: 0, offsetY: 0, scale:
 /** Half-extent (px) of a marker's bounding box for culling — the avatar circle + stem reach a few
  *  dozen px around the anchor; a generous box keeps a marker mounted slightly before it enters. */
 const MARKER_HALF_EXTENT = 48;
+
+/** The default preset a freshly-drawn shape carries (the generic "Stone" room; D-03). */
+const DEFAULT_PRESET = 'stone';
+
+/**
+ * Resolve the layer id a new shape attaches to. A map created via `createMap` starts with an
+ * EMPTY `layers` array (only the version(4) upgrade backfills the default "Markers" layer for
+ * pre-existing maps); a shape MUST reference a real layer (D-04). So when the active map has no
+ * layer yet, we create the default "Markers" layer (order 0) on the fly and persist it alongside
+ * the shape — the full layers panel arrives in 03-05, but a shape can never dangle without one
+ * (Rule 2: missing-critical-functionality).
+ */
+function ensureDefaultLayer(layers: MapLayer[]): { layers: MapLayer[]; layerId: string } {
+  if (layers.length > 0) return { layers, layerId: layers[0].id };
+  const layer: MapLayer = { id: nanoid(), name: 'Markers', visible: true, locked: false, order: 0 };
+  return { layers: [layer], layerId: layer.id };
+}
+
+/** The stage center of a shape's bounding box / vertex set, for anchoring its ZoneLabel chip. */
+function shapeCenter(shape: Shape, transform: BackgroundTransform): { x: number; y: number } {
+  if (shape.points && shape.points.length >= 2) {
+    let sx = 0;
+    let sy = 0;
+    const n = shape.points.length / 2;
+    for (let i = 0; i < shape.points.length; i += 2) {
+      sx += shape.points[i];
+      sy += shape.points[i + 1];
+    }
+    return imageToStage({ x: sx / n, y: sy / n }, transform);
+  }
+  return imageToStage(
+    { x: (shape.x ?? 0) + (shape.width ?? 0) / 2, y: (shape.y ?? 0) + (shape.height ?? 0) / 2 },
+    transform,
+  );
+}
+
+/** The live stage-space preview rendered while a rect/ellipse/line draw is in progress. */
+function DrawPreview({ draw, transform }: { draw: DrawState; transform: BackgroundTransform }) {
+  const stroke = zonePresets[DEFAULT_PRESET].stroke;
+  const a = imageToStage(draw.start, transform);
+  const b = imageToStage(draw.current, transform);
+  if (draw.kind === 'line') {
+    return <Line points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={2} dash={[6, 4]} listening={false} />;
+  }
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const w = Math.abs(b.x - a.x);
+  const h = Math.abs(b.y - a.y);
+  if (draw.kind === 'ellipse') {
+    return (
+      <Ellipse
+        x={x + w / 2}
+        y={y + h / 2}
+        radiusX={w / 2}
+        radiusY={h / 2}
+        stroke={stroke}
+        strokeWidth={2}
+        dash={[6, 4]}
+        listening={false}
+      />
+    );
+  }
+  // rect / polygon-in-progress fall back to a bounding rect preview
+  return <KonvaRect x={x} y={y} width={w} height={h} stroke={stroke} strokeWidth={2} dash={[6, 4]} listening={false} />;
+}
 
 export interface MapViewProps {
   /** The currently selected person id, mirrored to the marker ring. */
@@ -183,6 +261,133 @@ export function MapView({
     [culling],
   );
 
+  // ── Tool-mode draw wiring (MAP-02) ────────────────────────────────────────────────────────
+  // One useToolMode instance owned here drives the ToolPalette and routes Stage pointer events to
+  // draw vs. pan/select. `stageDraggable` toggles Stage.draggable so a single-pointer drag DRAWS
+  // in a draw mode (D-19) but PANS in Select. A two-finger touch always pans/pinches.
+  const toolMode = useToolMode();
+  const { tool, setTool, stageDraggable, draw, setDraw, setTwoFingerActive } = toolMode;
+
+  // Mirror the in-progress draw into a ref so the pointer-move/up handlers always read the LIVE
+  // draft, never a stale render-closure value. Without this, a fast down→move→up sequence (or a
+  // synthetic one in tests) reads `draw === null` on pointer-up and silently drops the shape.
+  const drawRef = useRef<DrawState | null>(null);
+  const setDrawTracked = useCallback(
+    (next: DrawState | null) => {
+      drawRef.current = next;
+      setDraw(next);
+    },
+    [setDraw],
+  );
+
+  // The currently-selected shape id (opens the StylePopover).
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+
+  // Convert a Stage pointer position to IMAGE space (undo the Stage pan/zoom, then the bg transform).
+  const pointerToImage = useCallback(
+    (stage: Konva.Stage): { x: number; y: number } | null => {
+      const pos = stage.getPointerPosition();
+      if (!pos) return null;
+      // Undo the Stage's own pan/zoom to get content-space, then undo the background transform.
+      const contentX = (pos.x - stage.x()) / stage.scaleX();
+      const contentY = (pos.y - stage.y()) / stage.scaleY();
+      return stageToImage({ x: contentX, y: contentY }, transform);
+    },
+    [transform],
+  );
+
+  // Commit a finished draft shape onto the active map's `shapes` array (persisting via updateMap,
+  // never straight to Dexie). Ensures a default layer exists so the shape never dangles (D-04).
+  const commitShape = useCallback(
+    (draft: DraftShape) => {
+      if (!map) return;
+      const { layers, layerId } = ensureDefaultLayer(map.layers);
+      const shape: Shape = {
+        id: nanoid(),
+        layerId,
+        kind: draft.kind,
+        x: draft.x,
+        y: draft.y,
+        width: draft.width,
+        height: draft.height,
+        points: draft.points,
+        rotation: 0,
+        preset: DEFAULT_PRESET,
+        // A freshly-drawn line is never filled; rooms/zones default to filled.
+        fill: draft.kind !== 'line',
+      };
+      void updateMap(map.id, { shapes: [...map.shapes, shape], layers });
+      // Select the just-drawn shape so the StylePopover opens for immediate styling.
+      setSelectedShapeId(shape.id);
+    },
+    [map],
+  );
+
+  // Pointer-down: in a draw mode, begin a drag-draw at the image-space point. (Polygon multi-click
+  // and Esc-cancel are deferred — rect/ellipse/line drag-draw is the MAP-02 core; polygon arrives
+  // alongside the Transformer in 03-04. The pure polygon helpers already exist in useToolMode.)
+  const handlePointerDown = useCallback(
+    (e: Konva.KonvaEventObject<PointerEvent>) => {
+      const stage = e.target.getStage();
+      if (!stage) return;
+      // Drag-draw only for rect/ellipse/line (polygon is multi-click — deferred to 03-04).
+      if (tool !== 'rect' && tool !== 'ellipse' && tool !== 'line') return;
+      const start = pointerToImage(stage);
+      if (!start) return;
+      setDrawTracked(beginDraw(tool, start));
+    },
+    [tool, pointerToImage, setDrawTracked],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: Konva.KonvaEventObject<PointerEvent>) => {
+      const current = drawRef.current;
+      if (!current) return;
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const at = pointerToImage(stage);
+      if (!at) return;
+      setDrawTracked(updateDraw(current, at));
+    },
+    [pointerToImage, setDrawTracked],
+  );
+
+  const handlePointerUp = useCallback(() => {
+    const current = drawRef.current;
+    if (!current) return;
+    const committed = commitDraw(current);
+    setDrawTracked(null);
+    if (committed) commitShape(committed);
+  }, [setDrawTracked, commitShape]);
+
+  // Two-finger touch always pans/pinches (RESEARCH Pattern 6); the second touch landing kills any
+  // in-flight single-finger draw so a pinch never leaves a stray preview (Pitfall 4).
+  const handleTouchStart = useCallback(
+    (e: Konva.KonvaEventObject<TouchEvent>) => {
+      const touches = e.evt.touches;
+      if (touches && touches.length >= 2) {
+        setTwoFingerActive(true);
+        setDrawTracked(null);
+        const stage = e.target.getStage();
+        if (stage) stage.stopDrag();
+      }
+    },
+    [setTwoFingerActive, setDrawTracked],
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: Konva.KonvaEventObject<TouchEvent>) => {
+      const touches = e.evt.touches;
+      if (!touches || touches.length < 2) setTwoFingerActive(false);
+    },
+    [setTwoFingerActive],
+  );
+
+  const selectedShape = useMemo(
+    () => (map?.shapes ?? []).find((s) => s.id === selectedShapeId) ?? null,
+    [map?.shapes, selectedShapeId],
+  );
+
   // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
   // markers BEFORE rendering them (so they are never mounted as Konva nodes). The cull box is the
   // composed stage point ± MARKER_HALF_EXTENT.
@@ -216,6 +421,7 @@ export function MapView({
             onCreateMap={onCreateMap}
           />
           <Breadcrumb activeMapId={activeMapId} onNavigate={onActiveMapChange} />
+          <ToolPalette tool={tool} onSelectTool={setTool} disabled={!hasMap} />
         </div>
       )}
 
@@ -223,12 +429,22 @@ export function MapView({
         <Stage
           width={size.width}
           height={size.height}
-          draggable
+          // Draggable only when the tool mode says so: Select pans, draw modes draw (single
+          // pointer), and a two-finger touch always pans/pinches (D-19).
+          draggable={stageDraggable}
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
-          // Click on empty canvas (not a marker) clears selection.
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          // Click on empty canvas (not a marker/shape) clears selection.
           onClick={(e) => {
-            if (e.target === e.target.getStage()) onSelect('');
+            if (e.target === e.target.getStage()) {
+              onSelect('');
+              setSelectedShapeId(null);
+            }
           }}
         >
           {/* L0 — background image. Non-interactive; positioned/scaled/rotated by the map's
@@ -246,10 +462,30 @@ export function MapView({
             )}
           </Layer>
 
-          {/* L1 — content (markers; shapes/portals land in later plans). Each marker is positioned
-              by composing its IMAGE-space coord onto the background transform; off-screen markers
-              are culled out of this list entirely (not mounted). */}
+          {/* L1 — content. Shapes render first (below markers, in array order — full per-layer
+              z-ordering arrives in 03-05), then a live draw preview, then the markers (each
+              composed from IMAGE space + culled). Markers stay visually on top of zones. */}
           <Layer>
+            {(map?.shapes ?? []).map((shape) => (
+              <ShapeNode
+                key={shape.id}
+                map={map!}
+                shape={shape}
+                transform={transform}
+                selected={shape.id === selectedShapeId}
+                onSelect={(id) => setSelectedShapeId(id)}
+              />
+            ))}
+            {/* Zone label chips for any shape carrying a non-empty label (D-02). */}
+            {(map?.shapes ?? [])
+              .filter((s) => (s.label ?? '').trim().length > 0)
+              .map((s) => {
+                const c = shapeCenter(s, transform);
+                return <ZoneLabel key={`label-${s.id}`} label={s.label!} x={c.x} y={c.y} />;
+              })}
+            {/* In-progress draw preview (rect/ellipse/line). */}
+            {draw && <DrawPreview draw={draw} transform={transform} />}
+
             {visibleMarkers.map(({ mk, pos }) => {
               const person = (people ?? []).find((p) => p.id === mk.personId);
               if (!person) return null;
@@ -270,6 +506,18 @@ export function MapView({
               Transformer here (kept as a fixed third physical layer per RESEARCH Pattern 3). */}
           <Layer />
         </Stage>
+      )}
+
+      {/* Style popover — opens when a shape is selected; closing it clears the selection. */}
+      {map && (
+        <StylePopover
+          open={selectedShape !== null}
+          onOpenChange={(o) => {
+            if (!o) setSelectedShapeId(null);
+          }}
+          map={map}
+          shape={selectedShape}
+        />
       )}
 
       {!hasAnyMap && (
