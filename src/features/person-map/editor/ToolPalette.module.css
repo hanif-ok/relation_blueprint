@@ -1,0 +1,57 @@
+/* ToolPalette — paper toolbar strip (UI-SPEC S10). Buttons are 44px hit (48px on coarse
+ * pointers). The active tool gets a 2px amber bottom-bar + paper-shade fill (the reserved
+ * active-tool accent); the rest are ink glyphs, paper-shade on hover. */
+
+.palette {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-1);
+  padding: var(--space-xs);
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--paper-shade);
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Active tool: paper-shade fill + 2px amber bar (UI-SPEC S10 / A8). */
+.toolActive {
+  background: var(--paper-shade);
+  border-bottom-color: var(--amber);
+}
+
+/* Larger touch targets on coarse pointers (UI-SPEC parity contract). */
+@media (pointer: coarse) {
+  .tool {
+    width: 48px;
+    height: 48px;
+  }
+}
