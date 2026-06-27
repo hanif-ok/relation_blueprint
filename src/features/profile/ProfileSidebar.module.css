@@ -251,3 +251,59 @@
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
+
+/* Appears on (D-12) — eyebrow + a list of jump-to-placement map rows. */
+.appearsOnEyebrow {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.appearsOnList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* A jump-to-placement row: ink text on paper-shade, neutral (amber stays reserved). */
+.appearsOnRow {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.appearsOnRow:hover {
+  background: var(--hairline);
+}
+
+.appearsOnRow:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.appearsOnEmpty {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+/* A placement whose map was deleted (T-03-10) — muted, non-interactive. */
+.appearsOnDeleted {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-muted);
+  padding: var(--space-xs) var(--space-sm);
+}

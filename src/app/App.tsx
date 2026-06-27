@@ -57,6 +57,11 @@ export function App() {
   // aria-live announcement for "Show on map" (the DOM-accessible path to a canvas action).
   const [announce, setAnnounce] = useState('');
 
+  // Jump-to-placement target (D-12): the marker id MapView should select + center after a profile
+  // "Appears on" row is clicked. Cleared by MapView (onFocusHandled) once applied, so re-jumping to
+  // the same placement works again.
+  const [focusMarkerId, setFocusMarkerId] = useState<string | null>(null);
+
   // The per-type field manager (S13, plan 02-04). When open, it edits the field-managed entity
   // type below (the active view, or People when the Map view is active — Map has no custom fields).
   const [fieldsOpen, setFieldsOpen] = useState(false);
@@ -195,6 +200,15 @@ export function App() {
     setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
   }
 
+  /** Jump-to-placement (D-12): an "Appears on" row sets the target map active, switches to the Map
+   *  view, and hands MapView the target marker id to select + center that placement. Reuses the
+   *  active-map setter (03-02) + the focusMarkerId plumbing into MapView (Task 1). */
+  function jumpToPlacement(mapId: string, markerId: string) {
+    setActiveMapId(mapId);
+    setActiveView('map');
+    setFocusMarkerId(markerId);
+  }
+
   /** Resolve an entity's display name for the delete-confirm copy, then open the confirm. */
   async function requestDelete(type: ProfileEntityType, id: string) {
     const table =
@@ -251,6 +265,9 @@ export function App() {
               activeMapId={activeMapId}
               onActiveMapChange={setActiveMapId}
               onCreateMap={() => openCreate('maps')}
+              onCreatePerson={() => openCreate('people')}
+              focusMarkerId={focusMarkerId}
+              onFocusHandled={() => setFocusMarkerId(null)}
             />
           ) : (
             <BrowseList
@@ -290,6 +307,7 @@ export function App() {
             setProfile({ type: type as ProfileEntityType, id, openedFrom: 'list' });
           }
         }}
+        onJumpToPlacement={jumpToPlacement}
       />
 
       {/* Always-mounted so Radix can animate/clean up its overlay on close (restoring body
