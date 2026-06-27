@@ -1,0 +1,119 @@
+/* StylePopover — paper dialog surface for the minimal shape-styling controls (UI-SPEC S17).
+ * Preset swatches + a fill toggle + a label input; no color picker / sliders (D-03 deferred). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.32);
+  z-index: 60;
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100vw - var(--space-xl)));
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-lg);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sectionLabel {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.swatches {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* Current preset: amber selection ring (UI-SPEC S17). */
+.swatchActive {
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--amber);
+}
+
+.toggleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.input {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  outline: none;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.done {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.done:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

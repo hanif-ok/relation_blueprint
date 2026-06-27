@@ -1,0 +1,134 @@
+// StylePopover — the minimal shape-styling surface (D-02/D-03, UI-SPEC S17). Opened when a shape
+// is selected. Built on the INSTALLED Radix Dialog (RESEARCH says Popover is optional; we prefer
+// the already-present @radix-ui/react-dialog over adding a new dependency — threat T-03-SC). The
+// whole styling surface is exactly three controls:
+//   1. a 5-swatch preset palette (Stone/Sage/Clay/Dusk/Plum), single-select, amber ring on current
+//   2. a Fill on/off toggle (forced off + disabled for `line` shapes, UI-SPEC l.160)
+//   3. a zone Label text input (a non-empty label promotes the shape to a zone, D-02)
+// There is intentionally NO color picker / stroke-width / opacity / dashes (D-03 deferred).
+//
+// Every change writes through `updateMap` (MapDoc.shapes), never straight to Dexie. The
+// move-to-layer dropdown arrives in 03-05 — a clearly-marked seam is left below.
+
+import { useId } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { zonePresets } from '@/app/tokens';
+import { updateMap } from '@/db/repository';
+import type { MapDoc, Shape } from '@/domain/types';
+import styles from './StylePopover.module.css';
+
+/** The five presets, in palette order (D-03). Keys are the lowercased preset ids stored on Shape. */
+const PRESETS = [
+  { id: 'stone', label: 'Stone' },
+  { id: 'sage', label: 'Sage' },
+  { id: 'clay', label: 'Clay' },
+  { id: 'dusk', label: 'Dusk' },
+  { id: 'plum', label: 'Plum' },
+] as const;
+
+export interface StylePopoverProps {
+  /** Open when a shape is selected. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The map owning the shape (shapes persist on it via updateMap). */
+  map: MapDoc;
+  /** The selected shape, or null when nothing is selected. */
+  shape: Shape | null;
+}
+
+export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverProps) {
+  const titleId = useId();
+  const labelInputId = useId();
+
+  if (!shape) return null;
+
+  const isLine = shape.kind === 'line';
+
+  /** Rewrite the selected shape with a patch and persist via updateMap. */
+  function patchShape(patch: Partial<Shape>) {
+    if (!shape) return;
+    const shapes = map.shapes.map((s) => (s.id === shape.id ? { ...s, ...patch } : s));
+    void updateMap(map.id, { shapes });
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={styles.overlay} />
+        <Dialog.Content
+          className={styles.content}
+          aria-labelledby={titleId}
+          data-testid="style-popover"
+        >
+          <Dialog.Title id={titleId} className={styles.title}>
+            Shape style
+          </Dialog.Title>
+
+          {/* 1 — preset palette (single-select). The current preset gets an amber ring. */}
+          <div className={styles.section}>
+            <span className={styles.sectionLabel}>Preset</span>
+            <div className={styles.swatches} role="radiogroup" aria-label="Preset">
+              {PRESETS.map((p) => {
+                const active = shape.preset === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={p.label}
+                    title={p.label}
+                    data-testid={`preset-${p.id}`}
+                    className={active ? `${styles.swatch} ${styles.swatchActive}` : styles.swatch}
+                    style={{ background: zonePresets[p.id].stroke }}
+                    onClick={() => patchShape({ preset: p.id })}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2 — fill on/off. Forced off + disabled for line shapes (UI-SPEC l.160). */}
+          <div className={styles.section}>
+            <label className={styles.toggleRow}>
+              <input
+                type="checkbox"
+                checked={!isLine && shape.fill}
+                disabled={isLine}
+                data-testid="fill-toggle"
+                onChange={(e) => patchShape({ fill: e.target.checked })}
+              />
+              <span>Fill{isLine ? ' (not available for lines)' : ''}</span>
+            </label>
+          </div>
+
+          {/* 3 — zone label. A non-empty label promotes the shape to a zone (D-02). */}
+          <div className={styles.section}>
+            <label className={styles.sectionLabel} htmlFor={labelInputId}>
+              Zone label
+            </label>
+            <input
+              id={labelInputId}
+              type="text"
+              className={styles.input}
+              value={shape.label ?? ''}
+              placeholder="e.g. Lobby"
+              data-testid="label-input"
+              onChange={(e) => patchShape({ label: e.target.value })}
+            />
+          </div>
+
+          {/* SEAM (03-05): move-to-layer dropdown lands here once the layers panel exists. */}
+
+          <div className={styles.actions}>
+            <Dialog.Close asChild>
+              <button type="button" className={styles.done}>
+                Done
+              </button>
+            </Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

@@ -21,6 +21,15 @@
   --ink-muted: #6b6358; /* muted text on paper */
   --hairline: #d8d2c4; /* warm paper-on-paper border */
 
+  /* ---- Phase-3 canvas hues (mirror tokens.ts — canvas reads .ts, DOM reads .css; UI-SPEC l.82) */
+  --portal: #3e6b8c; /* portal-glyph fill only (doorway/elsewhere) — mirrors tokens.ts #3E6B8C */
+  /* The five zone/shape preset stroke hexes (D-03). Fill = same hue at 20% (rgba in tokens.ts). */
+  --zone-stone: #8a8170; /* generic rooms / unlabeled areas (default) */
+  --zone-sage: #6e8e6a; /* outdoor / green areas */
+  --zone-clay: #a8745a; /* warm / living spaces */
+  --zone-dusk: #6e7a9e; /* cool / utility spaces */
+  --zone-plum: #8a6e8e; /* restricted / special zones */
+
   /* ---- Spacing (8-point scale) ---------------------------------------------- */
   --space-xs: 4px;
   --space-sm: 8px;
