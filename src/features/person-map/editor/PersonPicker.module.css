@@ -1,0 +1,203 @@
+/* PersonPicker — paper dialog for placing an existing person on the active map (UI-SPEC S16).
+ * Mirrors PortalTargetPicker's paper surface + tokens; no new visual primitives. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.32);
+  z-index: 60;
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(400px, calc(100vw - var(--space-xl)));
+  max-height: calc(100vh - var(--space-xl));
+  overflow-y: auto;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-lg);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sectionLabel {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.input {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  outline: none;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* Each person row: avatar thumb + name, left-aligned, ≥44px hit target. */
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.listItem:hover {
+  background: var(--hairline);
+}
+
+.listItem:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* Round avatar thumb (mirrors the round photo-avatar marker / BrowseRow people thumb). */
+.thumb {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  border: var(--border-hairline);
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbInitials {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.itemName {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: var(--space-sm) var(--space-md);
+}
+
+/* Zero-people empty state. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.emptyBody {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.createCta {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: 2px dashed var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.createCta:hover {
+  background: var(--hairline);
+}
+
+.createCta:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.secondary {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

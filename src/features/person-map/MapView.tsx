@@ -39,6 +39,7 @@ import { TransformerOverlay } from './editor/TransformerOverlay';
 import { LayersPanel } from './editor/LayersPanel';
 import { PortalGlyph, PORTAL_TARGET_DELETED_MESSAGE } from './editor/PortalGlyph';
 import { PortalTargetPicker } from './editor/PortalTargetPicker';
+import { PersonPicker } from './editor/PersonPicker';
 import { orderObjectsForRender, resolveLayer } from './editor/layers';
 import {
   useToolMode,
@@ -137,6 +138,16 @@ export interface MapViewProps {
   onActiveMapChange: (id: string) => void;
   /** Open the create-Location flow from the MapSwitcher "+ New map" (D-18). */
   onCreateMap: () => void;
+  /** Open the create-Person flow from the PersonPicker empty state (no people yet). */
+  onCreatePerson?: () => void;
+  /**
+   * Jump-to-placement (D-12, Task 2): a marker id to SELECT + CENTER. When it changes to a real
+   * marker on the active map, MapView selects it (Transformer ring) and recenters the viewport on
+   * it, then fires `onFocusHandled` so the host can clear it (re-jumps to the same id work again).
+   */
+  focusMarkerId?: string | null;
+  /** Raised after a `focusMarkerId` jump has been applied (host clears it). */
+  onFocusHandled?: () => void;
 }
 
 /** Decode an uploaded File to obtain intrinsic dimensions before persisting. */
@@ -163,9 +174,13 @@ export function MapView({
   activeMapId,
   onActiveMapChange,
   onCreateMap,
+  onCreatePerson,
+  focusMarkerId,
+  onFocusHandled,
 }: MapViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -323,6 +338,14 @@ export function MapView({
   // A transient message surfaced when a portal whose target was deleted is double-clicked (T-03-10).
   const [portalError, setPortalError] = useState<string | null>(null);
 
+  // ── Person placement (MAP-05, D-11) ─────────────────────────────────────────────────────────
+  // The IMAGE-space point where the Person tool was dropped, awaiting a pick from the PersonPicker.
+  // When set, the picker is open; picking a person places a NEW Marker row at this point (a second
+  // placement of an already-placed person is just another row — multi-placement, D-13).
+  const [pendingPersonPoint, setPendingPersonPoint] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
   // D-04: the layers the content render is organized by (always at least the default layer).
   const layers = map?.layers ?? [];
 
@@ -407,6 +430,34 @@ export function MapView({
     [map, effectiveActiveLayerId, setTool],
   );
 
+  // Place an existing person at the pending drop point (MAP-05, D-11). Called when the PersonPicker
+  // fires `onPick`: upsert a NEW Marker row (no id) on the ACTIVE layer with kind:'person', so
+  // placing an already-placed person yields a SECOND placement (D-13) while the canonical Person
+  // record is untouched. Mirrors `placePortal`'s active-layer materialization so it never dangles.
+  const placePerson = useCallback(
+    async (personId: string) => {
+      if (!map || !pendingPersonPoint) return;
+      const ensured = ensureDefaultLayer(map.layers);
+      const layerId =
+        effectiveActiveLayerId && ensured.layers.some((l) => l.id === effectiveActiveLayerId)
+          ? effectiveActiveLayerId
+          : ensured.layerId;
+      if (map.layers.length === 0) {
+        await updateMap(map.id, { layers: ensured.layers });
+      }
+      await upsertMarker({
+        mapId: map.id,
+        kind: 'person',
+        personId,
+        x: pendingPersonPoint.x,
+        y: pendingPersonPoint.y,
+        layerId,
+      });
+      setPendingPersonPoint(null);
+    },
+    [map, pendingPersonPoint, effectiveActiveLayerId],
+  );
+
   // Pointer-down: in a draw mode, begin a drag-draw at the image-space point. (Polygon multi-click
   // and Esc-cancel are deferred — rect/ellipse/line drag-draw is the MAP-02 core; polygon arrives
   // alongside the Transformer in 03-04. The pure polygon helpers already exist in useToolMode.)
@@ -420,13 +471,23 @@ export function MapView({
         if (at) void placePortal(at);
         return;
       }
+      // Person is one-shot like Portal (D-11): record the drop point + open the PersonPicker, then
+      // return to Select. The pick (placePerson) upserts the marker at this point.
+      if (tool === 'person') {
+        const at = pointerToImage(stage);
+        if (at) {
+          setPendingPersonPoint(at);
+          setTool('select');
+        }
+        return;
+      }
       // Drag-draw only for rect/ellipse/line (polygon is multi-click — deferred to 03-04).
       if (tool !== 'rect' && tool !== 'ellipse' && tool !== 'line') return;
       const start = pointerToImage(stage);
       if (!start) return;
       setDrawTracked(beginDraw(tool, start));
     },
-    [tool, pointerToImage, setDrawTracked, placePortal],
+    [tool, pointerToImage, setDrawTracked, placePortal, setTool],
   );
 
   const handlePointerMove = useCallback(
@@ -581,6 +642,27 @@ export function MapView({
     [mapsById, onActiveMapChange],
   );
 
+  // ── Jump-to-placement (D-12, Task 2) ────────────────────────────────────────────────────────
+  // When the profile "Appears on" jump sets `focusMarkerId` (after switching the active map), find
+  // that marker on the now-active map, SELECT it (so the Transformer ring shows), and recenter the
+  // viewport on its composed stage point. Then fire `onFocusHandled` so the host clears the id —
+  // re-jumping to the SAME placement works again. Guarded on the marker being present so it runs
+  // only once the (async) markers read for the new active map has resolved.
+  useEffect(() => {
+    if (!focusMarkerId) return;
+    const stage = stageRef.current;
+    const mk = (markers ?? []).find((m) => m.id === focusMarkerId);
+    if (!stage || !mk || size.width === 0) return;
+    setSelectedMarkerId(focusMarkerId);
+    setSelectedShapeId(null);
+    setEditingBackground(false);
+    const c = imageToStage({ x: mk.x, y: mk.y }, transform);
+    const scale = stage.scaleX();
+    stage.position({ x: size.width / 2 - c.x * scale, y: size.height / 2 - c.y * scale });
+    culling.recompute(stage);
+    onFocusHandled?.();
+  }, [focusMarkerId, markers, transform, size.width, size.height, culling, onFocusHandled]);
+
   // Per-layer object count (shapes + markers resolved to a layer) for the panel count pills. An
   // object with an absent/dangling layerId is counted against the default layer (resolveLayer).
   const objectCounts = useMemo(() => {
@@ -655,6 +737,7 @@ export function MapView({
 
       {hasMap && size.width > 0 && (
         <Stage
+          ref={stageRef}
           width={size.width}
           height={size.height}
           // Draggable only when the tool mode says so: Select pans, draw modes draw (single
@@ -820,6 +903,20 @@ export function MapView({
             if (!o) setPendingPortalId(null);
           }}
           onDone={() => setPendingPortalId(null)}
+        />
+      )}
+
+      {/* Person picker (S16, D-11) — opens when the Person tool drops at a point. Pick an existing
+          person → a NEW Marker row is placed at the drop point (multi-placement, D-13). Cancel
+          abandons the pending placement. */}
+      {map && (
+        <PersonPicker
+          open={pendingPersonPoint !== null}
+          onOpenChange={(o) => {
+            if (!o) setPendingPersonPoint(null);
+          }}
+          onPick={(personId) => void placePerson(personId)}
+          onCreateNew={onCreatePerson}
         />
       )}
 

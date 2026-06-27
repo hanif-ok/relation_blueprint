@@ -57,6 +57,11 @@ export function App() {
   // aria-live announcement for "Show on map" (the DOM-accessible path to a canvas action).
   const [announce, setAnnounce] = useState('');
 
+  // Jump-to-placement target (D-12): the marker id MapView should select + center after a profile
+  // "Appears on" row is clicked. Cleared by MapView (onFocusHandled) once applied, so re-jumping to
+  // the same placement works again.
+  const [focusMarkerId, setFocusMarkerId] = useState<string | null>(null);
+
   // The per-type field manager (S13, plan 02-04). When open, it edits the field-managed entity
   // type below (the active view, or People when the Map view is active — Map has no custom fields).
   const [fieldsOpen, setFieldsOpen] = useState(false);
@@ -251,6 +256,9 @@ export function App() {
               activeMapId={activeMapId}
               onActiveMapChange={setActiveMapId}
               onCreateMap={() => openCreate('maps')}
+              onCreatePerson={() => openCreate('people')}
+              focusMarkerId={focusMarkerId}
+              onFocusHandled={() => setFocusMarkerId(null)}
             />
           ) : (
             <BrowseList
