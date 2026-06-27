@@ -7,8 +7,9 @@
 //   3. a zone Label text input (a non-empty label promotes the shape to a zone, D-02)
 // There is intentionally NO color picker / stroke-width / opacity / dashes (D-03 deferred).
 //
-// Every change writes through `updateMap` (MapDoc.shapes), never straight to Dexie. The
-// move-to-layer dropdown arrives in 03-05 — a clearly-marked seam is left below.
+// Every change writes through `updateMap` (MapDoc.shapes), never straight to Dexie. A fourth
+// control — a move-to-layer dropdown (D-04) — sets the shape's `layerId` so it re-orders/filters
+// against the layers panel immediately.
 
 import { useId } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -39,6 +40,7 @@ export interface StylePopoverProps {
 export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverProps) {
   const titleId = useId();
   const labelInputId = useId();
+  const layerSelectId = useId();
 
   if (!shape) return null;
 
@@ -118,7 +120,32 @@ export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverPro
             />
           </div>
 
-          {/* SEAM (03-05): move-to-layer dropdown lands here once the layers panel exists. */}
+          {/* 4 — move-to-layer (D-04). Choosing a layer sets the shape's `layerId` and persists via
+              updateMap; the content render re-orders/filters by the new layer immediately. */}
+          {map.layers.length > 0 && (
+            <div className={styles.section}>
+              <label className={styles.sectionLabel} htmlFor={layerSelectId}>
+                Layer
+              </label>
+              <select
+                id={layerSelectId}
+                className={styles.input}
+                value={shape.layerId}
+                data-testid="shape-layer-select"
+                onChange={(e) => patchShape({ layerId: e.target.value })}
+              >
+                {/* Top→bottom so the dropdown order mirrors the panel (highest order first). */}
+                {map.layers
+                  .slice()
+                  .sort((a, b) => b.order - a.order)
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
           <div className={styles.actions}>
             <Dialog.Close asChild>

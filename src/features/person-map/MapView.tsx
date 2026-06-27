@@ -36,7 +36,8 @@ import { ShapeNode } from './editor/ShapeNode';
 import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
 import { TransformerOverlay } from './editor/TransformerOverlay';
-import { orderObjectsForRender } from './editor/layers';
+import { LayersPanel } from './editor/LayersPanel';
+import { orderObjectsForRender, resolveLayer } from './editor/layers';
 import {
   useToolMode,
   beginDraw,
@@ -310,12 +311,20 @@ export function MapView({
     setSelectedShapeId(null);
   }, []);
 
-  // D-20: show person-name labels on the canvas. Driven by the LayersPanel toggle (wired in Task 2);
-  // the default is hidden here and the prop threads through to AvatarMarker (a real seam, not a stub).
-  const showLabels = false;
+  // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
+  const [showLabels, setShowLabels] = useState(false);
 
   // D-04: the layers the content render is organized by (always at least the default layer).
   const layers = map?.layers ?? [];
+
+  // D-04: the ACTIVE layer — new shapes/markers land on it. Resolves to the topmost layer when unset
+  // or stale (the selected layer was deleted). The panel sets this when a row is selected/created.
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  const effectiveActiveLayerId = useMemo(() => {
+    if (activeLayerId && layers.some((l) => l.id === activeLayerId)) return activeLayerId;
+    if (layers.length === 0) return null;
+    return layers.slice().sort((a, b) => b.order - a.order)[0].id;
+  }, [activeLayerId, layers]);
 
   // Convert a Stage pointer position to IMAGE space (undo the Stage pan/zoom, then the bg transform).
   const pointerToImage = useCallback(
@@ -335,7 +344,14 @@ export function MapView({
   const commitShape = useCallback(
     (draft: DraftShape) => {
       if (!map) return;
-      const { layers, layerId } = ensureDefaultLayer(map.layers);
+      // Ensure a layer exists, then land the shape on the ACTIVE layer (D-04). When no layer is
+      // active yet (fresh map), `ensureDefaultLayer` materializes the default "Markers" layer.
+      const ensured = ensureDefaultLayer(map.layers);
+      const layers = ensured.layers;
+      const layerId =
+        effectiveActiveLayerId && layers.some((l) => l.id === effectiveActiveLayerId)
+          ? effectiveActiveLayerId
+          : ensured.layerId;
       const shape: Shape = {
         id: nanoid(),
         layerId,
@@ -354,7 +370,7 @@ export function MapView({
       // Select the just-drawn shape so the StylePopover opens for immediate styling.
       setSelectedShapeId(shape.id);
     },
-    [map],
+    [map, effectiveActiveLayerId],
   );
 
   // Pointer-down: in a draw mode, begin a drag-draw at the image-space point. (Polygon multi-click
@@ -477,6 +493,21 @@ export function MapView({
       });
   }, [markers, layers, transform, culling]);
 
+  // Per-layer object count (shapes + markers resolved to a layer) for the panel count pills. An
+  // object with an absent/dangling layerId is counted against the default layer (resolveLayer).
+  const objectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (layers.length === 0) return counts;
+    const bump = (layerId?: string) => {
+      const layer = resolveLayer({ id: '', layerId }, layers);
+      if (!layer) return;
+      counts[layer.id] = (counts[layer.id] ?? 0) + 1;
+    };
+    for (const s of map?.shapes ?? []) bump(s.layerId);
+    for (const mk of markers ?? []) bump(mk.layerId);
+    return counts;
+  }, [layers, map?.shapes, markers]);
+
   const hasMap = !!map;
   const hasAnyMap = (mapCount ?? 0) > 0;
 
@@ -519,6 +550,19 @@ export function MapView({
         <div className={styles.bgHint} role="status" data-testid="bg-transform-hint">
           Transforming background — markers stay anchored.
         </div>
+      )}
+
+      {/* Layers panel (S11, MAP-03) — create/rename/reorder/show/hide/lock + the D-20 label toggle.
+          Only meaningful once the map has at least one layer (drawing/placing creates one). */}
+      {hasMap && map && layers.length > 0 && (
+        <LayersPanel
+          map={map}
+          activeLayerId={effectiveActiveLayerId}
+          onActiveLayerChange={setActiveLayerId}
+          showLabels={showLabels}
+          onShowLabelsChange={setShowLabels}
+          objectCounts={objectCounts}
+        />
       )}
 
       {hasMap && size.width > 0 && (
