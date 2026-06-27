@@ -27,6 +27,7 @@ import {
   listFieldDefs,
 } from './repository';
 import { storeMediaRaw } from './media';
+import type { BackgroundTransform } from '@/domain/types';
 import {
   markConnected,
   markSyncing,
@@ -71,6 +72,22 @@ export interface TestBridge {
   listFieldDefs: typeof listFieldDefs;
   /** Raw (no-resize) media store for seeding pre-made blobs in E2E specs. */
   storeMedia: typeof storeMediaRaw;
+  /**
+   * Resize/rotate a marker through the repository (criterion 6). Reads the existing marker, then
+   * re-upserts it with the new width/height/rotation — exactly what the Transformer's transform-end
+   * persists, but addressable from Playwright without driving a brittle canvas handle-drag. Routes
+   * through `upsertMarker` (validate→stamp→emit) — NEVER straight to Dexie.
+   */
+  transformMarker: (
+    id: string,
+    t: { width?: number; height?: number; rotation?: number },
+  ) => Promise<void>;
+  /**
+   * Set a map's background transform through the repository (criterion 7). Routes through
+   * `updateMap` (validate→stamp→emit). Markers compose THROUGH this transform, so a re-fit keeps
+   * their stored image-space x/y unchanged (the anchoring property the E2E asserts).
+   */
+  setBackgroundTransform: (mapId: string, t: BackgroundTransform) => Promise<void>;
   connect: ConnectTestBridge;
 }
 
@@ -105,6 +122,25 @@ export function installTestBridge(): void {
     softDeleteFieldDef,
     listFieldDefs,
     storeMedia: storeMediaRaw,
+    transformMarker: async (id, t) => {
+      const existing = await db.markers.get(id);
+      if (!existing) throw new Error(`transformMarker: no marker with id ${id}`);
+      await upsertMarker({
+        id: existing.id,
+        mapId: existing.mapId,
+        kind: existing.kind,
+        personId: existing.personId,
+        targetMapId: existing.targetMapId,
+        x: existing.x,
+        y: existing.y,
+        width: t.width ?? existing.width,
+        height: t.height ?? existing.height,
+        rotation: t.rotation ?? existing.rotation,
+      });
+    },
+    setBackgroundTransform: async (mapId, t) => {
+      await updateMap(mapId, { backgroundTransform: t });
+    },
     connect: {
       markConnected,
       markSyncing,
