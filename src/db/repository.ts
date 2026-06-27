@@ -144,6 +144,11 @@ function collectEntityMediaHashes(entity: {
  * Marker-only delete — the map-level "Remove from map" action (D-12). Removes ONLY that marker
  * row; the referenced entity and any OTHER markers survive, and NO media is collected. This is
  * the user-flagged correctness fix: removing someone from a map must not delete them from the DB.
+ *
+ * Phase-3 (MAP-06): a PORTAL is a Marker (`kind:'portal'`), so removing a portal — including the
+ * picker's "cancel removes the just-dropped target-less portal" path — is just this `deleteMarker`.
+ * There is intentionally no portal-specific delete and no cascade: a portal owns no entity (it has
+ * a `targetMapId`, not a `personId`), and deleting it never touches the target map.
  */
 export async function deleteMarker(id: string): Promise<void> {
   await db.markers.delete(id);
@@ -265,7 +270,12 @@ export async function createMap(input: CreateMapInput): Promise<MapDoc> {
 export type UpdateMapPatch = Partial<Omit<MapDoc, 'id' | 'updatedAt' | 'dirty'>>;
 
 /** The Location edit path (D-07): enrich an existing map in place (photo/notes/custom/gallery)
- * without losing its background/width/height spine. Mirrors `updatePerson`. */
+ * without losing its background/width/height spine. Mirrors `updatePerson`.
+ *
+ * Phase-3 (MAP-07): this is ALSO how the portal descend-hierarchy is set — the PortalTargetPicker's
+ * inline create-a-child flow calls `updateMap(childId, { parentId: currentMapId })` so the new child
+ * sits under the current map (the breadcrumb from 03-02 then shows parent ▸ child). `parentId` is a
+ * plain MapDoc field, so it patches through here with no new repository function. */
 export async function updateMap(id: string, patch: UpdateMapPatch): Promise<MapDoc> {
   const existing = await db.maps.get(id);
   if (!existing) throw new Error(`updateMap: no map with id ${id}`);
@@ -292,6 +302,11 @@ export async function updateMap(id: string, patch: UpdateMapPatch): Promise<MapD
  * MapDoc sub-objects written through `updateMap(mapId, { layers })` (RESEARCH Don't-Hand-Roll), so
  * there is no new repository function for it. An absent `layerId` resolves to the map's default
  * layer at render time, so this field is optional.
+ *
+ * Note on portals (D-06, MAP-06): a PORTAL is placed through THIS same `upsertMarker` — pass
+ * `{ kind:'portal', targetMapId, x, y, layerId }` and NO `personId`. There is no portal-specific
+ * placement function: a portal is a Marker variant (RESEARCH Pattern 5a), so it rides the markers
+ * shard and reuses upsert (validate→stamp→emit) + `deleteMarker` like any other marker.
  */
 export type UpsertMarkerInput = {
   id?: string;

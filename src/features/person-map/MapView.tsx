@@ -22,7 +22,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
 import type { BackgroundTransform, Layer as MapLayer, Marker, Shape } from '@/domain/types';
-import { createMap, updateMap } from '@/db/repository';
+import { createMap, updateMap, upsertMarker } from '@/db/repository';
 import { storeMedia } from '@/media/mediaManager';
 import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
@@ -37,6 +37,8 @@ import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
 import { TransformerOverlay } from './editor/TransformerOverlay';
 import { LayersPanel } from './editor/LayersPanel';
+import { PortalGlyph, PORTAL_TARGET_DELETED_MESSAGE } from './editor/PortalGlyph';
+import { PortalTargetPicker } from './editor/PortalTargetPicker';
 import { orderObjectsForRender, resolveLayer } from './editor/layers';
 import {
   useToolMode,
@@ -314,6 +316,13 @@ export function MapView({
   // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
   const [showLabels, setShowLabels] = useState(false);
 
+  // ── Portal placement + navigation (MAP-06/MAP-07, D-06/D-07/D-08) ───────────────────────────
+  // The just-dropped portal awaiting a target (opens the PortalTargetPicker). When set, the picker
+  // is shown; choosing a target sets its `targetMapId`, cancelling deletes the target-less portal.
+  const [pendingPortalId, setPendingPortalId] = useState<string | null>(null);
+  // A transient message surfaced when a portal whose target was deleted is double-clicked (T-03-10).
+  const [portalError, setPortalError] = useState<string | null>(null);
+
   // D-04: the layers the content render is organized by (always at least the default layer).
   const layers = map?.layers ?? [];
 
@@ -373,20 +382,51 @@ export function MapView({
     [map, effectiveActiveLayerId],
   );
 
+  // Drop a portal at an IMAGE-space point on the active map and open the target picker (D-08). The
+  // portal is a one-shot place tool (like Person): commit a Marker(kind:'portal') with NO target
+  // yet — the picker (Task 2) sets `targetMapId` or, on cancel, deletes the target-less portal — and
+  // return to Select. The portal lands on the ACTIVE layer (D-04) so it never dangles.
+  const placePortal = useCallback(
+    async (at: { x: number; y: number }) => {
+      if (!map) return;
+      const ensured = ensureDefaultLayer(map.layers);
+      const layerId =
+        effectiveActiveLayerId && ensured.layers.some((l) => l.id === effectiveActiveLayerId)
+          ? effectiveActiveLayerId
+          : ensured.layerId;
+      // Materialize the default layer on the map first if the map had none, so the portal's layerId
+      // references a real layer (mirrors commitShape).
+      if (map.layers.length === 0) {
+        await updateMap(map.id, { layers: ensured.layers });
+      }
+      const portal = await upsertMarker({ mapId: map.id, kind: 'portal', x: at.x, y: at.y, layerId });
+      setPendingPortalId(portal.id);
+      // One-shot: return to Select after the drop (the picker now owns the flow).
+      setTool('select');
+    },
+    [map, effectiveActiveLayerId, setTool],
+  );
+
   // Pointer-down: in a draw mode, begin a drag-draw at the image-space point. (Polygon multi-click
   // and Esc-cancel are deferred — rect/ellipse/line drag-draw is the MAP-02 core; polygon arrives
   // alongside the Transformer in 03-04. The pure polygon helpers already exist in useToolMode.)
+  // Portal is one-shot: pointer-down at the point drops a portal and opens the target picker (D-08).
   const handlePointerDown = useCallback(
     (e: Konva.KonvaEventObject<PointerEvent>) => {
       const stage = e.target.getStage();
       if (!stage) return;
+      if (tool === 'portal') {
+        const at = pointerToImage(stage);
+        if (at) void placePortal(at);
+        return;
+      }
       // Drag-draw only for rect/ellipse/line (polygon is multi-click — deferred to 03-04).
       if (tool !== 'rect' && tool !== 'ellipse' && tool !== 'line') return;
       const start = pointerToImage(stage);
       if (!start) return;
       setDrawTracked(beginDraw(tool, start));
     },
-    [tool, pointerToImage, setDrawTracked],
+    [tool, pointerToImage, setDrawTracked, placePortal],
   );
 
   const handlePointerMove = useCallback(
@@ -492,6 +532,54 @@ export function MapView({
         return culling.isVisible(box);
       });
   }, [markers, layers, transform, culling]);
+
+  // The same compose+cull pass for PORTAL markers (kind:'portal'). Portals render as PortalGlyph in
+  // the SAME L1 content layer, composed from IMAGE space through the background transform and culled
+  // off-screen. Person markers (visibleMarkers above) skip portals because they have no personId.
+  const visiblePortals = useMemo(() => {
+    const portals = (markers ?? []).filter((m) => m.kind === 'portal');
+    const ordered = orderObjectsForRender(portals, layers);
+    return ordered
+      .map((item) => ({
+        mk: item.object,
+        locked: item.locked,
+        opacity: item.opacity,
+        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
+      }))
+      .filter(({ pos }) => {
+        const box: Rect = {
+          x: pos.x - MARKER_HALF_EXTENT,
+          y: pos.y - MARKER_HALF_EXTENT,
+          width: MARKER_HALF_EXTENT * 2,
+          height: MARKER_HALF_EXTENT * 2,
+        };
+        return culling.isVisible(box);
+      });
+  }, [markers, layers, transform, culling]);
+
+  // The set of map ids that currently exist (drives the deleted-target affordance + label name). A
+  // portal whose `targetMapId` is not in this set shows the muted glyph + the deleted message on
+  // navigate (T-03-10) rather than crashing.
+  const allMaps = useLiveQuery(() => db.maps.toArray(), [], []);
+  const mapsById = useMemo(() => {
+    const by = new Map<string, string>();
+    for (const m of allMaps ?? []) by.set(m.id, m.name);
+    return by;
+  }, [allMaps]);
+
+  // Navigate DOWN through a portal (MAP-07): set the target map active. When the target was deleted
+  // (or never set), surface the deleted-destination message instead of navigating (T-03-10).
+  const navigatePortal = useCallback(
+    (targetMapId: string | undefined) => {
+      if (!targetMapId || !mapsById.has(targetMapId)) {
+        setPortalError(PORTAL_TARGET_DELETED_MESSAGE);
+        return;
+      }
+      setPortalError(null);
+      onActiveMapChange(targetMapId);
+    },
+    [mapsById, onActiveMapChange],
+  );
 
   // Per-layer object count (shapes + markers resolved to a layer) for the panel count pills. An
   // object with an absent/dangling layerId is counted against the default layer (resolveLayer).
@@ -671,6 +759,33 @@ export function MapView({
                 </Group>
               );
             })}
+
+            {/* Portal glyphs (kind:'portal') — the down-navigation half of MAP-07. Single-click
+                selects (Transformer handles); double-click navigates to the target map. A portal
+                whose target was deleted renders muted and shows the deleted message on navigate. */}
+            {visiblePortals.map(({ mk, pos, locked, opacity }) => (
+              <Group key={mk.id} opacity={opacity} listening={!locked}>
+                <PortalGlyph
+                  marker={mk}
+                  position={pos}
+                  transform={transform}
+                  selected={mk.id === selectedMarkerId}
+                  targetExists={!!mk.targetMapId && mapsById.has(mk.targetMapId)}
+                  showLabels={showLabels}
+                  targetName={mk.targetMapId ? mapsById.get(mk.targetMapId) : undefined}
+                  onSelect={(id) => {
+                    setSelectedMarkerId(id);
+                    setSelectedShapeId(null);
+                    setEditingBackground(false);
+                    onSelect('');
+                  }}
+                  onNavigate={navigatePortal}
+                  onNodeRef={
+                    mk.id === selectedMarkerId ? (node) => setSelectedNode(node) : undefined
+                  }
+                />
+              </Group>
+            ))}
           </Layer>
 
           {/* L2 — transformer-overlay (RESEARCH Pattern 3, fixed third physical layer). Attaches a
@@ -692,6 +807,36 @@ export function MapView({
           map={map}
           shape={selectedShape}
         />
+      )}
+
+      {/* Portal target picker (S15, D-08) — opens on portal drop. Create-or-pick the target map
+          inline; cancel removes the just-dropped (target-less) portal. */}
+      {map && (
+        <PortalTargetPicker
+          open={pendingPortalId !== null}
+          portalId={pendingPortalId}
+          currentMapId={map.id}
+          onOpenChange={(o) => {
+            if (!o) setPendingPortalId(null);
+          }}
+          onDone={() => setPendingPortalId(null)}
+        />
+      )}
+
+      {/* Deleted-destination message (T-03-10) — surfaced when a portal whose target was deleted is
+          double-clicked. A brief dismissible status rather than a crash. */}
+      {portalError && (
+        <div className={styles.bgHint} role="alert" data-testid="portal-target-error">
+          {portalError}
+          <button
+            type="button"
+            className={styles.bgEditToggle}
+            onClick={() => setPortalError(null)}
+            style={{ marginLeft: 8 }}
+          >
+            Dismiss
+          </button>
+        </div>
       )}
 
       {!hasAnyMap && (
