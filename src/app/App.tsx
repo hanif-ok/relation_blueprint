@@ -32,6 +32,11 @@ type EntityView = Exclude<ViewKey, 'map'>;
 export function App() {
   const [activeView, setActiveView] = useState<ViewKey>('map');
 
+  // Phase-3 (D-05): the active map shown on the canvas. Lifted next to `activeView` so the
+  // MapSwitcher, the breadcrumb, "show on map", and person auto-placement all target the SAME map.
+  // Seeded to the first map on first load (below) so the single-map skeleton behavior is preserved.
+  const [activeMapId, setActiveMapId] = useState<string | null>(null);
+
   // The open profile: which entity family + id, and whether it was opened from a marker or a list.
   const [profile, setProfile] = useState<{
     type: ProfileEntityType;
@@ -76,7 +81,21 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const map = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
+  // The first map (by insertion order) — used ONLY to SEED `activeMapId` when it is still null, so
+  // an existing single-map DB renders its map on first open without an explicit selection.
+  const firstMap = useLiveQuery(() => db.maps.toArray().then((m) => m[0] ?? null), [], null);
+
+  // Seed the active map to the first map once, when none is selected yet (and one exists).
+  useEffect(() => {
+    if (activeMapId === null && firstMap) setActiveMapId(firstMap.id);
+  }, [activeMapId, firstMap]);
+
+  // The currently-active map (drives person auto-placement onto the RIGHT map, not always maps[0]).
+  const activeMap = useLiveQuery(
+    async () => (activeMapId ? await db.maps.get(activeMapId) : undefined),
+    [activeMapId],
+    undefined,
+  );
 
   // Does the user have any first-class entity yet? Gates the one-time privacy notice's auto-show
   // (criterion 4: show at first entity creation OR first provider connect, whichever comes first).
@@ -134,16 +153,17 @@ export function App() {
 
   async function handleSaved(savedId: string) {
     if (!form) return;
-    // Creating a Person while a map exists auto-places them so the create→place→profile thread
-    // is unbroken (Phase-1 behavior preserved). Edits leave any existing marker untouched.
-    if (form.type === 'people' && map) {
+    // Creating a Person while a map exists auto-places them on the ACTIVE map (D-05) so the
+    // create→place→profile thread is unbroken (Phase-1 behavior preserved, now multi-map aware).
+    // Edits leave any existing marker untouched.
+    if (form.type === 'people' && activeMap) {
       const existing = await db.markers.where('personId').equals(savedId).count();
       if (existing === 0) {
         await upsertMarker({
-          mapId: map.id,
+          mapId: activeMap.id,
           personId: savedId,
-          x: map.width / 2,
-          y: map.height / 2,
+          x: activeMap.width / 2,
+          y: activeMap.height / 2,
         });
       }
       // Open the new person's profile in marker context (they're now on the map).
@@ -163,9 +183,13 @@ export function App() {
     setProfile({ type, id, openedFrom: 'list' });
   }
 
-  /** Jump to the Map view and select a person's marker, announced for AT (Show on map). */
+  /** Jump to the Map view and select a person's marker, announced for AT (Show on map). Opens the
+   *  SPECIFIC map the person is placed on (D-05) — not always the first map — by resolving the
+   *  person's marker's `mapId` and setting it active. */
   async function showOnMap(id: string) {
     const person = await db.people.get(id);
+    const marker = await db.markers.where('personId').equals(id).first();
+    if (marker) setActiveMapId(marker.mapId);
     setActiveView('map');
     setProfile({ type: 'people', id, openedFrom: 'marker' });
     setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
@@ -224,6 +248,9 @@ export function App() {
                   personId ? { type: 'people', id: personId, openedFrom: 'marker' } : null,
                 )
               }
+              activeMapId={activeMapId}
+              onActiveMapChange={setActiveMapId}
+              onCreateMap={() => openCreate('maps')}
             />
           ) : (
             <BrowseList

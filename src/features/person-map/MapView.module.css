@@ -9,6 +9,23 @@
   overflow: hidden;
 }
 
+/* Editor toolbar — floats over the top-left of the dark Stage (map switcher + breadcrumb). */
+.toolbar {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  pointer-events: none;
+}
+
+.toolbar > * {
+  pointer-events: auto;
+}
+
 /* Empty state — centered dashed drop zone on the slate canvas (UI-SPEC S2). */
 .empty {
   position: absolute;

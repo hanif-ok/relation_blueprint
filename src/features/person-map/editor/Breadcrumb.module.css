@@ -1,0 +1,80 @@
+/* Breadcrumb (UI-SPEC S12) — a thin paper strip floating over the dark Stage, under the map
+ * switcher. Crumbs are calm ink-muted buttons; the current crumb is ink, non-interactive. Amber
+ * is reserved: it appears only on the focus ring. */
+
+.breadcrumb {
+  display: inline-flex;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-xs) var(--space-sm);
+  max-width: 480px;
+  overflow: hidden;
+}
+
+.list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.separator {
+  color: var(--ink-muted);
+  flex: none;
+}
+
+.crumb {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-xs);
+  cursor: pointer;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumb:hover {
+  color: var(--ink);
+  background: var(--paper-shade);
+}
+
+.crumb:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.current {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 2px var(--space-xs);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ellipsis {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 2px var(--space-xs);
+}

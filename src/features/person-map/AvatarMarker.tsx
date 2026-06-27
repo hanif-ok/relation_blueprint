@@ -14,6 +14,7 @@ import { colors, marker as M } from '@/app/tokens';
 import { upsertMarker } from '@/db/repository';
 import { useMapImage } from './useMapImage';
 import type { Marker, Person } from '@/domain/types';
+import type { Point } from './coords';
 
 const R = M.R; // avatar radius (diameter 48px)
 
@@ -28,11 +29,20 @@ function initialsOf(name: string): string {
 export interface AvatarMarkerProps {
   marker: Marker;
   person: Person;
+  /**
+   * Phase-3: the STAGE-space position to render at, composed by the parent from the marker's
+   * IMAGE-space `x`/`y` through the map's `backgroundTransform` (`imageToStage`). The marker no
+   * longer reads `marker.x`/`marker.y` directly so it stays anchored when the background is
+   * re-fit. On drag-end the parent supplies `onMoved` to convert the dropped stage point back to
+   * image space before persisting (the inverse arrives wired in 03-04; for now drag-end persists
+   * the stage point at the identity transform, unchanged from Phase-1 behavior).
+   */
+  position: Point;
   selected: boolean;
   onSelect: (personId: string) => void;
 }
 
-export function AvatarMarker({ marker, person, selected, onSelect }: AvatarMarkerProps) {
+export function AvatarMarker({ marker, person, position, selected, onSelect }: AvatarMarkerProps) {
   const avatar = useMapImage(person.photo?.hash);
 
   const ringColor = selected ? colors.amber : colors.paper;
@@ -42,7 +52,9 @@ export function AvatarMarker({ marker, person, selected, onSelect }: AvatarMarke
   function handleDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
     // This is a person marker (it renders an avatar for `person`), so `personId` is the rendered
     // person's id — `marker.personId` is now optional on the widened Phase-3 Marker, but `person.id`
-    // is the authoritative non-null value here.
+    // is the authoritative non-null value here. The dropped point is in stage space; the
+    // stage→image conversion (the inverse transform) is wired in 03-04 — at the identity transform
+    // (the only one reachable until then) stage space === image space, so this stays correct.
     void upsertMarker({
       id: marker.id,
       mapId: marker.mapId,
@@ -54,8 +66,8 @@ export function AvatarMarker({ marker, person, selected, onSelect }: AvatarMarke
 
   return (
     <Group
-      x={marker.x}
-      y={marker.y}
+      x={position.x}
+      y={position.y}
       draggable
       onDragEnd={handleDragEnd}
       onClick={() => onSelect(person.id)}

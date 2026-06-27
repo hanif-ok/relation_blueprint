@@ -15,6 +15,7 @@ import {
   getPerson,
   listPeople,
   createMap,
+  updateMap,
   upsertMarker,
   createGroup,
   createRelationshipLink,
@@ -58,6 +59,7 @@ export interface TestBridge {
   getPerson: typeof getPerson;
   listPeople: typeof listPeople;
   createMap: typeof createMap;
+  updateMap: typeof updateMap;
   upsertMarker: typeof upsertMarker;
   createGroup: typeof createGroup;
   createRelationshipLink: typeof createRelationshipLink;
@@ -92,6 +94,7 @@ export function installTestBridge(): void {
     getPerson,
     listPeople,
     createMap,
+    updateMap,
     upsertMarker,
     createGroup,
     createRelationshipLink,
