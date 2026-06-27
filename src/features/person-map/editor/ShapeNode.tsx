@@ -24,6 +24,7 @@ import { zonePresets, colors, marker as M } from '@/app/tokens';
 import { updateMap } from '@/db/repository';
 import type { BackgroundTransform, MapDoc, Shape } from '@/domain/types';
 import { imageToStage, stageToImage } from '../coords';
+import { computeTransformPersist, persistTransformResult } from './TransformerOverlay';
 
 /** Generous touch grab for thin Line shapes (UI-SPEC parity contract l.311). */
 const LINE_HIT_STROKE = 20;
@@ -38,6 +39,11 @@ export interface ShapeNodeProps {
   selected: boolean;
   /** Single-click selects the shape (consumer opens the StylePopover). */
   onSelect: (shapeId: string) => void;
+  /**
+   * Expose this shape's Konva node to the parent when selected (null on deselect/unmount) so the
+   * L2 TransformerOverlay can attach to it for resize/rotate.
+   */
+  onNodeRef?: (node: Konva.Node | null) => void;
 }
 
 /** Resolve a preset id to its stroke/fill, defaulting to `stone` for an unknown preset. */
@@ -51,7 +57,7 @@ function persistShapePatch(map: MapDoc, shapeId: string, patch: Partial<Shape>):
   void updateMap(map.id, { shapes });
 }
 
-export function ShapeNode({ map, shape, transform, selected, onSelect }: ShapeNodeProps) {
+export function ShapeNode({ map, shape, transform, selected, onSelect, onNodeRef }: ShapeNodeProps) {
   const { stroke, fill } = presetColors(shape.preset);
   const fillColor = shape.fill ? fill : undefined;
   const selectionStroke = selected ? colors.amber : stroke;
@@ -102,10 +108,33 @@ export function ShapeNode({ map, shape, transform, selected, onSelect }: ShapeNo
     e.target.position({ x: 0, y: 0 });
   }
 
+  // On transform-end (Transformer resize/rotate): bake the node's scale into width/height +
+  // rotation and persist the whole shapes array through updateMap (computeTransformPersist resets
+  // the scale to 1 — never persists raw scale). Then reset the node's own scale so the next render
+  // re-composes from the descriptor.
+  function handleTransformEnd(e: Konva.KonvaEventObject<Event>) {
+    const node = e.target as Konva.Node;
+    const result = computeTransformPersist({
+      node: node as unknown as Parameters<typeof computeTransformPersist>[0]['node'],
+      kind: 'shape',
+      transform,
+      mapId: map.id,
+      objectId: shape.id,
+      shapes: map.shapes,
+      resetScale: (sx, sy) => {
+        node.scaleX(sx);
+        node.scaleY(sy);
+      },
+    });
+    persistTransformResult(result, map.id);
+  }
+
   const commonHandlers = {
     draggable: true,
     onClick: () => onSelect(shape.id),
     onTap: () => onSelect(shape.id),
+    onTransformEnd: handleTransformEnd,
+    ref: (node: Konva.Node | null) => onNodeRef?.(node),
   } as const;
 
   if (shape.kind === 'rect') {

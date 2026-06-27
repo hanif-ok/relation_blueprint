@@ -98,9 +98,17 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
   resetScale?.(1, 1);
 
   if (kind === 'shape') {
+    // A shape node renders at STAGE size (image-size × bg scale). The baked width/height above are
+    // in stage space; divide by the bg scale to store IMAGE-space geometry (Pattern 7). At the
+    // identity transform (scale 1) this is a no-op. `rotation` is the shape's OWN rotation: the
+    // node's rotation includes the bg rotation, so subtract it back out.
+    const bgScale = transform.scale !== 0 && Number.isFinite(transform.scale) ? transform.scale : 1;
+    const imgWidth = Math.max(MIN_TRANSFORM_SIZE, width / bgScale);
+    const imgHeight = Math.max(MIN_TRANSFORM_SIZE, height / bgScale);
+    const ownRotation = rotation - transform.rotation;
     const current = shapes ?? [];
     const next = current.map((s) =>
-      s.id === objectId ? { ...s, width, height, rotation } : s,
+      s.id === objectId ? { ...s, width: imgWidth, height: imgHeight, rotation: ownRotation } : s,
     );
     return { branch: 'shape', shapes: next };
   }

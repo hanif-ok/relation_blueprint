@@ -35,6 +35,7 @@ import { ToolPalette } from './editor/ToolPalette';
 import { ShapeNode } from './editor/ShapeNode';
 import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
+import { TransformerOverlay } from './editor/TransformerOverlay';
 import {
   useToolMode,
   beginDraw,
@@ -283,6 +284,35 @@ export function MapView({
   // The currently-selected shape id (opens the StylePopover).
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
 
+  // ── Single-select + Transformer (MAP-02, D-14/D-15, criterion 6) ────────────────────────────
+  // Exactly ONE object is selected at a time. The selected object's live Konva node is mirrored
+  // into a ref so the L2 TransformerOverlay can attach to it. Selecting a marker also selects it
+  // for the Transformer; selecting a shape does too (and opens the StylePopover). Clicking empty
+  // canvas deselects everything (D-15).
+  const [selectedNode, setSelectedNode] = useState<Konva.Node | null>(null);
+  // The id of the currently-selected MARKER (its Group is what the Transformer attaches to). A
+  // shape selection is tracked by `selectedShapeId`; only one of the two is non-null at a time.
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+
+  // ── Background-transform affordance (S16b, criterion 7) ─────────────────────────────────────
+  // An explicit "Edit background" toggle (so the background is never grabbed by accident). While
+  // active, a Transformer attaches to the <KonvaImage> and, on transform-end, persists
+  // MapDoc.backgroundTransform via updateMap. Because markers/shapes compose THROUGH this transform,
+  // re-fitting keeps them anchored automatically — the criterion-7 payoff.
+  const [editingBackground, setEditingBackground] = useState(false);
+  const [bgNode, setBgNode] = useState<Konva.Node | null>(null);
+
+  // Clear any object selection (markers + shapes) — used on empty-canvas click and bg-edit entry.
+  const clearSelection = useCallback(() => {
+    setSelectedNode(null);
+    setSelectedMarkerId(null);
+    setSelectedShapeId(null);
+  }, []);
+
+  // D-20: show person-name labels on the canvas. Wired to the layers-panel toggle in 03-05; the
+  // default is hidden here (the prop threads through so the wiring seam is real, not a stub).
+  const showLabels = false;
+
   // Convert a Stage pointer position to IMAGE space (undo the Stage pan/zoom, then the bg transform).
   const pointerToImage = useCallback(
     (stage: Konva.Stage): { x: number; y: number } | null => {
@@ -388,6 +418,26 @@ export function MapView({
     [map?.shapes, selectedShapeId],
   );
 
+  // Persist a background transform on transform-end. The <KonvaImage> renders at
+  // (offsetX, offsetY) scaled by `transform.scale` and rotated by `transform.rotation`; reading the
+  // node's post-gesture x/y/scale/rotation and writing them back as the new BackgroundTransform is
+  // the whole mechanism (markers stay anchored because they compose THROUGH this transform).
+  const handleBackgroundTransformEnd = useCallback(
+    (e: Konva.KonvaEventObject<Event>) => {
+      if (!map) return;
+      const node = e.target as Konva.Image;
+      const next: BackgroundTransform = {
+        offsetX: node.x(),
+        offsetY: node.y(),
+        // scaleX === scaleY for the uniform background scale; read scaleX.
+        scale: node.scaleX(),
+        rotation: (node.rotation() * Math.PI) / 180,
+      };
+      void updateMap(map.id, { backgroundTransform: next });
+    },
+    [map],
+  );
+
   // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
   // markers BEFORE rendering them (so they are never mounted as Konva nodes). The cull box is the
   // composed stage point ± MARKER_HALF_EXTENT.
@@ -422,6 +472,30 @@ export function MapView({
           />
           <Breadcrumb activeMapId={activeMapId} onNavigate={onActiveMapChange} />
           <ToolPalette tool={tool} onSelectTool={setTool} disabled={!hasMap} />
+          {/* S16b: explicit background-edit toggle so the bg is never grabbed by accident.
+              Entering it clears any object selection; the Transformer then attaches to the bg. */}
+          <button
+            type="button"
+            className={styles.bgEditToggle}
+            data-testid="edit-background-toggle"
+            aria-pressed={editingBackground}
+            onClick={() => {
+              setEditingBackground((on) => {
+                const next = !on;
+                if (next) clearSelection();
+                return next;
+              });
+            }}
+          >
+            {editingBackground ? 'Done' : 'Edit background'}
+          </button>
+        </div>
+      )}
+
+      {/* While transforming the background, a hint reassures the curator placements stay put. */}
+      {hasMap && editingBackground && (
+        <div className={styles.bgHint} role="status" data-testid="bg-transform-hint">
+          Transforming background — markers stay anchored.
         </div>
       )}
 
@@ -439,25 +513,31 @@ export function MapView({
           onPointerUp={handlePointerUp}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          // Click on empty canvas (not a marker/shape) clears selection.
+          // Click on empty canvas (not a marker/shape) clears selection (D-15).
           onClick={(e) => {
             if (e.target === e.target.getStage()) {
               onSelect('');
-              setSelectedShapeId(null);
+              clearSelection();
             }
           }}
         >
-          {/* L0 — background image. Non-interactive; positioned/scaled/rotated by the map's
-              background transform (offset → uniform scale → rotation in radians). */}
-          <Layer listening={false}>
+          {/* L0 — background image. Positioned/scaled/rotated by the map's background transform
+              (offset → uniform scale → rotation in radians). Non-interactive EXCEPT while the
+              "Edit background" affordance is active, when it becomes draggable and exposes its node
+              to the L2 Transformer for resize/rotate (S16b, criterion 7). */}
+          <Layer listening={editingBackground}>
             {bgImage && (
               <KonvaImage
+                ref={(node) => setBgNode(node)}
                 image={bgImage}
                 x={transform.offsetX}
                 y={transform.offsetY}
                 scaleX={transform.scale}
                 scaleY={transform.scale}
                 rotation={(transform.rotation * 180) / Math.PI}
+                draggable={editingBackground}
+                onDragEnd={editingBackground ? handleBackgroundTransformEnd : undefined}
+                onTransformEnd={editingBackground ? handleBackgroundTransformEnd : undefined}
               />
             )}
           </Layer>
@@ -473,7 +553,15 @@ export function MapView({
                 shape={shape}
                 transform={transform}
                 selected={shape.id === selectedShapeId}
-                onSelect={(id) => setSelectedShapeId(id)}
+                onSelect={(id) => {
+                  // Selecting a shape is single-select: clear any marker selection, exit bg-edit.
+                  setSelectedShapeId(id);
+                  setSelectedMarkerId(null);
+                  setEditingBackground(false);
+                }}
+                onNodeRef={
+                  shape.id === selectedShapeId ? (node) => setSelectedNode(node) : undefined
+                }
               />
             ))}
             {/* Zone label chips for any shape carrying a non-empty label (D-02). */}
@@ -495,16 +583,31 @@ export function MapView({
                   marker={mk}
                   person={person}
                   position={pos}
+                  transform={transform}
                   selected={person.id === selectedPersonId}
-                  onSelect={onSelect}
+                  showLabels={showLabels}
+                  onSelect={(personId) => {
+                    // Selecting a marker opens its profile AND selects it for the Transformer
+                    // (single-select: clear any shape selection, exit bg-edit).
+                    onSelect(personId);
+                    setSelectedMarkerId(mk.id);
+                    setSelectedShapeId(null);
+                    setEditingBackground(false);
+                  }}
+                  onNodeRef={
+                    mk.id === selectedMarkerId ? (node) => setSelectedNode(node) : undefined
+                  }
                 />
               );
             })}
           </Layer>
 
-          {/* L2 — transformer-overlay placeholder. Empty until 03-04 attaches the Konva
-              Transformer here (kept as a fixed third physical layer per RESEARCH Pattern 3). */}
-          <Layer />
+          {/* L2 — transformer-overlay (RESEARCH Pattern 3, fixed third physical layer). Attaches a
+              single Konva.Transformer to the selected object's node, OR to the background image
+              while the "Edit background" affordance is active (S16b). */}
+          <Layer>
+            <TransformerOverlay selectedNode={editingBackground ? bgNode : selectedNode} />
+          </Layer>
         </Stage>
       )}
 

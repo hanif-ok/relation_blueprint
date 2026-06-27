@@ -99,3 +99,45 @@
 .hiddenInput {
   display: none;
 }
+
+/* "Edit background" toggle in the toolbar (S16b). Paper chrome; amber when active (aria-pressed). */
+.bgEditToggle {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background-color: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+}
+
+.bgEditToggle[aria-pressed='true'] {
+  color: var(--paper);
+  background-color: var(--amber);
+  border-color: var(--amber);
+}
+
+.bgEditToggle:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* The "markers stay anchored" reassurance chip shown while transforming the background. */
+.bgHint {
+  position: absolute;
+  top: var(--space-md);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+  background-color: rgba(27, 34, 48, 0.92);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-md);
+  pointer-events: none;
+}
