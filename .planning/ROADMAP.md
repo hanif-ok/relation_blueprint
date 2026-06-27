@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore (completed 2026-06-24)
 - [x] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (verification 2026-06-26: gaps found — 5/6 must-haves; D-05 type-change coercion unwired, awaiting gap closure) (completed 2026-06-26)
-- [ ] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps
+- [x] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps (completed 2026-06-27)
 - [ ] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph
 - [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
 - [ ] **Phase 6: Mega.nz Provider** - Second-class opt-in Mega storage behind the existing provider abstraction
@@ -138,7 +138,7 @@ Plans:
   6. User can select a placed marker and resize (and rotate) it via on-canvas transform handles, with the new size/rotation persisting across reloads (deferred from Phase 1 UAT)
   7. User can resize/transform the map background image via handles (beyond view pan/zoom), and the change persists (deferred from Phase 1 UAT)
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 **Wave 1**
 
 - [x] 03-01-PLAN.md — Data foundation: Marker transform/portal fields + MapDoc sub-objects, Dexie version(4) backfill, migration round-trip (Wave 0)
@@ -162,7 +162,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 03-07-PLAN.md — Multi-placement: map-side PersonPicker (D-11) + profile "Appears on" with jump-to-placement (D-12) — MAP-05 (Wave 6)
+- [x] 03-07-PLAN.md — Multi-placement: map-side PersonPicker (D-11) + profile "Appears on" with jump-to-placement (D-12) — MAP-05 (Wave 6)
 
 **Research flag:** NEEDS DEEPER RESEARCH — Konva.js viewport culling and shape caching patterns at hundreds-to-thousands of markers, portal/nested-map navigation UX, and Konva + React 19 compatibility. Research before PLAN; build caching/culling in from the start, not as a retrofit.
 **UI hint**: yes
@@ -224,7 +224,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
-| 3. Map Editor — Spaces & Navigation | 6/7 | In Progress|  |
+| 3. Map Editor — Spaces & Navigation | 7/7 | Complete   | 2026-06-27 |
 | 4. Relationships & Graph | 0/TBD | Not started | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
