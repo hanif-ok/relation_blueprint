@@ -15,7 +15,7 @@
 // Security: all user text (name, phone, description, tags, notes, label, date) is rendered as
 // React children — never dangerouslySetInnerHTML (T-03-01: an XSS could exfiltrate the Drive token).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Building2, UsersRound, ArrowLeftRight } from 'lucide-react';
 import { db } from '@/db/schema';
@@ -25,11 +25,43 @@ import { PhotoGallery } from './PhotoGallery';
 import { PhotoLightbox } from './PhotoLightbox';
 import { CustomFieldRows } from './CustomFieldRows';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
-import type { EntityType, Group, MapDoc, MediaRef, Person, RelationshipLink } from '@/domain/types';
+import type {
+  EntityType,
+  Group,
+  MapDoc,
+  Marker,
+  MediaRef,
+  Person,
+  RelationshipLink,
+} from '@/domain/types';
 import styles from './ProfileSidebar.module.css';
 
 /** The deletable entity families a profile can render (markers are a separate concern). */
 export type ProfileEntityType = 'people' | 'maps' | 'groups' | 'relationship-links';
+
+/** One "Appears on" group: a map a person is placed on + the marker ids of every placement there. */
+export interface PlacementGroup {
+  mapId: string;
+  markerIds: string[];
+}
+
+/**
+ * Group a person's Marker rows by `mapId` (D-12) — the pure core of the "Appears on" list, extracted
+ * so it is unit-testable without rendering. Only person-kind markers count (a portal carries a
+ * `targetMapId`, not a `personId`); multiple placements on the SAME map collapse into one group whose
+ * `markerIds` holds every placement (the first is the jump target). The caller resolves map names and
+ * skips/marks any group whose map was deleted (T-03-10).
+ */
+export function groupPlacementsByMap(markers: Marker[]): PlacementGroup[] {
+  const byMap = new Map<string, string[]>();
+  for (const m of markers) {
+    if (m.kind !== 'person') continue;
+    const ids = byMap.get(m.mapId) ?? [];
+    ids.push(m.id);
+    byMap.set(m.mapId, ids);
+  }
+  return Array.from(byMap.entries()).map(([mapId, markerIds]) => ({ mapId, markerIds }));
+}
 
 /** Any entity record this sidebar can render — they share the spine fields it reads. */
 type AnyEntity = Person | MapDoc | Group | RelationshipLink;
@@ -63,6 +95,11 @@ export interface ProfileSidebarProps {
   onDeleted: (entityId: string) => void;
   /** Open another entity's profile — drives link-to-entity navigation (D-10, one-way). */
   onOpenEntity?: (type: EntityType, id: string) => void;
+  /**
+   * Jump-to-placement (D-12): an "Appears on" row sets the target map active and centers/selects the
+   * placement. Fired with the map and the first marker id placed there.
+   */
+  onJumpToPlacement?: (mapId: string, markerId: string) => void;
 }
 
 export function initialsOf(name: string): string {
@@ -97,6 +134,7 @@ export function ProfileSidebar({
   onEdit,
   onDeleted,
   onOpenEntity,
+  onJumpToPlacement,
 }: ProfileSidebarProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -154,6 +192,27 @@ export function ProfileSidebar({
   );
   const type = resolved?.type ?? requestedType;
   const entity = resolved?.entity;
+
+  // ── "Appears on" placements (D-12, People only) ─────────────────────────────────────────────
+  // Read this person's placements reactively (Dexie is source of truth) — every person-kind Marker
+  // referencing this id — then group by mapId. A second reactive read of `db.maps` resolves each
+  // map's NAME; a placement whose map was deleted is shown as a muted "(deleted map)" row rather
+  // than crashing the sidebar (T-03-10), mirroring the portal deleted-target handling in 03-06.
+  const placements = useLiveQuery(
+    () =>
+      id && requestedType === 'people'
+        ? db.markers.where('personId').equals(id).filter((m) => m.kind === 'person').toArray()
+        : Promise.resolve<Marker[]>([]),
+    [id, requestedType],
+    [] as Marker[],
+  );
+  const allMaps = useLiveQuery(() => db.maps.toArray(), [], [] as MapDoc[]);
+  const placementGroups = useMemo(() => groupPlacementsByMap(placements ?? []), [placements]);
+  const mapNameById = useMemo(() => {
+    const by = new Map<string, string>();
+    for (const m of allMaps ?? []) by.set(m.id, m.name);
+    return by;
+  }, [allMaps]);
 
   // Load the avatar thumbnail blob for the header.
   useEffect(() => {
@@ -261,6 +320,51 @@ export function ProfileSidebar({
                   </span>
                 ))}
               </span>
+            </div>
+          )}
+
+          {/* Appears on (D-12) — People only: every map this person is placed on, grouped by map,
+              each row a jump-to-placement button (sets the map active + centers/selects the
+              placement). Map names render as React children (XSS-safe, T-03-01). A placement whose
+              map was deleted shows a muted "(deleted map)" row instead of crashing (T-03-10). */}
+          {person && (
+            <div className={styles.row}>
+              <span className={styles.appearsOnEyebrow} data-testid="profile-appears-on">
+                Appears on
+              </span>
+              {placementGroups.length === 0 ? (
+                <span className={styles.appearsOnEmpty} data-testid="profile-appears-on-empty">
+                  Not placed on any map yet.
+                </span>
+              ) : (
+                <span className={styles.appearsOnList}>
+                  {placementGroups.map((group) => {
+                    const name = mapNameById.get(group.mapId);
+                    if (name === undefined) {
+                      return (
+                        <span
+                          key={group.mapId}
+                          className={styles.appearsOnDeleted}
+                          data-testid="profile-appears-on-deleted"
+                        >
+                          (deleted map)
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={group.mapId}
+                        type="button"
+                        className={styles.appearsOnRow}
+                        data-testid={`profile-appears-on-${group.mapId}`}
+                        onClick={() => onJumpToPlacement?.(group.mapId, group.markerIds[0])}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </span>
+              )}
             </div>
           )}
 
