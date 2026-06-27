@@ -1,0 +1,82 @@
+/* MapSwitcher — the in-editor active-map control. Paper chrome (it floats over the dark Stage),
+ * hairline border, elevation-2 dropdown. Amber is reserved: it appears ONLY on the focus ring,
+ * never as a fill (UI-SPEC A8). The trigger is a calm paper pill, not a create action. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 280px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+}
+
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.content {
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-xs);
+  z-index: 50;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item[data-highlighted] {
+  background: var(--paper-shade);
+}
+
+.item[data-active] {
+  font-weight: 600;
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.newIcon {
+  color: var(--ink-muted);
+}
+
+.separator {
+  height: 1px;
+  margin: var(--space-xs) 0;
+  background: var(--hairline);
+}
