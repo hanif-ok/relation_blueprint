@@ -56,6 +56,7 @@ export function PortalTargetPicker({
   const [newName, setNewName] = useState('');
   const [newBackground, setNewBackground] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Tracks whether a Done/Cancel action already resolved the portal, so the Radix close handler
   // doesn't ALSO delete it (a double-resolve would error on the already-deleted row).
   const [resolved, setResolved] = useState(false);
@@ -68,6 +69,7 @@ export function PortalTargetPicker({
       setNewName('');
       setNewBackground(null);
       setBusy(false);
+      setError(null);
       setResolved(false);
     }
   }, [open, portalId]);
@@ -85,25 +87,33 @@ export function PortalTargetPicker({
   async function pickTarget(targetMapId: string) {
     if (!portalId || busy) return;
     setBusy(true);
-    const existing = await db.markers.get(portalId);
-    if (existing) {
-      await upsertMarker({
-        id: existing.id,
-        mapId: existing.mapId,
-        kind: 'portal',
-        targetMapId,
-        layerId: existing.layerId,
-        x: existing.x,
-        y: existing.y,
-        width: existing.width,
-        height: existing.height,
-        rotation: existing.rotation,
-      });
+    setError(null);
+    try {
+      const existing = await db.markers.get(portalId);
+      if (existing) {
+        await upsertMarker({
+          id: existing.id,
+          mapId: existing.mapId,
+          kind: 'portal',
+          targetMapId,
+          layerId: existing.layerId,
+          x: existing.x,
+          y: existing.y,
+          width: existing.width,
+          height: existing.height,
+          rotation: existing.rotation,
+        });
+      }
+      setResolved(true);
+      onDone();
+      onOpenChange(false);
+    } catch {
+      // A failed write must not wedge the controls (all disabled={busy}) — surface an error and
+      // release busy in finally so the list/create/back buttons re-enable (mirrors handleFile).
+      setError('Could not set the portal target. Please try again.');
+    } finally {
+      setBusy(false);
     }
-    setResolved(true);
-    setBusy(false);
-    onDone();
-    onOpenChange(false);
   }
 
   /** CREATE: make a child map (name + background), point the portal at it, and set the descend
@@ -114,34 +124,42 @@ export function PortalTargetPicker({
     if (!name || !newBackground) return;
     if (!ACCEPTED_TYPES.includes(newBackground.type) || newBackground.size > MAX_UPLOAD_BYTES) return;
     setBusy(true);
-    const ref = await storeMedia(newBackground, { kind: 'map' });
-    const child = await createMap({
-      name,
-      background: ref,
-      width: ref.width ?? 800,
-      height: ref.height ?? 600,
-    });
-    // The descend hierarchy: the new child sits UNDER the current map (breadcrumb parent ▸ child).
-    await updateMap(child.id, { parentId: currentMapId });
-    const existing = await db.markers.get(portalId);
-    if (existing) {
-      await upsertMarker({
-        id: existing.id,
-        mapId: existing.mapId,
-        kind: 'portal',
-        targetMapId: child.id,
-        layerId: existing.layerId,
-        x: existing.x,
-        y: existing.y,
-        width: existing.width,
-        height: existing.height,
-        rotation: existing.rotation,
+    setError(null);
+    try {
+      const ref = await storeMedia(newBackground, { kind: 'map' });
+      const child = await createMap({
+        name,
+        background: ref,
+        width: ref.width ?? 800,
+        height: ref.height ?? 600,
       });
+      // The descend hierarchy: the new child sits UNDER the current map (breadcrumb parent ▸ child).
+      await updateMap(child.id, { parentId: currentMapId });
+      const existing = await db.markers.get(portalId);
+      if (existing) {
+        await upsertMarker({
+          id: existing.id,
+          mapId: existing.mapId,
+          kind: 'portal',
+          targetMapId: child.id,
+          layerId: existing.layerId,
+          x: existing.x,
+          y: existing.y,
+          width: existing.width,
+          height: existing.height,
+          rotation: existing.rotation,
+        });
+      }
+      setResolved(true);
+      onDone();
+      onOpenChange(false);
+    } catch {
+      // A failed decode/quota/write must not wedge the create controls — surface an error and release
+      // busy in finally so "Create map"/"Back" re-enable (mirrors handleFile's UPLOAD_ERROR path).
+      setError('Could not create the map. Please try again.');
+    } finally {
+      setBusy(false);
     }
-    setResolved(true);
-    setBusy(false);
-    onDone();
-    onOpenChange(false);
   }
 
   /** CANCEL: remove the target-less portal so the map never carries a dangling doorway. */
@@ -178,6 +196,12 @@ export function PortalTargetPicker({
           <Dialog.Title id={titleId} className={styles.title}>
             Where does this portal go?
           </Dialog.Title>
+
+          {error && (
+            <p role="alert" className={styles.error} data-testid="portal-target-error">
+              {error}
+            </p>
+          )}
 
           {!creating ? (
             <>

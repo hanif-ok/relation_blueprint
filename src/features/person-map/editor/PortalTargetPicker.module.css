@@ -34,6 +34,13 @@
   margin: 0;
 }
 
+.error {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--danger, #c0392b);
+  margin: 0;
+}
+
 .section {
   display: flex;
   flex-direction: column;
