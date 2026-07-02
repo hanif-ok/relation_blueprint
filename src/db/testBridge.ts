@@ -141,6 +141,11 @@ export function installTestBridge(): void {
         kind: existing.kind,
         personId: existing.personId,
         targetMapId: existing.targetMapId,
+        // Thread the marker's layerId through the re-upsert (WR-02): upsertMarker does a full
+        // validated put, so an omitted layerId would become undefined and silently move the marker
+        // to the default layer — the exact hazard the production transform-persist paths guard
+        // against. Preserving it keeps this E2E-driven helper faithful to the real Transformer.
+        layerId: existing.layerId,
         x: existing.x,
         y: existing.y,
         width: t.width ?? existing.width,
