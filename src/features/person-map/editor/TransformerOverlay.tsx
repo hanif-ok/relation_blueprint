@@ -76,6 +76,13 @@ export interface ComputeTransformPersistArgs {
   targetMapId?: string;
   /** Marker branch only: the editor layer the marker belongs to, preserved across the transform. */
   layerId?: string;
+  /** Marker branch only: the intrinsic base box size (image-space px) to bake the scale onto. A
+   *  marker/portal node is a Konva Group with NO intrinsic `width()` — the Transformer resizes a
+   *  Group by mutating scaleX/scaleY, not width, so `node.width()` returns 0 and every resize would
+   *  collapse to MIN_TRANSFORM_SIZE. Pass the known base box (2*R for a person, PORTAL_W/PORTAL_H for
+   *  a portal). Absent → fall back to `node.width()`/`node.height()` (correct for real shape nodes). */
+  baseWidth?: number;
+  baseHeight?: number;
   /** Shape branch only: the current shapes array (one entry is rewritten). */
   shapes?: Shape[];
   /** Optional callback to reset the live node's scale back to 1 (the side-effect, kept injectable
@@ -96,12 +103,16 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
     args;
   const scaleX = node.scaleX();
   const scaleY = node.scaleY();
+  // A marker/portal Group has no intrinsic width()/height() (Transformer mutates scale, not size),
+  // so fall back to the caller-supplied base box; real shape nodes carry a real width()/height().
+  const baseWidth = args.baseWidth ?? node.width();
+  const baseHeight = args.baseHeight ?? node.height();
   // Konva's `node.rotation()` returns DEGREES, but the stored model + every renderer treats the
   // persisted `rotation` as RADIANS (they multiply by 180/π on the way out). Convert at this
   // boundary so the shape subtraction below and the marker payload both stay in radians.
   const rotation = (node.rotation() * Math.PI) / 180;
-  const width = Math.max(MIN_TRANSFORM_SIZE, node.width() * scaleX);
-  const height = Math.max(MIN_TRANSFORM_SIZE, node.height() * scaleY);
+  const width = Math.max(MIN_TRANSFORM_SIZE, baseWidth * scaleX);
+  const height = Math.max(MIN_TRANSFORM_SIZE, baseHeight * scaleY);
 
   // Reset the live node's scale to 1 — bake-into-width/height keeps strokes uniform.
   resetScale?.(1, 1);

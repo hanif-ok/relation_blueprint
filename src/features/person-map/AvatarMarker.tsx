@@ -116,6 +116,9 @@ export function AvatarMarker({
       objectId: marker.id,
       personId: person.id,
       layerId: marker.layerId,
+      // The node is a Konva Group (no intrinsic width()); bake the scale onto the avatar's base box.
+      baseWidth: 2 * R,
+      baseHeight: 2 * R,
       resetScale: (sx, sy) => {
         node.scaleX(sx);
         node.scaleY(sy);

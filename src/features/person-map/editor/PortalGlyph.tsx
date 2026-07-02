@@ -112,6 +112,9 @@ export function PortalGlyph({
       objectId: marker.id,
       targetMapId: marker.targetMapId,
       layerId: marker.layerId,
+      // The node is a Konva Group (no intrinsic width()); bake the scale onto the door-arch base box.
+      baseWidth: PORTAL_W,
+      baseHeight: PORTAL_H,
       resetScale: (sx, sy) => {
         node.scaleX(sx);
         node.scaleY(sy);
