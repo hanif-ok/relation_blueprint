@@ -212,11 +212,20 @@ export function MapView({
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    const update = () => {
+      setSize({ width: el.clientWidth, height: el.clientHeight });
+      // WR-03: keep the viewport cull rect in sync with the container size. It is otherwise only
+      // recomputed on wheel/drag, so after a pan (visibleRect non-null) enlarging the pane would
+      // leave the rect sized to the OLD, smaller viewport and cull markers in the newly-revealed
+      // edge region until the next gesture. `culling.recompute` is a stable useCallback, so the
+      // mount-time reference stays valid for the observer's lifetime.
+      if (stageRef.current) culling.recompute(stageRef.current);
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFile = useCallback(async (file: File) => {
