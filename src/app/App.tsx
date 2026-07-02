@@ -102,6 +102,18 @@ export function App() {
     undefined,
   );
 
+  // Re-seed the active map when the one it points at is DELETED (browse-list delete or the
+  // ProfileSidebar cascade). Without this, `activeMapId` keeps pointing at a now-missing row and
+  // the Map surface strands blank — no MapSwitcher, no breadcrumb, no empty state (other maps still
+  // exist so `!hasAnyMap` is false). `useLiveQuery` retains the previous resolved value across a
+  // deps change, so `activeMap === undefined` only after the query RESOLVED with no row (the map is
+  // truly gone), never transiently during a map-to-map navigation — so this can't mis-fire mid-nav.
+  useEffect(() => {
+    if (activeMapId && activeMap === undefined) {
+      setActiveMapId(firstMap?.id ?? null);
+    }
+  }, [activeMapId, activeMap, firstMap]);
+
   // Does the user have any first-class entity yet? Gates the one-time privacy notice's auto-show
   // (criterion 4: show at first entity creation OR first provider connect, whichever comes first).
   const hasAnyEntity = useLiveQuery(async () => {
