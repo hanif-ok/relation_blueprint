@@ -14,7 +14,13 @@ You can place people on a map of real locations and instantly see **who is where
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+**Maps & editor** — Phase 3, UAT-confirmed 2026-07-02
+- ✓ Create maps from uploaded background images plus drawn shapes/lines/zones for rooms/areas — Phase 3 (MAP-02; image-background upload from Phase 1)
+- ✓ Layers in the map editor (create/rename/reorder/show-hide/lock) — Phase 3 (MAP-03)
+- ✓ Place people as markers (round photo avatar) on a map; one person can appear on multiple maps at once as a single canonical record — Phase 1/3 (MAP-04/05)
+- ✓ Place location-link "portal" markers (distinct door-arch glyph) that navigate to another map — Phase 3 (MAP-06)
+- ✓ Nest maps into spatial map-groups (floor→building→street) and navigate the hierarchy — Phase 3 (MAP-07)
+- ✓ On-canvas resize/rotate of markers and the background image, persisted across reload, with markers anchored to their image-space spot — Phase 3 (deferred-from-Phase-1 criteria; UAT tests 2–3)
 
 ### Active
 
@@ -25,13 +31,6 @@ You can place people on a map of real locations and instantly see **who is where
 - [ ] Read/write all data as files in the user's own cloud — no backend, no accounts, single curator
 - [ ] Offline-capable PWA: installable, works offline against a local cache, syncs to the connected cloud
 - [ ] Export the whole database as a portable backup
-
-**Maps & editor**
-- [ ] Create maps using uploaded images as backgrounds plus drawn shapes/lines/zones for rooms/areas
-- [ ] Layers in the map editor
-- [ ] Place people as markers (round photo avatar) on a map
-- [ ] Place location-link markers with a distinctive unique shape that hyperlink ("portal") to another map
-- [ ] Nest maps into spatial map-groups (floor → building → street) and navigate the hierarchy
 
 **Entities (four first-class object types — each with custom fields, thumbnail, photo gallery, searchable)**
 - [ ] People: out-of-box fields (name, photo, phone, description, tags, notes); can appear in multiple places at once
@@ -97,6 +96,10 @@ You can place people on a map of real locations and instantly see **who is where
 | Typed custom fields | Powers per-field checkbox search and validation; the search feature depends on it | — Pending |
 | Relationships are data-driven, graph is viewer-only | Single source of truth in entity data; connectors/graph are projections of it | — Pending |
 | Social Groups separate from spatial Map-groups | Keeps social grouping and floor→building→street nesting from colliding | — Pending |
+| Marker/shape coordinates stored in image-space, composed through `backgroundTransform` (Phase 3) | One background re-fit keeps every placement anchored to its physical spot — no per-marker recompute | ✓ Phase 3 — anchoring UAT-confirmed |
+| Multi-placement = a new Marker row per placement over one canonical Person (D-13, Phase 3) | Person edits propagate to all placements; each placement keeps its own x/y | ✓ Phase 3 |
+| Portal = distinct door-arch glyph; single-click selects, double-click navigates (D-06/D-07, Phase 3) | Visually separates portals from person avatars and prevents accidental map navigation | ✓ Phase 3 |
+| Logical layers (`layers.ts`) decoupled from the 3 physical Konva layers (bg / content / transformer) | Users reorder/lock content layers freely without touching the fixed render-pipeline layers | ✓ Phase 3 |
 | v1 = current state only (no time/history) | Scope control; temporal tracking is a large feature deferred | — Pending |
 | Provider security only (no app-level encryption) in v1 | Simplicity; Mega is e2e encrypted, Drive uses Google encryption | — Pending |
 | Free/OSS-only dependencies | Keeps the tool free to run and self-hostable as a static site | — Pending |
@@ -119,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-26 after Phase 02.1 — closed the DATA-03 cloud-sync blocker so custom-field definitions round-trip through the manifest cloud path (own-your-whole-database guarantee restored for the custom-field schema).*
+*Last updated: 2026-07-02 after Phase 3 — the map editor ships: draw shapes/zones on reorderable layers, portal-link maps into floor→building→street hierarchies, place one canonical person across many maps, and resize/rotate markers + background with image-space anchoring. All 7 success criteria UAT-confirmed (the 3 runtime-only items from 03-VERIFICATION now verified).*

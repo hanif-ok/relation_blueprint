@@ -2,44 +2,44 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 03
-current_phase_name: map-editor-spaces-navigation
-status: executing
-stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-06-26T23:34:53.428Z"
-last_activity: 2026-06-26
-last_activity_desc: Phase 03 execution started
+current_phase: 4
+current_phase_name: Relationships & Graph
+status: ready_to_plan
+stopped_at: Phase 3 complete (UAT 3/3 pass), ready to plan Phase 4
+last_updated: "2026-07-02T13:15:00.490Z"
+last_activity: 2026-07-02
+last_activity_desc: Phase 03 complete, transitioned to Phase 4
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 25
-  completed_plans: 18
-  percent: 43
+  completed_plans: 25
+  percent: 57
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-24)
+See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** You can place people on a map of real locations and instantly see who is where, open any person to their full profile, and trace how people and groups relate — all from data you fully own, with no server.
-**Current focus:** Phase 03 — map-editor-spaces-navigation
+**Current focus:** Phase 4 — Relationships & Graph
 
 ## Current Position
 
-Phase: 03 (map-editor-spaces-navigation) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 03
-Last activity: 2026-06-26 — Phase 03 execution started
+Phase: 4 — Relationships & Graph
+Plan: Not started
+Status: Ready to plan Phase 4
+Last activity: 2026-07-02 — Phase 03 complete (UAT 3/3 pass), transitioned to Phase 4
 
-Progress: [██████████] 100%
+Progress: [████████████████████] 25/25 plans (100%)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
+- Total plans completed: 8
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -48,6 +48,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02.1 | 1 | - | - |
+| 03 | 7 | - | - |
 
 **Recent Trend:**
 
@@ -72,6 +73,10 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 03]: Marker/shape coords stored in IMAGE-space, composed at render through `imageToStage(backgroundTransform)` — a background re-fit keeps every placement anchored to its physical spot (UAT-confirmed); Phase 4 connectors must draw in the same image-space so relationship lines stay anchored too
+- [Phase 03]: Multi-placement = a new Marker row per placement over one canonical Person (D-13); `db.markers.where('personId')` is the reverse index ("Appears on:") — Phase 4 relationships attach to the canonical Person/Group, never to a placement
+- [Phase 03]: Portal marker is a distinct door-arch glyph (`colors.portal`), single-click select / double-click navigate (D-06/D-07); precedent for a per-marker-kind glyph vocabulary
+- [Phase 03]: Logical layers (`layers.ts`) are decoupled from the 3 fixed physical Konva layers (L0 bg / L1 content / L2 transformer); viewport culling (`useViewportCulling`) debounced on pan/zoom END keeps high marker counts smooth
 - [Roadmap]: Vertical-MVP structure — Phase 1 is a thin end-to-end slice (Drive connect → Person → map → profile → export/restore) proving the spine, not a storage layer in isolation
 - [Roadmap]: Drive `drive.file` scope on a visible named folder only (never broad `drive`, never `appDataFolder`); sharded manifest + StorageProvider abstraction designed in from Phase 1
 - [Roadmap]: Export/restore pulled into Phase 1 (the cloud is the only copy; tested restore must exist before real data)
@@ -109,8 +114,8 @@ Recent decisions affecting current work:
 
 [Issues that affect future work]
 
-- Phase 1 carries a research flag — spike the full Drive auth + read/write + token-expiry cycle and the atomic write pattern before planning.
-- Phases 3 (Map Editor / Konva at scale) and 6 (Mega megajs) also carry research flags.
+- ⚠️ [Phase 3] Polygon draw tool is armed in ToolPalette (shortcut P) but its multi-click wiring in MapView was never delivered; the pure `addPolygonVertex`/`closePolygon` helpers exist and are unit-tested. Non-blocking — Rect/Ellipse/Line satisfy MAP-02. Either wire the multi-click path or formally drop the tool. See 03-VERIFICATION.md (non-blocking warning).
+- Phase 6 (Mega megajs) still carries a research flag — spike the browser SDK before planning. (Phase 1 Drive-auth and Phase 3 Konva-at-scale research flags are now resolved.)
 
 ### Roadmap Evolution
 
@@ -128,6 +133,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-26T17:42:12.720Z
-Stopped at: Phase 3 UI-SPEC approved
-Resume file: .planning/phases/03-map-editor-spaces-navigation/03-UI-SPEC.md
+Last session: 2026-07-02T13:13:14Z
+Stopped at: Phase 3 complete (UAT 3/3 pass), ready to plan Phase 4
+Resume file: None
