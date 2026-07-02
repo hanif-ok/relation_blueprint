@@ -30,6 +30,7 @@ import type {
   MediaRef,
   Person,
   RelationshipLink,
+  Shape,
 } from '@/domain/types';
 
 /** What changed, for sync-engine subscribers. */
@@ -289,6 +290,50 @@ export async function updateMap(id: string, patch: UpdateMapPatch): Promise<MapD
   await db.maps.put(updated);
   emit({ entityType: 'maps', entityId: id, op: 'update' });
   return updated;
+}
+
+/**
+ * Read-modify-write a map from its CURRENT persisted row (WR-01). The `mutate` callback receives the
+ * freshly-read row — read inside a SINGLE rw transaction — and returns the patch to apply. This
+ * closes the lost-update window that `updateMap` has when a caller rebuilds a whole sub-array (e.g.
+ * `MapDoc.shapes`) from a `useLiveQuery` render snapshot: because that snapshot refreshes
+ * asynchronously, two shape writes issued before it updated both read the same stale array and the
+ * second silently overwrote the first. Computing the next value from `existing` INSIDE the
+ * transaction means each write sees the prior write's result. Re-validates + stamps exactly like
+ * `updateMap`; emits AFTER the transaction commits so subscribers only ever see persisted state.
+ */
+export async function updateMapFrom(
+  id: string,
+  mutate: (existing: MapDoc) => UpdateMapPatch,
+): Promise<MapDoc> {
+  const updated = await db.transaction('rw', db.maps, async () => {
+    const existing = await db.maps.get(id);
+    if (!existing) throw new Error(`updateMapFrom: no map with id ${id}`);
+    const next: MapDoc = MapDocSchema.parse({
+      ...existing,
+      ...mutate(existing),
+      id: existing.id,
+      updatedAt: Date.now(),
+      dirty: true,
+    });
+    await db.maps.put(next);
+    return next;
+  });
+  emit({ entityType: 'maps', entityId: id, op: 'update' });
+  return updated;
+}
+
+/**
+ * Convenience over `updateMapFrom` for the common case of rewriting ONLY the `shapes` array from the
+ * freshly-read row (WR-01). `updater` receives the current persisted shapes and returns the next
+ * array — used by the draw-commit append and the per-shape drag/style patches so concurrent edits
+ * no longer drop one another.
+ */
+export async function updateMapShapes(
+  id: string,
+  updater: (shapes: Shape[]) => Shape[],
+): Promise<MapDoc> {
+  return updateMapFrom(id, (existing) => ({ shapes: updater(existing.shapes) }));
 }
 
 /**

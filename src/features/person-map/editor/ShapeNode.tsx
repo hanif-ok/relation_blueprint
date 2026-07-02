@@ -21,7 +21,7 @@ import { useMemo } from 'react';
 import { Rect, Ellipse, Line } from 'react-konva';
 import type Konva from 'konva';
 import { zonePresets, colors, marker as M } from '@/app/tokens';
-import { updateMap } from '@/db/repository';
+import { updateMapShapes } from '@/db/repository';
 import type { BackgroundTransform, MapDoc, Shape } from '@/domain/types';
 import { imageToStage, stageToImage } from '../coords';
 import { computeTransformPersist, persistTransformResult } from './TransformerOverlay';
@@ -51,10 +51,13 @@ function presetColors(preset: string) {
   return zonePresets[preset as keyof typeof zonePresets] ?? zonePresets.stone;
 }
 
-/** Rewrite this shape inside the map's shapes array with a patch, then persist via updateMap. */
+/** Rewrite this shape inside the map's shapes array with a patch, persisting via updateMapShapes. */
 function persistShapePatch(map: MapDoc, shapeId: string, patch: Partial<Shape>): void {
-  const shapes = map.shapes.map((s) => (s.id === shapeId ? { ...s, ...patch } : s));
-  void updateMap(map.id, { shapes });
+  // WR-01: patch against the FRESHLY-READ shapes array (not this render-closure snapshot) so a
+  // concurrent draw/edit isn't dropped by a full-array overwrite of a stale snapshot.
+  void updateMapShapes(map.id, (shapes) =>
+    shapes.map((s) => (s.id === shapeId ? { ...s, ...patch } : s)),
+  );
 }
 
 export function ShapeNode({ map, shape, transform, selected, onSelect, onNodeRef }: ShapeNodeProps) {

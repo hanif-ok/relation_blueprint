@@ -14,7 +14,7 @@
 import { useId } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { zonePresets } from '@/app/tokens';
-import { updateMap } from '@/db/repository';
+import { updateMapShapes } from '@/db/repository';
 import type { MapDoc, Shape } from '@/domain/types';
 import styles from './StylePopover.module.css';
 
@@ -46,11 +46,14 @@ export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverPro
 
   const isLine = shape.kind === 'line';
 
-  /** Rewrite the selected shape with a patch and persist via updateMap. */
+  /** Rewrite the selected shape with a patch and persist via updateMapShapes. */
   function patchShape(patch: Partial<Shape>) {
     if (!shape) return;
-    const shapes = map.shapes.map((s) => (s.id === shape.id ? { ...s, ...patch } : s));
-    void updateMap(map.id, { shapes });
+    // WR-01: patch against the FRESHLY-READ shapes array, not this render snapshot, so a concurrent
+    // draw/edit isn't clobbered by a stale full-array overwrite.
+    void updateMapShapes(map.id, (shapes) =>
+      shapes.map((s) => (s.id === shape.id ? { ...s, ...patch } : s)),
+    );
   }
 
   return (

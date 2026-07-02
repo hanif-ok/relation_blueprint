@@ -22,7 +22,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
 import type { BackgroundTransform, Layer as MapLayer, Marker, Shape } from '@/domain/types';
-import { createMap, updateMap, upsertMarker } from '@/db/repository';
+import { createMap, updateMap, updateMapFrom, upsertMarker } from '@/db/repository';
 import { storeMedia } from '@/media/mediaManager';
 import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
@@ -398,7 +398,9 @@ export function MapView({
         // A freshly-drawn line is never filled; rooms/zones default to filled.
         fill: draft.kind !== 'line',
       };
-      void updateMap(map.id, { shapes: [...map.shapes, shape], layers });
+      // WR-01: append the shape against the FRESHLY-READ row (not the stale useLiveQuery snapshot)
+      // so a rapid second draw/edit before the live query refreshes can't silently clobber it.
+      void updateMapFrom(map.id, (m) => ({ shapes: [...m.shapes, shape], layers }));
       // Select the just-drawn shape so the StylePopover opens for immediate styling.
       setSelectedShapeId(shape.id);
     },
