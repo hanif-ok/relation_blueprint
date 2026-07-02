@@ -99,9 +99,10 @@ export function PortalGlyph({
   // On transform-end (resize/rotate): bake scale into width/height + rotation and persist through
   // the repository (computeTransformPersist resets scale to 1 — never persists raw scale). The
   // 'person' kind in computeTransformPersist drives uniform scale handling; a portal uses the same
-  // path. We re-thread the portal's targetMapId after via upsertMarker is unnecessary because
-  // persistTransformResult re-reads through the repository which preserves it — but to be safe the
-  // Transformer overlay's persist path keys off the existing marker, so kind/target survive.
+  // path. The portal's targetMapId/layerId survive the transform because they are passed EXPLICITLY
+  // into computeTransformPersist below, which carries them straight into the upsert payload —
+  // persistTransformResult does NOT re-read the existing marker, so this explicit threading is the
+  // only thing that preserves them (do not remove it).
   function handleTransformEnd(e: Konva.KonvaEventObject<Event>) {
     const node = e.target as Konva.Group;
     const result = computeTransformPersist({
