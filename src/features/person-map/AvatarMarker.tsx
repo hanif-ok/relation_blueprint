@@ -91,6 +91,9 @@ export function AvatarMarker({
       mapId: marker.mapId,
       kind: marker.kind,
       personId: person.id,
+      // Preserve the marker's editor layer across a move (upsertMarker does a full put — an omitted
+      // layerId would silently reassign it to the default/first layer, destroying layer organization).
+      layerId: marker.layerId,
       x: img.x,
       y: img.y,
       // Preserve any baked Transformer state across a move.
@@ -112,6 +115,7 @@ export function AvatarMarker({
       mapId: marker.mapId,
       objectId: marker.id,
       personId: person.id,
+      layerId: marker.layerId,
       resetScale: (sx, sy) => {
         node.scaleX(sx);
         node.scaleY(sy);

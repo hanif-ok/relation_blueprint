@@ -49,6 +49,9 @@ export interface MarkerPersistPayload {
   kind: MarkerKind;
   personId?: string;
   targetMapId?: string;
+  /** The editor layer the marker belongs to — threaded through so a transform-end never drops it
+   *  (upsertMarker does a full put; an omitted layerId would silently reassign the default layer). */
+  layerId?: string;
   x: number;
   y: number;
   width: number;
@@ -71,6 +74,8 @@ export interface ComputeTransformPersistArgs {
   personId?: string;
   /** Portal marker only. */
   targetMapId?: string;
+  /** Marker branch only: the editor layer the marker belongs to, preserved across the transform. */
+  layerId?: string;
   /** Shape branch only: the current shapes array (one entry is rewritten). */
   shapes?: Shape[];
   /** Optional callback to reset the live node's scale back to 1 (the side-effect, kept injectable
@@ -87,7 +92,8 @@ export interface ComputeTransformPersistArgs {
  * what is applied, NEVER the raw scale (the Anti-pattern this whole helper exists to avoid).
  */
 export function computeTransformPersist(args: ComputeTransformPersistArgs): TransformPersistResult {
-  const { node, kind, transform, mapId, objectId, personId, targetMapId, shapes, resetScale } = args;
+  const { node, kind, transform, mapId, objectId, personId, targetMapId, layerId, shapes, resetScale } =
+    args;
   const scaleX = node.scaleX();
   const scaleY = node.scaleY();
   // Konva's `node.rotation()` returns DEGREES, but the stored model + every renderer treats the
@@ -126,6 +132,7 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
       kind: kind === 'portal' ? 'portal' : 'person',
       personId,
       targetMapId,
+      layerId,
       x: img.x,
       y: img.y,
       width,

@@ -111,6 +111,7 @@ export function PortalGlyph({
       mapId: marker.mapId,
       objectId: marker.id,
       targetMapId: marker.targetMapId,
+      layerId: marker.layerId,
       resetScale: (sx, sy) => {
         node.scaleX(sx);
         node.scaleY(sy);
