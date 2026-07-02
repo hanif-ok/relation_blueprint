@@ -127,6 +127,13 @@ export function ShapeNode({ map, shape, transform, selected, onSelect, onNodeRef
       },
     });
     persistTransformResult(result, map.id);
+    // A Line/polygon node has NO controlled x/y prop (it renders from `points` only), so the
+    // Transformer's translation stays on the live node after the bake and would compound on the next
+    // gesture; reset it to 0 so the next render composes purely from the persisted points (mirrors
+    // handlePointsDragEnd). Rect/ellipse have controlled x/y and re-compose from the descriptor.
+    if (shape.kind === 'line' || shape.kind === 'polygon') {
+      node.position({ x: 0, y: 0 });
+    }
   }
 
   const commonHandlers = {

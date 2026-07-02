@@ -126,14 +126,23 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
     const imgWidth = Math.max(MIN_TRANSFORM_SIZE, width / bgScale);
     const imgHeight = Math.max(MIN_TRANSFORM_SIZE, height / bgScale);
     const ownRotation = rotation - transform.rotation;
+    // The Transformer moves the node's x/y whenever a non-anchor handle is dragged (and ALWAYS for a
+    // center-origin Ellipse). Inverse-compose the node's post-transform position back to IMAGE space
+    // so that translation is PERSISTED, not discarded (CR-01): dragging the top/left anchors — or any
+    // Ellipse handle — used to snap the shape back to its stale stored origin. For a top-left-origin
+    // Rect this image point is the box origin; for an Ellipse it is the box CENTER; for a
+    // line/polygon it is a pure translation delta folded into the (centroid-scaled) points.
+    const nodePosImg = stageToImage({ x: node.x(), y: node.y() }, transform);
+    const zeroImg = stageToImage({ x: 0, y: 0 }, transform);
     const current = shapes ?? [];
     const next = current.map((s) => {
       if (s.id !== objectId) return s;
       // line/polygon geometry lives in `points` — the renderer draws them from `stagePoints` and
       // never reads width/height, so a width/height bake leaves the visible line unchanged. Scale the
       // stored points about their centroid by scaleX/scaleY (image-space; scale is a dimensionless
-      // ratio that applies equally in image space) so the resize actually takes effect. The
-      // width/height bake is reserved for rect/ellipse.
+      // ratio that applies equally in image space), then FOLD IN the node's translation delta so a
+      // handle drag that also moved the node is not thrown away (CR-01). The width/height bake is
+      // reserved for rect/ellipse.
       if ((s.kind === 'line' || s.kind === 'polygon') && s.points && s.points.length >= 2) {
         const pts = s.points;
         const n = pts.length / 2;
@@ -145,12 +154,34 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
         }
         cx /= n;
         cy /= n;
+        const dImgX = nodePosImg.x - zeroImg.x;
+        const dImgY = nodePosImg.y - zeroImg.y;
         const scaledPoints = pts.map((v, i) =>
-          i % 2 === 0 ? cx + (v - cx) * scaleX : cy + (v - cy) * scaleY,
+          i % 2 === 0 ? cx + (v - cx) * scaleX + dImgX : cy + (v - cy) * scaleY + dImgY,
         );
         return { ...s, points: scaledPoints, rotation: ownRotation };
       }
-      return { ...s, width: imgWidth, height: imgHeight, rotation: ownRotation };
+      // Ellipse is center-origin in Konva, so node.x()/y() is the box CENTER: derive the stored box
+      // origin from the NEW size (center − half-size). Rect is top-left-origin, so node.x()/y() IS
+      // the box origin. Both persist the inverse-composed position so a non-anchor resize sticks.
+      if (s.kind === 'ellipse') {
+        return {
+          ...s,
+          x: nodePosImg.x - imgWidth / 2,
+          y: nodePosImg.y - imgHeight / 2,
+          width: imgWidth,
+          height: imgHeight,
+          rotation: ownRotation,
+        };
+      }
+      return {
+        ...s,
+        x: nodePosImg.x,
+        y: nodePosImg.y,
+        width: imgWidth,
+        height: imgHeight,
+        rotation: ownRotation,
+      };
     });
     return { branch: 'shape', shapes: next };
   }
