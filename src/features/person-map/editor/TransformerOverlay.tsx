@@ -127,9 +127,31 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
     const imgHeight = Math.max(MIN_TRANSFORM_SIZE, height / bgScale);
     const ownRotation = rotation - transform.rotation;
     const current = shapes ?? [];
-    const next = current.map((s) =>
-      s.id === objectId ? { ...s, width: imgWidth, height: imgHeight, rotation: ownRotation } : s,
-    );
+    const next = current.map((s) => {
+      if (s.id !== objectId) return s;
+      // line/polygon geometry lives in `points` — the renderer draws them from `stagePoints` and
+      // never reads width/height, so a width/height bake leaves the visible line unchanged. Scale the
+      // stored points about their centroid by scaleX/scaleY (image-space; scale is a dimensionless
+      // ratio that applies equally in image space) so the resize actually takes effect. The
+      // width/height bake is reserved for rect/ellipse.
+      if ((s.kind === 'line' || s.kind === 'polygon') && s.points && s.points.length >= 2) {
+        const pts = s.points;
+        const n = pts.length / 2;
+        let cx = 0;
+        let cy = 0;
+        for (let i = 0; i < pts.length; i += 2) {
+          cx += pts[i];
+          cy += pts[i + 1];
+        }
+        cx /= n;
+        cy /= n;
+        const scaledPoints = pts.map((v, i) =>
+          i % 2 === 0 ? cx + (v - cx) * scaleX : cy + (v - cy) * scaleY,
+        );
+        return { ...s, points: scaledPoints, rotation: ownRotation };
+      }
+      return { ...s, width: imgWidth, height: imgHeight, rotation: ownRotation };
+    });
     return { branch: 'shape', shapes: next };
   }
 
