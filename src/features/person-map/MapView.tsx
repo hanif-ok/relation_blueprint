@@ -586,7 +586,11 @@ export function MapView({
   // are already excluded by `orderObjectsForRender`; the cull box is the composed stage point ±
   // MARKER_HALF_EXTENT.
   const visibleMarkers = useMemo(() => {
-    const ordered = orderObjectsForRender(markers ?? [], layers);
+    // IN-01: own exactly the PERSON markers here (portals are rendered by visiblePortals). Filtering
+    // up front — mirroring visiblePortals' kind==='portal' filter — avoids composing + culling every
+    // portal only to render null for it in the JSX below (dead work that obscured the render path).
+    const persons = (markers ?? []).filter((m) => m.kind === 'person');
+    const ordered = orderObjectsForRender(persons, layers);
     return ordered
       .map((item) => ({
         mk: item.object,
