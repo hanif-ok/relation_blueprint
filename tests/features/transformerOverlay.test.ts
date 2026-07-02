@@ -74,8 +74,9 @@ describe('computeTransformPersist — scale-reset-to-1 bake (RESEARCH Pattern 1)
     expect(resetScaleY).toBe(1);
   });
 
-  it('passes rotation through unchanged (radians)', () => {
-    const node = fakeNode({ scaleX: () => 1, scaleY: () => 1, rotation: () => 1.25 });
+  it('converts Konva degrees to the stored radians (node.rotation() is degrees)', () => {
+    // Konva reports rotation in DEGREES; the persisted model + renderers use RADIANS.
+    const node = fakeNode({ scaleX: () => 1, scaleY: () => 1, rotation: () => 90 });
     const result = computeTransformPersist({
       node,
       kind: 'person',
@@ -85,7 +86,7 @@ describe('computeTransformPersist — scale-reset-to-1 bake (RESEARCH Pattern 1)
       personId: 'p1',
     });
     if (result.branch !== 'marker') throw new Error('expected marker branch');
-    expect(result.payload.rotation).toBe(1.25);
+    expect(result.payload.rotation).toBeCloseTo(Math.PI / 2, 10);
   });
 
   it('clamps a below-MIN baked size up to MIN_TRANSFORM_SIZE', () => {
@@ -160,7 +161,7 @@ describe('computeTransformPersist — scale-reset-to-1 bake (RESEARCH Pattern 1)
       { id: 's1', layerId: 'L', kind: 'rect', x: 0, y: 0, width: 50, height: 50, rotation: 0, preset: 'stone', fill: true },
       { id: 's2', layerId: 'L', kind: 'ellipse', x: 10, y: 10, width: 30, height: 30, rotation: 0, preset: 'sage', fill: true },
     ];
-    const node = fakeNode({ scaleX: () => 2, scaleY: () => 2, width: () => 50, height: () => 50, rotation: () => 0.5 });
+    const node = fakeNode({ scaleX: () => 2, scaleY: () => 2, width: () => 50, height: () => 50, rotation: () => 90 });
     const result = computeTransformPersist({
       node,
       kind: 'shape',
@@ -175,7 +176,8 @@ describe('computeTransformPersist — scale-reset-to-1 bake (RESEARCH Pattern 1)
     const s2 = result.shapes.find((s) => s.id === 's2')!;
     expect(s1.width).toBe(100);
     expect(s1.height).toBe(100);
-    expect(s1.rotation).toBe(0.5);
+    // Konva degrees (90) → stored radians (π/2), minus the identity bg rotation (0).
+    expect(s1.rotation).toBeCloseTo(Math.PI / 2, 10);
     // The untouched shape is preserved verbatim.
     expect(s2).toEqual(shapes[1]);
   });

@@ -90,7 +90,10 @@ export function computeTransformPersist(args: ComputeTransformPersistArgs): Tran
   const { node, kind, transform, mapId, objectId, personId, targetMapId, shapes, resetScale } = args;
   const scaleX = node.scaleX();
   const scaleY = node.scaleY();
-  const rotation = node.rotation();
+  // Konva's `node.rotation()` returns DEGREES, but the stored model + every renderer treats the
+  // persisted `rotation` as RADIANS (they multiply by 180/π on the way out). Convert at this
+  // boundary so the shape subtraction below and the marker payload both stay in radians.
+  const rotation = (node.rotation() * Math.PI) / 180;
   const width = Math.max(MIN_TRANSFORM_SIZE, node.width() * scaleX);
   const height = Math.max(MIN_TRANSFORM_SIZE, node.height() * scaleY);
 
