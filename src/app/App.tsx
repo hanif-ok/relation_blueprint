@@ -196,7 +196,9 @@ export function App() {
     const marker = await db.markers.where('personId').equals(id).first();
     if (marker) setActiveMapId(marker.mapId);
     setActiveView('map');
-    setProfile({ type: 'people', id, openedFrom: 'marker' });
+    // Only open in marker context when the person is actually placed; otherwise 'list' context so the
+    // profile doesn't render a "Remove from map" action for someone on no map.
+    setProfile({ type: 'people', id, openedFrom: marker ? 'marker' : 'list' });
     setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
   }
 
