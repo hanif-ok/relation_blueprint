@@ -11,7 +11,7 @@
 // The geometry (`getVisibleRect`, `intersects`) is pure and exported independently of React so it
 // is unit-testable without rendering (tests/features/coords.test.ts).
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 
 export interface Rect {
@@ -102,6 +102,15 @@ export function useViewportCulling(debounceMs = 80): ViewportCulling {
       }, debounceMs);
     },
     [debounceMs],
+  );
+
+  // Clear any pending debounce timer on unmount so a settled wheel/drag within the debounce window
+  // never fires setVisibleRect on an unmounted component (leaked timer + wasted state update).
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
   );
 
   const isVisible = useCallback((box: Rect) => intersects(box, visibleRect), [visibleRect]);
