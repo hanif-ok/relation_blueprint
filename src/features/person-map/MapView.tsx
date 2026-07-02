@@ -409,7 +409,13 @@ export function MapView({
       };
       // WR-01: append the shape against the FRESHLY-READ row (not the stale useLiveQuery snapshot)
       // so a rapid second draw/edit before the live query refreshes can't silently clobber it.
-      void updateMapFrom(map.id, (m) => ({ shapes: [...m.shapes, shape], layers }));
+      // IN-02: include `layers` ONLY when the map has none yet (materialize the default layer);
+      // otherwise the identical array would churn updatedAt/dirty for sync on every shape commit.
+      void updateMapFrom(map.id, (m) =>
+        m.layers.length === 0
+          ? { shapes: [...m.shapes, shape], layers: ensured.layers }
+          : { shapes: [...m.shapes, shape] },
+      );
       // Select the just-drawn shape so the StylePopover opens for immediate styling.
       setSelectedShapeId(shape.id);
     },
