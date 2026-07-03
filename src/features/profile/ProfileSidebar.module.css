@@ -19,6 +19,7 @@
   right: 0;
   height: calc(100vh - var(--top-bar-height));
   width: min(360px, 100vw);
+  z-index: var(--z-panel);
   background: var(--paper);
   box-shadow: var(--elevation-2);
   border-radius: var(--radius-md) 0 0 var(--radius-md);

@@ -56,4 +56,20 @@
 
   /* Fixed chrome metrics */
   --top-bar-height: 56px;
+
+  /* ---- Z-index scale (DOM stacking order) -----------------------------------
+   * The Konva canvas is ONE flat surface — z-index is a DOM-only concern, so it
+   * lives ONLY here (tokens.ts owns canvas colors/geometry; there is no z-index to
+   * mirror). Layers run low → high. A positioned element with NO z-index paints at
+   * the `auto` level and is covered by ANY positive-z sibling in the same stacking
+   * context — which is exactly why every modal MUST declare --z-modal, or positive-z
+   * chrome (the browse people/location header + A–Z sorter) paints over it. */
+  --z-sticky: 1; /* sticky section headers (browse list header) */
+  --z-chrome: 10; /* map-surface overlays + docked editor panels */
+  --z-menu: 50; /* dropdown / overflow / switcher menus */
+  --z-popover: 60; /* editor popover scrim (overlay) */
+  --z-popover-content: 61; /* editor popover surface — one step above its own scrim */
+  --z-panel: 100; /* docked reading panels (profile sidebar) — clears chrome, sits below modals */
+  --z-modal: 1000; /* Radix Dialog.Portal dialogs — must clear ALL chrome */
+  --z-toast: 1100; /* transient status toasts — above modals */
 }

@@ -6,6 +6,7 @@
   position: fixed;
   inset: 0;
   background: rgba(27, 34, 48, 0.45);
+  z-index: var(--z-modal);
 }
 
 .panel {
@@ -14,6 +15,7 @@
   right: 0;
   height: 100vh;
   width: min(420px, 100vw);
+  z-index: var(--z-modal);
   background: var(--paper);
   box-shadow: var(--elevation-2);
   border-radius: var(--radius-md) 0 0 var(--radius-md);

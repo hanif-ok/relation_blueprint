@@ -6,6 +6,7 @@
   position: fixed;
   inset: 0;
   background: rgba(27, 34, 48, 0.45);
+  z-index: var(--z-modal);
 }
 
 .panel {
@@ -15,6 +16,7 @@
   transform: translate(-50%, -50%);
   width: min(560px, 100vw);
   max-height: min(80vh, 100vh);
+  z-index: var(--z-modal);
   background: var(--paper);
   box-shadow: var(--elevation-2);
   border-radius: var(--radius-md);

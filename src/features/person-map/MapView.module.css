@@ -14,7 +14,7 @@
   position: absolute;
   top: var(--space-md);
   left: var(--space-md);
-  z-index: 10;
+  z-index: var(--z-chrome);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -130,7 +130,7 @@
   top: var(--space-md);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: var(--z-chrome);
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;

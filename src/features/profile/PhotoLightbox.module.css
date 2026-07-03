@@ -6,11 +6,13 @@
   position: fixed;
   inset: 0;
   background: rgba(27, 34, 48, 0.92); /* --slate #1B2230 @ ~92% (U7) */
+  z-index: var(--z-modal);
 }
 
 .content {
   position: fixed;
   inset: 0;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: var(--space-2xl);

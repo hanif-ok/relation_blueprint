@@ -28,7 +28,7 @@
   box-shadow: var(--elevation-2, 0 8px 24px rgba(27, 34, 48, 0.18));
   padding: 6px;
   font-family: var(--font-body, 'Inter', system-ui, sans-serif);
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .item {
@@ -64,7 +64,7 @@
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
-  z-index: 1100;
+  z-index: var(--z-toast);
   min-width: 240px;
   max-width: 420px;
   padding: 14px 18px;

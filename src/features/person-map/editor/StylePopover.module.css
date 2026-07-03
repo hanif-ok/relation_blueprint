@@ -5,7 +5,7 @@
   position: fixed;
   inset: 0;
   background: rgba(27, 34, 48, 0.32);
-  z-index: 60;
+  z-index: var(--z-popover);
 }
 
 .content {
@@ -19,7 +19,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--elevation-2);
   padding: var(--space-lg);
-  z-index: 61;
+  z-index: var(--z-popover-content);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
