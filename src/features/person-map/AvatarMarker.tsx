@@ -17,6 +17,7 @@
 // The selected-ring amber is read from the shared tokens (`colors.amber`) so the canvas
 // and the DOM focus mirror never drift (UI-SPEC A5/A8).
 
+import { useEffect, useRef } from 'react';
 import { Group, Circle, Rect, Image as KonvaImage, Text } from 'react-konva';
 import type Konva from 'konva';
 import { colors, marker as M } from '@/app/tokens';
@@ -63,6 +64,15 @@ export interface AvatarMarkerProps {
   onNodeRef?: (node: Konva.Group | null) => void;
   /** D-20: show the person's name as a Konva Text label below the stem. Default hidden. */
   showLabels?: boolean;
+  /**
+   * REL-03 (Pitfall 1): report the marker's LIVE stage position during a drag so the connector
+   * layer can track it mid-drag WITHOUT a per-frame Dexie write. rAF-throttled internally — the
+   * parent stores it as transient state and clears it on drag-end. Persistence still happens only
+   * on drag-end (the existing upsertMarker path); this is a pure viewer-follow signal.
+   */
+  onDragMove?: (markerId: string, x: number, y: number) => void;
+  /** REL-03: fired after the drag persists, so the parent can clear the transient drag override. */
+  onDragEnd?: () => void;
 }
 
 export function AvatarMarker({
@@ -74,17 +84,46 @@ export function AvatarMarker({
   onSelect,
   onNodeRef,
   showLabels = false,
+  onDragMove,
+  onDragEnd,
 }: AvatarMarkerProps) {
   const avatar = useMapImage(person.photo?.hash);
 
   const ringColor = selected ? colors.amber : colors.paper;
   const ringWidth = selected ? M.ringSelectedWidth : M.ringDefaultWidth;
 
+  // rAF handle coalescing per-frame dragmove reports into a single connector update (Pattern 2).
+  const dragRafRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (dragRafRef.current != null) cancelAnimationFrame(dragRafRef.current);
+    },
+    [],
+  );
+
+  // Report the marker's LIVE stage position to the parent during a drag, throttled to one update
+  // per animation frame (no Dexie write here — persistence is on drag-end only, Pitfall 1).
+  function handleDragMove(e: Konva.KonvaEventObject<DragEvent>) {
+    if (!onDragMove) return;
+    const node = e.target;
+    if (dragRafRef.current != null) return; // already scheduled this frame — coalesce.
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      onDragMove(marker.id, node.x(), node.y());
+    });
+  }
+
   // Persist the dragged position to the repository on drag end (Dexie is source of truth). The
   // dropped point is in STAGE space; convert it back to IMAGE space via the inverse transform so
   // the stored model stays image-space (Pattern 7) — a background re-fit then keeps the marker
   // anchored. At the identity transform this is the identity function (unchanged Phase-1 behavior).
   function handleDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
+    // Cancel any queued live-follow update — the persisted position (below) is now authoritative,
+    // and the transient override is about to be cleared via onDragEnd.
+    if (dragRafRef.current != null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
     const img = stageToImage({ x: e.target.x(), y: e.target.y() }, transform);
     void upsertMarker({
       id: marker.id,
@@ -101,6 +140,9 @@ export function AvatarMarker({
       height: marker.height,
       rotation: marker.rotation,
     });
+    // Notify the parent so it can clear the transient drag override — useLiveQuery then recomputes
+    // the connector from the source of truth (which now equals the drop position).
+    onDragEnd?.();
   }
 
   // On transform-end (Transformer resize/rotate): bake scale into width/height + rotation and
@@ -144,6 +186,7 @@ export function AvatarMarker({
       scaleY={scaleY}
       rotation={rotationDeg}
       draggable
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onTransformEnd={handleTransformEnd}
       onClick={() => onSelect(person.id)}

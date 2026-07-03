@@ -37,6 +37,7 @@ import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
 import { TransformerOverlay } from './editor/TransformerOverlay';
 import { LayersPanel } from './editor/LayersPanel';
+import { ConnectorLayer } from './editor/ConnectorLayer';
 import { PortalGlyph, PORTAL_TARGET_DELETED_MESSAGE } from './editor/PortalGlyph';
 import { PortalTargetPicker } from './editor/PortalTargetPicker';
 import { PersonPicker } from './editor/PersonPicker';
@@ -199,6 +200,11 @@ export function MapView({
     [] as Marker[],
   );
   const people = useLiveQuery(() => db.people.toArray(), [], []);
+  // REL-03: all relationship-links drive the connector projection. A connector renders only for a
+  // person↔person link whose both endpoints have a marker on THIS map (buildConnectors filters the
+  // rest) — group-involving/endpoint-less/unplaced links draw nothing. Reactive so authoring a new
+  // relationship (or moving a marker) recomputes the lines from source.
+  const links = useLiveQuery(() => db.relationshipLinks.toArray(), [], []);
 
   const bgImage = useMapImage(map?.background.hash);
 
@@ -339,6 +345,25 @@ export function MapView({
 
   // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
   const [showLabels, setShowLabels] = useState(false);
+
+  // D-09/R5: show relationship (connector) labels on the canvas — a separate LayersPanel toggle,
+  // default OFF to keep the canvas clean and cheap at scale (mirrors the D-20 Names toggle).
+  const [showConnectorLabels, setShowConnectorLabels] = useState(false);
+
+  // REL-03 (Pitfall 1): the transient LIVE stage position of the one marker currently being dragged.
+  // AvatarMarker.onDragMove (rAF-throttled) pushes it here; the ConnectorLayer overlays it for that
+  // marker so connectors follow the drag WITHOUT a per-frame Dexie write. Cleared on drag-end, at
+  // which point the persisted position flows back through useLiveQuery and the connector recomputes.
+  const [draggingMarker, setDraggingMarker] = useState<{
+    markerId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const handleMarkerDragMove = useCallback(
+    (markerId: string, x: number, y: number) => setDraggingMarker({ markerId, x, y }),
+    [],
+  );
+  const handleMarkerDragEnd = useCallback(() => setDraggingMarker(null), []);
 
   // ── Portal placement + navigation (MAP-06/MAP-07, D-06/D-07/D-08) ───────────────────────────
   // The just-dropped portal awaiting a target (opens the PortalTargetPicker). When set, the picker
@@ -752,6 +777,8 @@ export function MapView({
           onActiveLayerChange={setActiveLayerId}
           showLabels={showLabels}
           onShowLabelsChange={setShowLabels}
+          showConnectorLabels={showConnectorLabels}
+          onShowConnectorLabelsChange={setShowConnectorLabels}
           objectCounts={objectCounts}
         />
       )}
@@ -798,6 +825,22 @@ export function MapView({
                 onTransformEnd={editingBackground ? handleBackgroundTransformEnd : undefined}
               />
             )}
+          </Layer>
+
+          {/* Connectors (REL-03) — the data-driven relationship lines. A dedicated NON-INTERACTIVE
+              physical Konva layer inserted BETWEEN L0 (background) and L1 (content) so the lines
+              paint BENEATH the markers and never intercept a marker drag/click (D-08/D-10, B7).
+              This is a physical-layer insertion, NOT a user-facing logical (MapDoc.layers) layer.
+              Endpoints compose through the SAME background transform as markers (imageToStage) so
+              they stay anchored on a background re-fit and follow a marker live during a drag. */}
+          <Layer listening={false}>
+            <ConnectorLayer
+              links={links ?? []}
+              markers={markers ?? []}
+              transform={transform}
+              dragOverride={draggingMarker}
+              showConnectorLabels={showConnectorLabels}
+            />
           </Layer>
 
           {/* L1 — content. ALL objects (shapes + markers) live in this SINGLE physical Konva layer
@@ -848,6 +891,8 @@ export function MapView({
                     transform={transform}
                     selected={person.id === selectedPersonId}
                     showLabels={showLabels}
+                    onDragMove={handleMarkerDragMove}
+                    onDragEnd={handleMarkerDragEnd}
                     onSelect={(personId) => {
                       // Selecting a marker opens its profile AND selects it for the Transformer
                       // (single-select: clear any shape selection, exit bg-edit).
