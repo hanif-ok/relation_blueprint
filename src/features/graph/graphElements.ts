@@ -38,8 +38,16 @@ export function toGraphElements(
     })),
   ];
 
+  // Every id Cytoscape will actually have a node for. An edge to an id NOT in this set makes
+  // Cytoscape throw ("Can not create edge … with nonexistant source/target"), white-screening the
+  // whole graph — reachable via the untrusted-at-rest import path, since BackupSchema does no
+  // referential-integrity check on fromId/toId (WR-04). Drop such edges instead, matching the
+  // ProfileSidebar's graceful handling of a deleted endpoint.
+  const nodeIds = new Set<string>([...people.map((p) => p.id), ...groups.map((g) => g.id)]);
+
   const edges: cytoscape.ElementDefinition[] = links
-    .filter((l) => l.fromId && l.toId) // drop legacy endpoint-less shells (Pitfall 4 / T-04-10)
+    // Drop legacy endpoint-less shells (Pitfall 4 / T-04-10) AND edges to a missing node (WR-04).
+    .filter((l) => l.fromId && l.toId && nodeIds.has(l.fromId) && nodeIds.has(l.toId))
     .map((l) => ({
       data: {
         id: l.id,
