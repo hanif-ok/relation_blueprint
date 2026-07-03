@@ -1,8 +1,8 @@
 ---
 phase: 04-relationships-graph
-reviewed: 2026-07-03T00:00:00Z
+reviewed: 2026-07-03T11:36:26Z
 depth: standard
-files_reviewed: 33
+files_reviewed: 34
 files_reviewed_list:
   - e2e/browse-and-create.spec.ts
   - e2e/connectors.spec.ts
@@ -48,194 +48,139 @@ status: issues_found
 
 # Phase 4: Code Review Report
 
-**Reviewed:** 2026-07-03
+**Reviewed:** 2026-07-03T11:36:26Z
 **Depth:** standard
-**Files Reviewed:** 33
+**Files Reviewed:** 34
 **Status:** issues_found
 
 ## Summary
 
-This phase adds relationship endpoints to the `RelationshipLink` model, a profile authoring
-UI (`AddRelationshipDialog` + the ProfileSidebar Relationships section), viewer-only Konva
-map connectors, and a viewer-only Cytoscape relationship graph. The endpoint model, zod gate
-(closed `people|groups` enum), reverse-lookup index (v5 `fromId`/`toId`), and the pure
-projections (`connectors.ts`, `relationships.ts`) are well-factored and well-tested. XSS
-discipline (all user text as React/canvas children, never `dangerouslySetInnerHTML`) is
-consistently honored across every new surface.
+Phase 4 wires relationship endpoints onto the `RelationshipLink` shell, adds the viewer-only Cytoscape graph, and projects data-driven connectors onto the Konva map. The pure projection helpers (`connectors.ts`, `graphElements.ts`, `relationships.ts`) are well-factored, DOM-free, and thoroughly unit-tested, and the XSS boundary discipline (React children / Konva canvas text, no `dangerouslySetInnerHTML`, no `eval`) holds across every new surface. No injection, secret-leak, or unsafe-deserialization defects were found.
 
-The most serious finding is that the graph edge projection (`graphElements.ts`) does NOT guard
-edges against the current node set — unlike the sibling `connectors.ts`, whose own doc comment
-it copies. Deleting a node that has relationships while the graph is open can hand Cytoscape an
-edge whose source/target node is absent, which Cytoscape throws on — an uncaught exception with
-no error boundary. Several robustness gaps around the authoring dialog (Escape handling, error
-handling) and the delete/sync path round out the findings.
-
-Note: the documented deferred items (layerless-map marker render; browse-list sort-toggle E2E
-overlap) were treated as out of scope per the review brief and are not reported.
+The defects are correctness and robustness gaps, not surface-level ones. The most serious is that the map "Remove from map" action re-derives its target marker with `.first()` and can delete the **wrong placement** for a multi-placed person (a supported feature, D-13). Supporting issues cluster around the delete cascade (no change-events and no media GC for cascaded relationship-links) and the graph's position cache (which stops updating after the first layout), plus the graph's willingness to build an edge to a node that may not exist.
 
 ## Critical Issues
 
-### CR-01: Graph edges are not validated against the node set — deleting a related node can crash the graph
+### CR-01: "Remove from map" deletes an arbitrary marker for a multi-placed person
 
-**File:** `src/features/graph/graphElements.ts:41-51`
-**Issue:** `toGraphElements` drops only links whose `fromId`/`toId` are *missing*, but emits an
-edge for any link that HAS both ids — even when the referenced person/group node is no longer
-present. The file's own comment claims it also handles "one whose endpoint was deleted", but a
-deleted endpoint leaves `fromId`/`toId` intact (pointing at a ghost), so that case is NOT
-handled. Cytoscape throws (`Can not create edge … with nonexistant source/target`) when an edge
-references a node it doesn't have; `CytoscapeComponent.normalizeElements` does no validation and
-there is no React error boundary in `App.tsx`, so the throw blanks the app.
+**File:** `src/app/App.tsx:158-164` (with `src/features/profile/ProfileSidebar.tsx:568-603`)
+**Issue:** When a person profile is opened from a marker, the marker to remove is re-derived in `App`:
 
-This is reachable through a normal flow: in the Graph view, tap a node to open its profile
-(list context), click "Delete {entity}". `deleteEntity` cascades the person/group + its links in
-one transaction, then the three independent `useLiveQuery` reads (`people`, `groups`, `links`)
-re-resolve as separate promises. In any render where `links` has updated but `people`/`groups`
-has not yet (or vice-versa), an edge references a missing node and the graph throws. The pure
-`connectors.ts` avoids exactly this by resolving endpoints through `primaryByPerson` and dropping
-a link when an endpoint is unresolved — `graphElements.ts` should apply the same guard.
-
-**Fix:**
 ```ts
-const nodeIds = new Set<string>([...people.map((p) => p.id), ...groups.map((g) => g.id)]);
-const edges: cytoscape.ElementDefinition[] = links
-  .filter((l) => l.fromId && l.toId && nodeIds.has(l.fromId!) && nodeIds.has(l.toId!))
-  .map((l) => ({
-    data: {
-      id: l.id,
-      source: l.fromId!,
-      target: l.toId!,
-      label: l.label ?? '',
-      directed: l.directed === true,
-    },
-  }));
+const selectedMarkerId = useLiveQuery<string | undefined>(
+  async () =>
+    profile?.openedFrom === 'marker' && profile.type === 'people'
+      ? (await db.markers.where('personId').equals(profile.id).first())?.id
+      : undefined,
+  [profile?.id, profile?.openedFrom, profile?.type],
+);
+```
+
+The clicked marker's identity is never propagated — `MapView`'s `onSelect(personId)` passes only the person id — so `App` recovers "a" marker via `.first()`. This query is **not scoped to `activeMapId`** and `.first()` returns the lowest primary key (a random `nanoid`), not the clicked marker. For a person placed on more than one map (multi-placement is an explicit feature, D-13), "Remove from map" can delete a placement on a **different map** than the one on screen, leaving the intended marker in place. Even for two placements on the same map it removes an arbitrary one. The user is told "only the marker on this map is removed" (ProfileSidebar body copy) while a different marker silently disappears.
+
+**Fix:** Thread the actual clicked marker id from the map through selection instead of re-deriving it — `MapView` already has `mk.id` in the `visibleMarkers.map`. Widen `onSelect` to carry the marker id, store it on `profile`, and pass it to `ProfileSidebar.markerId`. If re-derivation must stay, at minimum scope it to the active map:
+
+```ts
+(await db.markers
+  .where('personId').equals(profile.id)
+  .filter((m) => m.kind === 'person' && m.mapId === activeMapId)
+  .first())?.id
 ```
 
 ## Warnings
 
-### WR-01: ProfileSidebar Escape handler doesn't guard the Add-relationship dialog — one Esc closes both
+### WR-01: Delete cascade emits no ChangeEvent for cascaded markers or relationship-links
 
-**File:** `src/features/profile/ProfileSidebar.tsx:300-311` (handler) / `634-644` (dialog)
-**Issue:** The sidebar's window-level `keydown` (capture) handler closes the sidebar on Escape
-unless `confirmOpen` or the lightbox is open. It does NOT check `addRelOpen`. So when the
-AddRelationshipDialog is open and the user presses Escape, Radix closes the dialog AND the
-sidebar's handler fires `onClose()` — closing the whole sidebar underneath (which unmounts the
-dialog). The lightbox and confirm dialog are explicitly guarded here; the add-relationship dialog
-was missed.
-**Fix:** Track the dialog-open state in a ref (like `lightboxOpenRef`) and add it to the guard:
+**File:** `src/db/repository.ts:182-223`
+**Issue:** `deleteEntity` cascades marker deletes and, new in Phase 4, relationship-link deletes (`relationshipLinks.where('fromId').equals(id).or('toId')…delete()`), but only calls `emit()` **once**, for the top-level entity (line 222). The module header states the emit is the signal "the sync engine subscribes to flush dirty records," and a deleted row cannot be found by a `dirty` flag. Cascaded markers and links are removed from IndexedDB with **no delete notification**. This matches the recorded "Sync push/pull gap" project-memory pattern: the local delete succeeds but a Plan-05 sync engine keying off `ChangeEvent`s never learns to remove those rows from the cloud — leaving dangling cloud links that can resurrect or reference a since-deleted person on another device (which then trips WR-04).
+
+**Fix:** Collect the cascaded marker/link ids inside the transaction and emit a `delete` per id after commit (mirroring `applyFieldTypeChange`/`reorderFieldDefs`):
+
 ```ts
-const addRelOpenRef = useRef(false);
-addRelOpenRef.current = addRelOpen;
-// …
-if (e.key === 'Escape' && !confirmOpen && !lightboxOpenRef.current && !addRelOpenRef.current) onClose();
+const removed = await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).primaryKeys();
+// …after the transaction commits:
+for (const lId of removed) emit({ entityType: 'relationship-links', entityId: lId, op: 'delete' });
 ```
 
-### WR-02: AddRelationshipDialog.save() has no error handling — a failed write wedges the dialog
+### WR-02: Cascade-deleted relationship-links leak their media (GC skips them)
+
+**File:** `src/db/repository.ts:194-219`
+**Issue:** The media refcount sweep collects GC candidates only from `victim` (the person/group/map being deleted). When deleting an endpoint entity cascades its relationship-links, those links can carry their own `photo`/`gallery` (both exist on `RelationshipLinkSchema`), but their hashes are never added to `candidates`, so their blobs are never collected. The `stillReferenced` sweep runs *after* the cascade, so the just-deleted links no longer protect that media either — it becomes permanently orphaned in the `media` table. This is the exact drift the "one source of truth" comment (lines 121-126) set out to prevent, but the cascaded links sit outside the candidate set.
+
+**Fix:** Read the links before deleting them and fold their media hashes into `candidates` (building `candidates` before the `if (!victim) return` early-out):
+
+```ts
+if (entityType === 'people' || entityType === 'groups') {
+  const links = await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).toArray();
+  for (const l of links) for (const h of collectEntityMediaHashes(l)) candidates.add(h);
+  await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).delete();
+}
+```
+
+### WR-03: Graph position cache stops updating after the first layout (`cy.one`)
+
+**File:** `src/features/graph/GraphView.tsx:180-191`
+**Issue:** `registerCy` attaches the layout-cache handler with `cy.one('layoutstop', …)`, which fires **exactly once** per Cytoscape instance and then removes itself. react-cytoscapejs keeps a single `cy` instance for the component's lifetime, so after the first `cose` run saves positions, every subsequent `cose` re-run (triggered whenever a node is added — `hasCachedPositions` returns false and `layout` flips back to `cose`) fires `layoutstop` with **no listener**. The new node's position is never persisted, `hasCachedPositions` stays false forever after any node-set change, and the D-13 "reopen with `preset` for an instant render" fast-path is permanently defeated for any database that is ever edited.
+
+**Fix:** Use `cy.on('layoutstop', …)` so the cache is re-saved after each layout (it is idempotent), or re-register the one-shot handler whenever the layout decision flips back to `cose`.
+
+### WR-04: Graph builds edges without verifying the endpoint nodes exist
+
+**File:** `src/features/graph/graphElements.ts:41-52`
+**Issue:** `toGraphElements` filters out endpoint-less shells (`l.fromId && l.toId`) but never checks that `fromId`/`toId` correspond to a node in the `people`/`groups` sets it just built. Cytoscape throws (`Can not create edge … with nonexistant source/target`) when an edge references a missing node, crashing the whole graph view rather than dropping the bad edge. In single-device operation the delete cascade keeps things consistent, but this state is reachable through the untrusted-at-rest import path: `BackupSchema` validates that `fromId` is a string but performs **no referential-integrity check**, so a corrupted/hand-crafted backup with a link pointing at a non-existent person imports cleanly and then white-screens the graph. The sibling `ProfileSidebar` handles the same "deleted endpoint" case gracefully; the graph should be equally defensive.
+
+**Fix:** Drop edges whose endpoints are not in the node set:
+
+```ts
+const nodeIds = new Set([...people.map((p) => p.id), ...groups.map((g) => g.id)]);
+const edges = links
+  .filter((l) => l.fromId && l.toId && nodeIds.has(l.fromId) && nodeIds.has(l.toId))
+  .map(/* … */);
+```
+
+### WR-05: "Primary placement" relies on an ordering Dexie does not guarantee
+
+**File:** `src/features/person-map/connectors.ts:68-74` (also `src/app/App.tsx:206-207`, `ProfileSidebar.tsx:73-82`)
+**Issue:** `buildConnectors` picks a multi-placed person's primary marker as "first-seen" in the `markers` array, and the comment asserts "Array order is insertion order, so the first-seen marker wins." That array comes from `db.markers.where('mapId').equals(map.id).toArray()`, which Dexie returns ordered by the index then by **primary key (`id`)** — and `id` is a random `nanoid`, not an insertion timestamp. So the connector attaches to a lexicographically-arbitrary placement, and the B6 "first/primary placement" guarantee is not honored deterministically. The passing unit test only works because it hand-orders the input array; real Dexie reads won't.
+
+**Fix:** Make "primary" deterministic — sort candidate markers by a stable field before choosing (e.g. `updatedAt`, or a persisted creation order) and correct the comment to match.
+
+### WR-06: `AddRelationshipDialog.save()` has no error handling; failure wedges the dialog
 
 **File:** `src/features/profile/AddRelationshipDialog.tsx:93-112`
-**Issue:** `save()` sets `saving = true`, awaits `createRelationshipLink(...)`, then closes. There
-is no `try/catch/finally`. If the write rejects (e.g. `RelationshipLinkSchema.parse` throws), the
-dialog never closes, `saving` stays `true` (the Save button is permanently `disabled`), and the
-rejection is an unhandled promise rejection because the caller uses `onClick={() => void save()}`.
-The user is stuck with no feedback and must reload.
-**Fix:** Wrap the write and reset `saving` on failure:
+**Issue:** `save()` sets `saving = true`, then `await createRelationshipLink(...)` with no `try/catch`. `createRelationshipLink` runs `RelationshipLinkSchema.parse` and a Dexie `put`, both of which can throw (validation failure, `QuotaExceededError`, aborted transaction). On rejection, `onOpenChange(false)` never runs, the dialog stays open, and `saving` stays `true`, permanently disabling the "Add relationship" button until the dialog is reopened. Because the caller is `onClick={() => void save()}`, the rejection is also an unhandled promise rejection with no user feedback.
+
+**Fix:** Wrap the write and reset `saving` in a `finally`, surfacing an inline error on failure:
+
 ```ts
+setSaving(true);
 try {
   const link = await createRelationshipLink({ /* … */ });
   onCreated?.(link.id);
   onOpenChange(false);
 } catch {
+  setError("Couldn't save this relationship. Try again.");
+} finally {
   setSaving(false);
-  // surface an inline error to the user
 }
-```
-
-### WR-03: "Remove from map" can remove the wrong placement for a multi-placed person
-
-**File:** `src/app/App.tsx:158-164`
-**Issue:** For a marker-context people profile, `selectedMarkerId` is resolved with
-`db.markers.where('personId').equals(profile.id).first()` — the FIRST marker across ALL maps in
-insertion order. `App` never learns which specific marker was clicked (MapView's `onSelect` passes
-only `personId`). When a person is placed on multiple maps, clicking their marker on map B and
-choosing "Remove from map" can delete their placement on map A instead. Multi-placement is a
-first-class feature (D-13), so this is reachable. `showOnMap` (line 204-207) has the same
-`.first()` assumption, though there it only picks which map to open.
-**Fix:** Thread the clicked marker id from `AvatarMarker`/`MapView` up to the profile, or resolve
-the marker scoped to the currently active map (`.where({ personId, mapId: activeMapId })`).
-
-### WR-04: Cascade deletes emit no dirty state and the change event's op is ignored — deletions may never reach the cloud
-
-**File:** `src/db/repository.ts:182-223` (`deleteEntity`) / cross-ref `src/features/connect/useSyncEngine.ts:215`, `src/sync/syncEngine.ts:188-191`
-**Issue:** `deleteEntity` removes the entity, cascade-deletes its markers (`db.markers.where(...).delete()`)
-and relationship-links (`db.relationshipLinks.where('fromId')…delete()`), and emits exactly ONE
-`{ op: 'delete' }` event for the primary entity. A row deletion leaves no `dirty` record behind.
-The sync subscriber ignores the event payload — `onChange(() => schedulePush())` — and
-`SyncEngine.push()` early-returns when `getDirtyTypes()` is empty (`syncEngine.ts:190`). Because a
-pure delete dirties nothing, the affected shard types are not in `dirtyTypes`, so the shard is
-never rebuilt and the deleted person/markers/relationship-links persist in the cloud shard. On the
-next LWW pull they can even be resurrected locally. This matches the project's documented
-"Sync push/pull gap" pattern and is compounded this phase by the new relationship-link cascade.
-**Fix:** Make deletions visible to the push gate — e.g. record deletions in the `syncQueue`
-table (which the repository currently never writes) and have `getDirtyTypes()` include queued
-deletions, or force-mark the affected shard types dirty on a `delete` event. Verify both
-directions (push removes the row from the cloud shard; pull does not re-add a tombstoned id).
-
-### WR-05: Media GC misses blobs owned only by cascade-deleted relationship-links
-
-**File:** `src/db/repository.ts:203-219`
-**Issue:** In `deleteEntity`, the GC candidate set is built ONLY from the primary victim's media
-(`collectEntityMediaHashes(victim)`). The relationship-links cascade-deleted at line 198 are
-removed before the `stillReferenced` sweep, so a blob referenced solely by one of those links
-(a link `photo`/`gallery`/custom Photo value — reachable via EntityForm editing) is neither a GC
-candidate nor still-referenced. It becomes an orphaned blob that is never collected. Not data
-loss, but a storage/quota leak that contradicts the T-02-03 "no orphaned blobs" invariant.
-**Fix:** Collect the cascade-deleted links' media into the candidate set before deleting them:
-```ts
-const cascaded = await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).toArray();
-await db.relationshipLinks.bulkDelete(cascaded.map((l) => l.id));
-for (const l of cascaded) collectEntityMediaHashes(l).forEach((h) => candidates.add(h));
-```
-(then include the marker/link candidate hashes in the existing sweep).
-
-### WR-06: ConnectorLayer hardcodes an rgba color literal instead of deriving it from the token
-
-**File:** `src/features/person-map/editor/ConnectorLayer.tsx:26`
-**Issue:** `const CONNECTOR_HAIRLINE = 'rgba(216,210,196,0.55)';` is an inline color literal,
-violating the strict "no inline color literals — Konva reads shared token constants" convention
-(UI-SPEC A5) that this very phase relies on. The comment even hand-copies the token hex
-(`#D8D2C4`), so if `colors.hairline` changes, the connector tint silently drifts out of sync.
-`graphStyle.ts:19-28` solves the identical "translucent hairline" need correctly with a
-`hexToRgba(colors.hairline, 0.55)` helper.
-**Fix:** Reuse the same derivation instead of a literal:
-```ts
-import { colors } from '@/app/tokens';
-const CONNECTOR_HAIRLINE = hexToRgba(colors.hairline, 0.55); // shared helper (see graphStyle.ts)
 ```
 
 ## Info
 
-### IN-01: Graph positions are re-cached only once per Cytoscape instance
-
-**File:** `src/features/graph/GraphView.tsx:188-190`
-**Issue:** `cy.one('layoutstop', …)` saves positions exactly once per Cytoscape instance. When
-the node set changes in the same session (add a person/group), `usePreset` flips to `false` and a
-fresh `cose` runs, but its `layoutstop` no longer saves because the one-shot handler was already
-consumed. The new node's position isn't cached until the view is unmounted and remounted (which
-re-arms `.one`), so the preset fast-path silently fails to update within a session.
-**Fix:** Use `cy.on('layoutstop', …)` (persistent) with a debounce, or re-register the one-shot
-whenever the preset/cose decision flips.
-
-### IN-02: Connector label pill is not actually centered on the segment midpoint
+### IN-01: Connector label pill is not actually centered
 
 **File:** `src/features/person-map/editor/ConnectorLayer.tsx:77-85`
-**Issue:** The `<Tag offsetX={0}>` is commented "Center the pill on the midpoint (Label anchors at
-its top-left by default)", but `offsetX={0}` is a no-op — the Label stays anchored at its
-top-left corner at the midpoint, so the pill sits to the lower-right of the line's center rather
-than centered on it. Cosmetic; the comment overstates what the code does.
-**Fix:** Anchor via the Label's `offsetX`/`offsetY` set to half the rendered pill width/height
-after measuring, or accept the offset and correct the comment.
+**Issue:** The `<Tag offsetX={0} />` carries the comment "Center the pill on the midpoint (Label anchors at its top-left by default)," but `offsetX={0}` is a no-op — the `Label` still anchors at its top-left at the segment midpoint, so the pill sits down-and-right of the midpoint rather than centered. Cosmetic only.
+**Fix:** Center by offsetting half the measured pill width, or remove the misleading comment/prop if the current placement is intended.
+
+### IN-02: Inconsistent dependency pinning for the graph libraries
+
+**File:** `package.json:25,32`
+**Issue:** Every dependency is exact-pinned except `cytoscape: "^3.34.0"` and `react-cytoscapejs: "^2.0.0"`, which use caret ranges. Because the hand-written ambient module `src/types/react-cytoscapejs.d.ts` is tied to the exact 2.0.0 surface (including the undocumented `global` prop), a caret-allowed bump could drift the runtime away from the declared types.
+**Fix:** Pin both to exact versions, consistent with the rest of the manifest and the CLAUDE.md guidance to pin react-cytoscapejs to a specific line.
 
 ---
 
-_Reviewed: 2026-07-03_
+_Reviewed: 2026-07-03T11:36:26Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
