@@ -308,3 +308,93 @@
   color: var(--ink-muted);
   padding: var(--space-xs) var(--space-sm);
 }
+
+/* Relationships (REL-01) — a list of rows, each: [glyph] [label] · [other endpoint]. */
+.relationshipsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.relationshipRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+/* The relationship record affordance (glyph + label) — opens the link's own profile (D-06). */
+.relationshipRecord {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* Direction glyph — ink, never amber (B2). */
+.relationshipGlyph {
+  display: inline-flex;
+  color: var(--ink-muted);
+}
+
+.relationshipLabel {
+  color: var(--ink);
+}
+
+.relationshipSep {
+  color: var(--ink-muted);
+}
+
+/* The other-endpoint name — its own hit area, opens that entity's profile (D-10). */
+.relationshipEndpoint {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.relationshipRecord:focus-visible,
+.relationshipEndpoint:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* "+ Add relationship" — NEUTRAL paper button (B3 — amber stays reserved for selection). */
+.addRelationship {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  margin-top: var(--space-xs);
+  cursor: pointer;
+}
+
+.addRelationship:hover {
+  background: var(--hairline);
+}
+
+.addRelationship:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
