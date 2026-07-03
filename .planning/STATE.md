@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Relationships & Graph
 status: ready_to_plan
-stopped_at: Phase 4 context gathered
-last_updated: "2026-07-03T01:29:49.870Z"
+stopped_at: Phase 4 UI-SPEC approved
+last_updated: "2026-07-03T02:07:15.477Z"
 last_activity: 2026-07-02
 last_activity_desc: Phase 03 complete (UAT 3/3 pass), transitioned to Phase 4
 progress:
@@ -109,6 +109,7 @@ Recent decisions affecting current work:
 [From .planning/todos/pending/ — ideas captured during sessions]
 
 - (ui) Map-editor & profile-media UX enhancements deferred from Phase 1 UAT — resizable markers, image/marker transform handles, photo lightbox, gallery sort/reorder. See `.planning/todos/pending/2026-06-24-map-editor-and-profile-media-ux-enhancements-deferred-from-p.md`
+- (tooling) Enable COOP header in production for Drive OAuth — GitHub Pages can't send `Cross-Origin-Opener-Policy: same-origin-allow-popups` that GIS OAuth needs; move to Cloudflare Pages/Netlify `_headers` or adopt FedCM before shipping Drive sync. See `.planning/todos/pending/2026-07-03-enable-coop-header-in-production-for-drive-oauth.md`
 
 ### Blockers/Concerns
 
@@ -133,6 +134,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-03T01:29:49.829Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-relationships-graph/04-CONTEXT.md
+Last session: 2026-07-03T02:07:15.462Z
+Stopped at: Phase 4 UI-SPEC approved
+Resume file: .planning/phases/04-relationships-graph/04-UI-SPEC.md
