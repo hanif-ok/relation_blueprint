@@ -17,6 +17,7 @@ import {
   UsersRound,
   ArrowLeftRight,
   ExternalLink,
+  Map as MapIcon,
   MoreHorizontal,
 } from 'lucide-react';
 import { initialsOf } from '@/features/profile/ProfileSidebar';
@@ -26,6 +27,7 @@ import {
   type BrowseEntityType,
   SINGULAR,
   isSpatial,
+  isOpenableMap,
   showOnMapDisabledReason,
   entityTags,
   entityMedia,
@@ -39,6 +41,7 @@ export interface BrowseRowProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onShowOnMap: (id: string) => void;
+  onOpenMap: (id: string) => void;
 }
 
 /** The non-People type glyph for the default thumbnail (U2). */
@@ -55,7 +58,15 @@ function updatedAgo(updatedAt: number): string {
   return `updated ${days}d ago`;
 }
 
-export function BrowseRow({ entity, type, onOpen, onEdit, onDelete, onShowOnMap }: BrowseRowProps) {
+export function BrowseRow({
+  entity,
+  type,
+  onOpen,
+  onEdit,
+  onDelete,
+  onShowOnMap,
+  onOpenMap,
+}: BrowseRowProps) {
   const { photo, gallery } = entityMedia(entity);
   const thumbUrl = useEntityThumb(photo, gallery);
   const tags = entityTags(entity, type);
@@ -108,20 +119,38 @@ export function BrowseRow({ entity, type, onOpen, onEdit, onDelete, onShowOnMap 
         </span>
       </span>
 
-      <button
-        type="button"
-        className={styles.showOnMap}
-        aria-label={spatial ? 'Show on map' : showOnMapDisabledReason(type)}
-        title={spatial ? 'Show on map' : showOnMapDisabledReason(type)}
-        disabled={!spatial}
-        data-testid="browse-show-on-map"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (spatial) onShowOnMap(entity.id);
-        }}
-      >
-        <ExternalLink size={18} strokeWidth={1.75} aria-hidden="true" />
-      </button>
+      {isOpenableMap(type) ? (
+        // Locations ARE maps: an enabled "Open map ↗" that navigates to this map on the canvas.
+        // Distinct from People's "Show on map" (placement) — a separate testid + branch.
+        <button
+          type="button"
+          className={styles.showOnMap}
+          aria-label="Open map"
+          title="Open map"
+          data-testid="browse-open-map"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMap(entity.id);
+          }}
+        >
+          <MapIcon size={18} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={styles.showOnMap}
+          aria-label={spatial ? 'Show on map' : showOnMapDisabledReason(type)}
+          title={spatial ? 'Show on map' : showOnMapDisabledReason(type)}
+          disabled={!spatial}
+          data-testid="browse-show-on-map"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (spatial) onShowOnMap(entity.id);
+          }}
+        >
+          <ExternalLink size={18} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      )}
 
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

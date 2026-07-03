@@ -32,6 +32,7 @@ export interface BrowseListProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onShowOnMap: (id: string) => void;
+  onOpenMap: (id: string) => void;
   /** Opens the create form for this type (empty-state CTA). */
   onCreate: () => void;
 }
@@ -88,6 +89,7 @@ export function BrowseList({
   onEdit,
   onDelete,
   onShowOnMap,
+  onOpenMap,
   onCreate,
 }: BrowseListProps) {
   const [sort, setSort] = useState<BrowseSort>('name');
@@ -203,6 +205,7 @@ export function BrowseList({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onShowOnMap={onShowOnMap}
+                onOpenMap={onOpenMap}
               />
             ))}
           </div>

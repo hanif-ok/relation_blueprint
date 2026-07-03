@@ -30,6 +30,15 @@ export function isSpatial(type: BrowseEntityType): boolean {
   return type === 'people';
 }
 
+/**
+ * Whether a type IS itself an openable map (only Locations/maps). Distinct from `isSpatial`:
+ * "Show on map" places a spatial entity (People) ONTO a map, whereas "Open map" navigates to the
+ * map a Location IS — so these two row actions are semantically separate and never share a branch.
+ */
+export function isOpenableMap(type: BrowseEntityType): boolean {
+  return type === 'maps';
+}
+
 /** The disabled "Show on map" tooltip for a non-spatial type (Copywriting Contract). */
 export function showOnMapDisabledReason(type: BrowseEntityType): string {
   return `${PLURAL[type]} aren't placed on a map.`;
