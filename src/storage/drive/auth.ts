@@ -91,8 +91,13 @@ function ensureTokenClient(onToken: (resp: GisTokenResponse) => void, onError: (
  * it for the consent popup. Resolves with the token value, rejects if the user dismisses the
  * popup or no grant is given. The token is stored in memory only.
  *
- * `silent: true` passes `prompt: ''` to attempt a re-grant without re-showing consent while a
- * grant is still active (RESEARCH A1 — not a guaranteed background refresh; still gesture-driven).
+ * `silent: true` passes `prompt: 'none'` — the truly non-interactive GIS path: it re-acquires a
+ * token via a hidden iframe WITHOUT opening a popup, so it is safe to call on mount with no user
+ * gesture, and it fires `error_callback` (rejecting the promise) instead of popping consent when no
+ * grant/session is active. `prompt: ''` was WRONG here: it still tries to OPEN A POPUP, which the
+ * browser blocks off a mount effect ("Failed to open popup window") — the interactive path (no
+ * options) keeps popping consent on the user's click. See
+ * .planning/debug/oauth-prompt-every-refresh.md.
  */
 export function connect(options: { silent?: boolean } = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
@@ -115,7 +120,7 @@ export function connect(options: { silent?: boolean } = {}): Promise<string> {
         reject(new Error(err.message || err.type || 'Drive authorization was cancelled'));
       },
     );
-    client.requestAccessToken(options.silent ? { prompt: '' } : undefined);
+    client.requestAccessToken(options.silent ? { prompt: 'none' } : undefined);
   });
 }
 

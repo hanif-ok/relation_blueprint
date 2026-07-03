@@ -101,7 +101,7 @@ describe('useConnectDrive.restore() — silent on-load re-acquire (GAP 2)', () =
     expect(snap.connected).toBe(true);
     expect(snap.error).toBeNull();
     expect(snap.needsReconnect).toBe(false);
-    // The silent grant requested prompt:'' (no consent popup).
+    // The silent grant requested prompt:'none' (hidden-iframe re-grant; no consent popup).
     expect(onConnected).toHaveBeenCalledTimes(1);
     expect(typeof onConnected.mock.calls[0][0]).toBe('string');
   });

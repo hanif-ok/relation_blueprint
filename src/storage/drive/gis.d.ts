@@ -29,7 +29,11 @@ export interface GisTokenClientConfig {
 }
 
 export interface GisTokenClient {
-  /** MUST be invoked from a user gesture. `prompt: ''` attempts a silent re-grant. */
+  /**
+   * The interactive grant (no overrides) MUST be invoked from a user gesture and opens the consent
+   * popup. `prompt: 'none'` is the non-interactive path — a hidden-iframe re-grant with NO popup,
+   * safe to call without a gesture; it errors (via `error_callback`) instead of prompting.
+   */
   requestAccessToken(overrides?: { prompt?: string }): void;
 }
 
