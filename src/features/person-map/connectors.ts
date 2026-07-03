@@ -65,12 +65,21 @@ export function buildConnectors(
 ): Connector[] {
   const { selectedRelationshipId = null, dragOverride = null } = opts;
 
-  // Primary placement per person: the FIRST person-marker on the map for that personId (B6). Array
-  // order is insertion order, so the first-seen marker wins; later placements are ignored.
+  // Primary placement per person (B6): chosen DETERMINISTICALLY, not by array order (WR-05). The
+  // caller's `markers` come from `db.markers.where('mapId').equals(...)`, which Dexie returns ordered
+  // by primary KEY (a random `nanoid`) — NOT insertion time — so a "first-seen wins" rule picked a
+  // lexicographically-arbitrary placement that could differ run to run. Instead pick the
+  // earliest-touched marker (oldest `updatedAt`), tie-broken by `id` for a total, stable order, so
+  // the same placement anchors the connector on every read regardless of Dexie's iteration order.
+  const isPrimaryOver = (candidate: Marker, current: Marker): boolean =>
+    candidate.updatedAt !== current.updatedAt
+      ? candidate.updatedAt < current.updatedAt
+      : candidate.id < current.id;
   const primaryByPerson = new Map<string, Marker>();
   for (const mk of markers) {
     if (mk.kind !== 'person' || !mk.personId) continue;
-    if (!primaryByPerson.has(mk.personId)) primaryByPerson.set(mk.personId, mk);
+    const current = primaryByPerson.get(mk.personId);
+    if (!current || isPrimaryOver(mk, current)) primaryByPerson.set(mk.personId, mk);
   }
 
   // Resolve a person's endpoint to a stage point — overlaid by the transient drag position when the
