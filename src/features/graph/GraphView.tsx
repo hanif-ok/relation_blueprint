@@ -162,18 +162,26 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     cy.edges().style('text-opacity', showEdgeLabels ? 1 : 0);
   }, [showEdgeLabels, elements]);
 
-  // Ego emphasis (D-12): amber-ring + center/zoom the entity the graph was opened from.
+  // Ego emphasis (D-12), part 1 — the amber-ring class. Re-toggled whenever `elements` rebuild so
+  // the ring survives every graph re-render. This is class-only: it must NOT touch the viewport, or
+  // an unrelated DB mutation (which yields a fresh `elements` reference from useLiveQuery) would
+  // re-run it and discard the user's pan/zoom (WR-01).
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
     cy.nodes().removeClass('ego');
-    if (!egoId) return;
-    const node = cy.getElementById(egoId);
-    if (node.nonempty()) {
-      node.addClass('ego');
-      cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 300 });
-    }
+    if (egoId) cy.getElementById(egoId).addClass('ego');
   }, [egoId, elements]);
+
+  // Ego emphasis (D-12), part 2 — center/zoom ONLY when the ego target itself changes, i.e. the
+  // graph is (re)opened from a specific entity. Keyed on `egoId` alone (NOT `elements`) so it fires
+  // once per ego selection and never on unrelated data ticks, preserving the user's manual pan/zoom.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !egoId) return;
+    const node = cy.getElementById(egoId);
+    if (node.nonempty()) cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 300 });
+  }, [egoId]);
 
   // Attach tap + layoutstop handlers ONCE per Cytoscape instance (the cy callback fires on every
   // update). The tap handler reads the latest onSelectNode via a ref so it never goes stale.
