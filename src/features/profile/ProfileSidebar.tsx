@@ -17,13 +17,23 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Building2, UsersRound, ArrowLeftRight, Map as MapIcon } from 'lucide-react';
+import {
+  Building2,
+  UsersRound,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowLeft,
+  Plus,
+  Map as MapIcon,
+} from 'lucide-react';
 import { db } from '@/db/schema';
-import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
+import { deleteEntity, deleteMarker, getMedia, listRelationshipsFor } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
 import { PhotoGallery } from './PhotoGallery';
 import { PhotoLightbox } from './PhotoLightbox';
 import { CustomFieldRows } from './CustomFieldRows';
+import { AddRelationshipDialog } from './AddRelationshipDialog';
+import { buildRelationshipRows, type DirectionGlyph } from './relationships';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import type {
   EntityType,
@@ -32,9 +42,17 @@ import type {
   Marker,
   MediaRef,
   Person,
+  RelationshipEndpointType,
   RelationshipLink,
 } from '@/domain/types';
 import styles from './ProfileSidebar.module.css';
+
+/** Map a direction glyph to its Lucide icon (a shape, never a color — B2). */
+function DirectionIcon({ glyph }: { glyph: DirectionGlyph }) {
+  if (glyph === '→') return <ArrowRight size={14} strokeWidth={1.75} aria-hidden="true" />;
+  if (glyph === '←') return <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />;
+  return <ArrowLeftRight size={14} strokeWidth={1.75} aria-hidden="true" />;
+}
 
 /** The deletable entity families a profile can render (markers are a separate concern). */
 export type ProfileEntityType = 'people' | 'maps' | 'groups' | 'relationship-links';
@@ -145,6 +163,8 @@ export function ProfileSidebar({
 }: ProfileSidebarProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Whether the "+ Add relationship" authoring dialog is open (People/Group profiles).
+  const [addRelOpen, setAddRelOpen] = useState(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | undefined>(undefined);
   // Lightbox host (S18): which ordered photo set is open and at what index. `null` = closed.
   // The gallery passes `entity.gallery`; a custom Photo field passes a single-photo array.
@@ -220,6 +240,39 @@ export function ProfileSidebar({
     for (const m of allMaps ?? []) by.set(m.id, m.name);
     return by;
   }, [allMaps]);
+
+  // ── Relationships (REL-01/REL-02, People + Groups only) ─────────────────────────────────────
+  // Read every canonical RelationshipLink where THIS entity is an endpoint (D-04, single source of
+  // truth — the same link shows on both ends), gated to people|groups so Locations never get the
+  // section (D-03). A second reactive read of people + groups resolves the OTHER endpoint's name; a
+  // link to a deleted entity renders a muted "(deleted person/group)" row rather than crashing
+  // (T-04-10), mirroring the "(deleted map)" orphan guard above. The pure `buildRelationshipRows`
+  // helper drops any legacy endpoint-less shell so it never renders as a broken row.
+  const isRelationshipHost = requestedType === 'people' || requestedType === 'groups';
+  const relationshipLinks = useLiveQuery(
+    () =>
+      id && isRelationshipHost ? listRelationshipsFor(id) : Promise.resolve<RelationshipLink[]>([]),
+    [id, requestedType],
+    [] as RelationshipLink[],
+  );
+  const allPeople = useLiveQuery(
+    () => (isRelationshipHost ? db.people.toArray() : Promise.resolve<Person[]>([])),
+    [requestedType],
+    [] as Person[],
+  );
+  const allGroups = useLiveQuery(
+    () => (isRelationshipHost ? db.groups.toArray() : Promise.resolve<Group[]>([])),
+    [requestedType],
+    [] as Group[],
+  );
+  const relationshipRows = useMemo(() => {
+    if (!id) return [];
+    const peopleById = new Map((allPeople ?? []).map((p) => [p.id, p.name]));
+    const groupsById = new Map((allGroups ?? []).map((g) => [g.id, g.name]));
+    const resolveName = (t: RelationshipEndpointType, eid: string): string | undefined =>
+      t === 'people' ? peopleById.get(eid) : groupsById.get(eid);
+    return buildRelationshipRows(id, relationshipLinks ?? [], resolveName);
+  }, [id, relationshipLinks, allPeople, allGroups]);
 
   // Load the avatar thumbnail blob for the header.
   useEffect(() => {
@@ -375,6 +428,73 @@ export function ProfileSidebar({
             </div>
           )}
 
+          {/* Relationships (REL-01/REL-02) — People + Groups only (D-03): every canonical link this
+              entity is an endpoint of, each row [direction glyph] [label] · [other endpoint], with
+              the other-endpoint name a nested button opening that entity (D-10). A deleted endpoint
+              shows a muted "(deleted person/group)" row (T-04-10). The "+ Add relationship" button
+              is neutral paper (B3 — amber stays reserved). All user text is a React child (T-04-01). */}
+          {isRelationshipHost && (
+            <div className={styles.row}>
+              <span className={styles.appearsOnEyebrow} data-testid="profile-relationships">
+                Relationships
+              </span>
+              {relationshipRows.length === 0 ? (
+                <span className={styles.appearsOnEmpty} data-testid="profile-relationships-empty">
+                  No relationships yet.
+                </span>
+              ) : (
+                <span className={styles.relationshipsList} data-testid="profile-relationships-list">
+                  {relationshipRows.map((r) => (
+                    <span key={r.link.id} className={styles.relationshipRow}>
+                      <button
+                        type="button"
+                        className={styles.relationshipRecord}
+                        data-testid={`profile-relationship-${r.link.id}`}
+                        onClick={() => onOpenEntity?.('relationship-links', r.link.id)}
+                      >
+                        <span className={styles.relationshipGlyph} aria-hidden="true">
+                          <DirectionIcon glyph={r.glyph} />
+                        </span>
+                        {r.link.label && (
+                          <span className={styles.relationshipLabel}>{r.link.label}</span>
+                        )}
+                      </button>
+                      <span className={styles.relationshipSep} aria-hidden="true">
+                        ·
+                      </span>
+                      {r.otherName === undefined ? (
+                        <span
+                          className={styles.appearsOnDeleted}
+                          data-testid={`profile-relationship-deleted-${r.link.id}`}
+                        >
+                          (deleted {r.otherType === 'people' ? 'person' : 'group'})
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.relationshipEndpoint}
+                          data-testid={`profile-relationship-endpoint-${r.otherId}`}
+                          onClick={() => onOpenEntity?.(r.otherType, r.otherId)}
+                        >
+                          {r.otherName}
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </span>
+              )}
+              <button
+                type="button"
+                className={styles.addRelationship}
+                data-testid="profile-relationships-add"
+                onClick={() => setAddRelOpen(true)}
+              >
+                <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                Add relationship
+              </button>
+            </div>
+          )}
+
           {/* Relationship-link spine fields (REL-02). */}
           {link?.label && (
             <div className={styles.row}>
@@ -508,6 +628,18 @@ export function ProfileSidebar({
             if (!o) closeLightbox();
           }}
           onIndexChange={(i) => setLightbox((lb) => (lb ? { ...lb, index: i } : lb))}
+        />
+      )}
+
+      {/* Add-relationship authoring flow (REL-01/REL-02) — People/Group profiles only. Writes ONE
+          canonical link with THIS entity as `from`; it auto-appears on both endpoints (D-04). */}
+      {isRelationshipHost && (
+        <AddRelationshipDialog
+          open={addRelOpen}
+          onOpenChange={setAddRelOpen}
+          fromType={type as RelationshipEndpointType}
+          fromId={entity.id}
+          fromName={entity.name}
         />
       )}
     </>
