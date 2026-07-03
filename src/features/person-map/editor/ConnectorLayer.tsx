@@ -15,15 +15,17 @@
 
 import { Group, Arrow, Label, Tag, Text } from 'react-konva';
 import { colors } from '@/app/tokens';
+import { hexToRgba } from '@/features/common/color';
 import type { BackgroundTransform, Marker, RelationshipLink } from '@/domain/types';
 import { buildConnectors, type DragOverride } from '../connectors';
 
 /**
- * Default connector stroke/fill: the warm hairline `#D8D2C4` at 55% opacity (UI-SPEC B1). Kept as a
- * named constant derived from the hairline token so the translucent tint never drifts from the
- * palette; amber selection reads from `colors.amber` directly.
+ * Default connector stroke/fill: the warm hairline token at 55% opacity (UI-SPEC B1). Derived from
+ * `colors.hairline` via the shared `hexToRgba` (the same helper the graph edge stylesheet uses) so
+ * the translucent tint can never drift from the palette or from the graph edges; amber selection
+ * reads from `colors.amber` directly.
  */
-const CONNECTOR_HAIRLINE = 'rgba(216,210,196,0.55)'; // colors.hairline (#D8D2C4) @ 55%
+const CONNECTOR_HAIRLINE = hexToRgba(colors.hairline, 0.55);
 
 export interface ConnectorLayerProps {
   /** All relationship-links (live query of db.relationshipLinks). */

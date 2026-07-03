@@ -14,15 +14,7 @@
 
 import type cytoscape from 'cytoscape';
 import { colors } from '@/app/tokens';
-
-/** Compose an rgba() from a token hex so the edge hairline stays tied to the palette (no inline literal). */
-function hexToRgba(hex: string, alpha: number): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+import { hexToRgba } from '@/features/common/color';
 
 /** Translucent hairline for edges — the `hairline` token at 55% alpha (UI-SPEC edge default). */
 const EDGE_LINE = hexToRgba(colors.hairline, 0.55);
