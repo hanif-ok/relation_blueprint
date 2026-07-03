@@ -305,7 +305,7 @@ Recorded because this is a subagent run (no interactive confirmation possible). 
 
 ## Dependencies & Risks (for planner)
 
-- **⚠ FLAGGED BLOCKER (defect, not design):** the user reports **"can't navigate to a location from the list"** — opening a map from the Locations browse list (Phase-2/3 D-05) appears broken. R4 connectors render on exactly this surface (you open a map to see connectors), so REL-03 is **not testable until this is fixed**. Recommend a `/gsd-debug` pass before/alongside Phase-4 execution. Captured in CONTEXT `<domain>`; repeated here so the plan doesn't overlook it.
+- **✓ FORMER BLOCKER (defect, not design) — RESOLVED 2026-07-03:** the "can't navigate to a location from the list" defect (opening a map from the Locations browse list, Phase-2/3 D-05) has been fixed and human-verified via UAT (commit `76c55d8`, separate `/gsd-debug` pass). R4 connectors render on exactly this surface, so REL-03 is now fully testable end-to-end. No Phase-4 action required.
 - **New dependency:** `cytoscape` + `react-cytoscapejs` must be installed before R6 (MIT / free-OSS). Verify React 19 peer range.
 - **Data-model prerequisite (not UI, but gates every surface):** endpoint fields (`fromType/fromId`, `toType/toId`, `directed`) added to the type ↔ zod ↔ Dexie triple, plus a reverse-lookup index — planner owns this; all seven UI surfaces depend on it.
 

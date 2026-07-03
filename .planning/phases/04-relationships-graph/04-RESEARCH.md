@@ -16,7 +16,7 @@ This is a **light research pass** — the stack is already locked by CLAUDE.md a
 
 4. **Offline/sync/PWA** — **nothing new required.** `relationship-links` is already in `ENTITY_TYPES`, `getDirtyTypes`, the serializer, the manifest, `BackupSchema`, and the six-branch reconcile. New optional fields ride all of it. Both Drive and Mega host the identical `relationship-links-000.json` shard.
 
-**Primary recommendation:** Add optional endpoint fields to the existing `RelationshipLink` triple with a Dexie `version(5)` index-only upgrade (`fromId`, `toId`); build connectors as a non-listening image-space Konva layer derived from the same `markers`/`links` live queries; render the graph with built-in `cose` + a `meta`-table position cache and `preset` on reopen. Treat the "can't open a map from the Locations list" report as a **pre-req defect** (`/gsd-debug`) — REL-03 is untestable until it's fixed.
+**Primary recommendation:** Add optional endpoint fields to the existing `RelationshipLink` triple with a Dexie `version(5)` index-only upgrade (`fromId`, `toId`); build connectors as a non-listening image-space Konva layer derived from the same `markers`/`links` live queries; render the graph with built-in `cose` + a `meta`-table position cache and `preset` on reopen. The "can't open a map from the Locations list" report was a pre-req defect, now fixed via `/gsd-debug` and UAT-verified (commit `76c55d8`) — REL-03 is fully testable end-to-end.
 
 <phase_requirements>
 ## Phase Requirements
@@ -25,7 +25,7 @@ This is a **light research pass** — the stack is already locked by CLAUDE.md a
 |----|-------------|------------------|
 | REL-01 | Define relationships in an entity's details: person↔person, person↔group, group↔group | Endpoint fields on `RelationshipLink` (§Data Model); authoring section in `ProfileSidebar` reusing the "Appears on" pattern (§Architecture Pattern 1); entity picker reusing `PersonPicker` shape |
 | REL-02 | A relationship-link can carry its own data (label, date, notes) | Already present on `RelationshipLink` (`label`/`date`/`notes`/`custom`/`gallery`) and rendered by `ProfileSidebar.tsx` l.371–387 — no schema work for the data itself |
-| REL-03 | Relationships rendered as data-driven connectors between markers on a map (not hand-drawn) | Image-space Konva connectors layer (§Architecture Pattern 2); live-follow-on-drag via transient position state; **blocked by** the Locations→open-map defect (§Open Questions) |
+| REL-03 | Relationships rendered as data-driven connectors between markers on a map (not hand-drawn) | Image-space Konva connectors layer (§Architecture Pattern 2); live-follow-on-drag via transient position state; the former Locations→open-map blocker is **RESOLVED** (commit `76c55d8`, §Open Questions) |
 | REL-04 | Viewer-only relationship graph visualizing how people and groups connect | `react-cytoscapejs` + built-in `cose` + position cache (§Architecture Pattern 3); node-tap→sidebar bridge |
 </phase_requirements>
 
@@ -462,12 +462,11 @@ export async function loadPositions(): Promise<Record<string, { x: number; y: nu
 
 ## Open Questions
 
-*Status: the layout/glyph/sync questions (#2 group-node visual, #3 position sync) are **RESOLVED** — both adopted in plan `04-04`. Question #1 (Locations→open-map defect) remains a **tracked external dependency** to be fixed via a separate `/gsd-debug` pass before REL-03 UAT sign-off (out of scope for Phase 4 execution).*
+*Status: all three open questions are **RESOLVED** — #2 group-node visual and #3 position sync were adopted in plan `04-04`; #1 (Locations→open-map defect) was fixed via a separate `/gsd-debug` pass and human-verified via UAT (commit `76c55d8`), so REL-03 UAT sign-off is unblocked.*
 
-1. **TRACKED EXTERNAL DEPENDENCY (FLAGGED BLOCKER) — "can't navigate to a location from the list."**
-   - What we know: The user reports opening a map from the Locations browse list (Phase-2/3 D-05) is broken. REL-03 connectors render on exactly that surface — you open a map to see connectors.
-   - What's unclear: Whether it's a `showOnMap`/`activeMapId` wiring regression, a BrowseList handler gap, or map-seed logic. `App.tsx showOnMap` resolves a person's marker's `mapId`; the Locations list likely needs an analogous "open this map" path.
-   - Disposition: **Out of scope for Phase 4 (a pre-existing Locations-navigation defect, not relationship work).** Run a separate **`/gsd-debug`** pass to fix it. The connectors feature is fully built + testable via the `__rb` bridge and the map-switcher path (`e2e/map-switch.spec.ts`), so Phase-4 execution is unblocked; only REL-03's **user-facing** UAT sign-off is gated on this fix. Tracked as a hard prerequisite in plan `04-03` (`## Prerequisite / Blocking Dependency`).
+1. **RESOLVED — "can't navigate to a location from the list."**
+   - What it was: opening a map from the Locations browse list (Phase-2/3 D-05) was broken. REL-03 connectors render on exactly that surface — you open a map to see connectors — so it gated REL-03's user-facing UAT sign-off.
+   - Resolution: fixed via a separate **`/gsd-debug`** pass and human-verified via UAT on 2026-07-03 (commit `76c55d8`). The connectors feature was always independently testable via the `__rb` bridge and the map-switcher path (`e2e/map-switch.spec.ts`); with the navigation defect fixed, REL-03's full end-to-end user path is now verifiable and unblocked.
 
 2. **RESOLVED — Group node visual (glyph vs shape-only).**
    - Decision (adopted in `04-04`): use **round (person) vs round-rectangle + paper-shade fill + label (group)** to distinguish type pre-attentively (honors UI-SPEC B8's intent). The `UsersRound`-glyph-as-SVG-background is optional polish, deferred — Cytoscape can't render a Lucide React component directly, and round-vs-square already carries the type signal.
