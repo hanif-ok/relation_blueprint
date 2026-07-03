@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Building2, UsersRound, ArrowLeftRight } from 'lucide-react';
+import { Building2, UsersRound, ArrowLeftRight, Map as MapIcon } from 'lucide-react';
 import { db } from '@/db/schema';
 import { deleteEntity, deleteMarker, getMedia } from '@/db/repository';
 import { useBlobImage } from '@/features/person-map/useMapImage';
@@ -100,6 +100,12 @@ export interface ProfileSidebarProps {
    * placement. Fired with the map and the first marker id placed there.
    */
   onJumpToPlacement?: (mapId: string, markerId: string) => void;
+  /**
+   * Open this entity's map on the canvas — parity with the Locations-list "Open map ↗" action.
+   * Only rendered for `type === 'maps'` (a Location IS a map): sets the map active + switches to the
+   * Map view via the host's `openMap`. A neutral navigation control (no destructive semantics).
+   */
+  onOpenMap?: (id: string) => void;
 }
 
 export function initialsOf(name: string): string {
@@ -135,6 +141,7 @@ export function ProfileSidebar({
   onDeleted,
   onOpenEntity,
   onJumpToPlacement,
+  onOpenMap,
 }: ProfileSidebarProps) {
   const panelRef = useRef<HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -414,6 +421,20 @@ export function ProfileSidebar({
         </div>
 
         <div className={styles.footer}>
+          {/* Locations only: a neutral "Open map ↗" that navigates to this map on the canvas
+              (parity with the browse-list action). Reuses the neutral paper `edit` button style —
+              amber stays reserved. */}
+          {type === 'maps' && (
+            <button
+              type="button"
+              className={styles.edit}
+              onClick={() => onOpenMap?.(entity.id)}
+              data-testid="profile-open-map"
+            >
+              <MapIcon size={16} strokeWidth={1.75} aria-hidden="true" />
+              Open map
+            </button>
+          )}
           <button
             type="button"
             className={styles.edit}

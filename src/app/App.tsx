@@ -343,6 +343,7 @@ export function App() {
           }
         }}
         onJumpToPlacement={jumpToPlacement}
+        onOpenMap={(id) => openMap(id)}
       />
 
       {/* Always-mounted so Radix can animate/clean up its overlay on close (restoring body
