@@ -22,6 +22,12 @@ You can place people on a map of real locations and instantly see **who is where
 - ✓ Nest maps into spatial map-groups (floor→building→street) and navigate the hierarchy — Phase 3 (MAP-07)
 - ✓ On-canvas resize/rotate of markers and the background image, persisted across reload, with markers anchored to their image-space spot — Phase 3 (deferred-from-Phase-1 criteria; UAT tests 2–3)
 
+**Relationships & graph** — Phase 4, verified 2026-07-03
+- ✓ Define relationships in an entity's details: person↔person, person↔group, group↔group — Phase 4 (REL-01)
+- ✓ Relationship-links carry their own data (label, date, notes), authored from the profile sidebar — Phase 4 (REL-02)
+- ✓ Render data-defined relationships as connectors (derived from data, not hand-drawn) that follow markers live — Phase 4 (REL-03)
+- ✓ Graph view (viewer-only) visualizing how people and groups connect — Phase 4 (REL-04)
+
 ### Active
 
 <!-- Current scope. Building toward these. All are hypotheses until shipped and validated. -->
@@ -39,11 +45,6 @@ You can place people on a map of real locations and instantly see **who is where
 - [ ] Relationship-links that carry their own data (label, date, notes)
 - [ ] User-definable typed custom fields (text, number, date, phone, tags/select, link-to-entity, photo) configurable beyond the essentials
 - [ ] Click a person/place → sidebar/menu showing their full data; thumbnail + multi-photo gallery per object
-
-**Relationships & graph**
-- [ ] Define relationships in an entity's details: person↔person, person↔group, group↔group
-- [ ] Render data-defined relationships as connectors (derived from data, not hand-drawn)
-- [ ] Graph view (viewer-only) visualizing how people and groups connect
 
 **Browse & search**
 - [ ] Browse people as a list
@@ -122,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 after Phase 3 — the map editor ships: draw shapes/zones on reorderable layers, portal-link maps into floor→building→street hierarchies, place one canonical person across many maps, and resize/rotate markers + background with image-space anchoring. All 7 success criteria UAT-confirmed (the 3 runtime-only items from 03-VERIFICATION now verified).*
+*Last updated: 2026-07-03 after Phase 4 — relationships ship: author person↔person/person↔group/group↔group links (with label/date/notes) from the profile sidebar as one canonical link visible on both ends, see them projected as data-driven image-space map connectors that follow markers live, and explore a viewer-only Cytoscape relationship graph. All 4 success criteria verified (4/4 must-haves; 320/320 tests). Advisory code review (04-REVIEW.md) flagged 1 critical graph-edge robustness bug (deleted-endpoint node) + 6 warnings — tracked for a --fix pass.*
