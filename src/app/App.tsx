@@ -80,11 +80,12 @@ export function App() {
     onConnected: sync.onConnected,
     onDisconnected: sync.onDisconnected,
   });
-
-  useEffect(() => {
-    drive.restore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // NO auto-restore on mount. GIS's token model ALWAYS opens a popup for requestAccessToken (even
+  // prompt:'none'), and a popup off a mount effect has no user gesture, so a silent on-load
+  // reconnect is impossible without FedCM/a backend. The app is offline-first (Dexie is the source
+  // of truth), so it opens showing local data and the user clicks Connect to sync per session.
+  // (DEBUG oauth-prompt-every-refresh.) `drive.restore()` remains available for a future
+  // gesture-driven "quick reconnect" but must never be auto-called on load.
 
   // The first map (by insertion order) — used ONLY to SEED `activeMapId` when it is still null, so
   // an existing single-map DB renders its map on first open without an explicit selection.
