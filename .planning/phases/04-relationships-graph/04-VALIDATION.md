@@ -10,7 +10,9 @@ created: 2026-07-03
 # Phase 4 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
-> Populated from `04-RESEARCH.md` § Validation Architecture. Task IDs are assigned by the planner; this contract binds the per-requirement test map that plans must embed as `<automated>` verify blocks.
+> Populated from `04-RESEARCH.md` § Validation Architecture, with test paths corrected to the actual repo layout per `04-PATTERNS.md`. Task IDs are assigned by the planner; this contract binds the per-requirement test map that plans must embed as `<automated>` verify blocks.
+>
+> **Test layout (ground-truth, confirmed against repo):** unit/integration tests live in the top-level `tests/` tree (`tests/db/`, `tests/features/`, `tests/backup/`, `tests/sync/`), **not** beside source. E2E specs are flat in `e2e/*.spec.ts` (**not** `tests/e2e/`). RESEARCH.md's `src/**` and `tests/e2e/**` paths were wrong; PATTERNS.md holds the pinned analog test files and the planner finalizes exact filenames.
 
 ---
 
@@ -40,19 +42,19 @@ created: 2026-07-03
 
 ## Per-Task Verification Map
 
-*Task IDs are assigned during planning; rows below bind each phase requirement to its automated proof. The planner must embed the matching command as an `<automated>` verify on the task that delivers the behavior.*
+*Task IDs are assigned during planning; rows below bind each phase requirement to its automated proof. The planner must embed the matching command as an `<automated>` verify on the task that delivers the behavior. Paths follow the real `tests/` + `e2e/` layout (analogs cited in PATTERNS.md).*
 
 | Task ID | Req | Behavior | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|-----|----------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | REL-01 | Create person↔person / person↔group / group↔group link; Location endpoint rejected | T-03-10 | `z.enum(['people','groups'])` rejects invalid `fromType`/`toType` | unit | `npx vitest run src/db/repository.relationships.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-01 | `listRelationshipsFor(x)` returns links where x is `from` OR `to` (indexed `.or()`) | — | N/A | unit | `npx vitest run src/db/repository.relationships.test.ts -t "reverse lookup"` | ❌ W0 | ⬜ pending |
-| TBD | REL-01 | Deleting a Person/Group cascades its relationship-links (no orphan) | — | Cascade-delete prevents dangling-edge crash | unit | `npx vitest run src/db/repository.relationships.test.ts -t "cascade"` | ❌ W0 | ⬜ pending |
-| TBD | REL-02 | label/date/notes persist + round-trip through backup (`BackupSchema`) with endpoints | T-03-10 | Import validates endpoints before write transaction | unit | `npx vitest run src/sync/relationshipRoundTrip.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-03 | Connector geometry: person↔person both placed → an Arrow; group-involving → none; drop when a marker is absent | — | Orphan guard renders nothing rather than crashing | unit | `npx vitest run src/features/person-map/connectors.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-03 | Connector follows a marker on drag (transient position) then persists on `dragEnd` | — | N/A | e2e | `npx playwright test tests/e2e/connectors.spec.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-04 | `toGraphElements` maps people/groups→nodes, links→edges, drops endpoint-less shells | — | N/A | unit | `npx vitest run src/features/graph/graphElements.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-04 | Position cache: cose→save→reopen uses `preset`; node-set change invalidates | — | Revoke avatar object-URLs on unmount/hash change (no resource DoS) | unit | `npx vitest run src/features/graph/positionCache.test.ts` | ❌ W0 | ⬜ pending |
-| TBD | REL-04 | Node tap opens ProfileSidebar + announces selection (AT bridge); viewer-only (no edit) | T-03-01 | Labels via React children / Konva `Text` / Cytoscape canvas text — never `dangerouslySetInnerHTML` | e2e | `npx playwright test tests/e2e/graph.spec.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-01 | Create person↔person / person↔group / group↔group link; Location endpoint rejected | T-03-10 | `z.enum(['people','groups'])` rejects invalid `fromType`/`toType` | unit | `npx vitest run tests/db/repository.relationships.test.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-01 | `listRelationshipsFor(x)` returns links where x is `from` OR `to` (indexed `.or()`) | — | N/A | unit | `npx vitest run tests/db/repository.relationships.test.ts -t "reverse lookup"` | ❌ W0 | ⬜ pending |
+| TBD | REL-01 | Deleting a Person/Group cascades its relationship-links (no orphan) — `deleteEntity` `rw` txn already spans `db.relationshipLinks` (one-line `.or()` delete) | — | Cascade-delete prevents dangling-edge crash | unit | `npx vitest run tests/db/repository.relationships.test.ts -t "cascade"` | ❌ W0 | ⬜ pending |
+| TBD | REL-02 | label/date/notes persist + round-trip through backup (`BackupSchema`) with endpoints | T-03-10 | Import validates endpoints before write transaction | unit | `npx vitest run tests/backup/roundtrip.relationships.test.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-03 | Connector geometry: person↔person both placed → an Arrow; group-involving → none; drop when a marker is absent | — | Orphan guard renders nothing rather than crashing | unit | `npx vitest run tests/features/connectors.test.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-03 | Connector follows a marker on drag (transient position) then persists on `dragEnd` | — | N/A | e2e | `npx playwright test e2e/connectors.spec.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-04 | `toGraphElements` maps people/groups→nodes, links→edges, drops endpoint-less shells | — | N/A | unit | `npx vitest run tests/features/graphElements.test.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-04 | Position cache: cose→save→reopen uses `preset`; node-set change invalidates | — | Revoke avatar object-URLs on unmount/hash change (no resource DoS) | unit | `npx vitest run tests/features/positionCache.test.ts` | ❌ W0 | ⬜ pending |
+| TBD | REL-04 | Node tap opens ProfileSidebar + announces selection (AT bridge); viewer-only (no edit) | T-03-01 | Labels via React children / Konva `Text` / Cytoscape canvas text — never `dangerouslySetInnerHTML` | e2e | `npx playwright test e2e/graph.spec.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -60,13 +62,13 @@ created: 2026-07-03
 
 ## Wave 0 Requirements
 
-- [ ] `src/db/repository.relationships.test.ts` — create / validate / reverse-lookup / cascade (REL-01)
-- [ ] `src/sync/relationshipRoundTrip.test.ts` — endpoints survive export/restore (REL-02)
-- [ ] `src/features/person-map/connectors.test.ts` — pure connector geometry (REL-03)
-- [ ] `src/features/graph/graphElements.test.ts` — pure people/groups→nodes, links→edges mapping (REL-04)
-- [ ] `src/features/graph/positionCache.test.ts` — position cache + invalidation (REL-04)
-- [ ] `tests/e2e/connectors.spec.ts` — drag-follow + persist on dragEnd (REL-03; needs `--mode e2e` test bridge)
-- [ ] `tests/e2e/graph.spec.ts` — node-tap → sidebar, viewer-only (REL-04; needs `--mode e2e` test bridge)
+- [ ] `tests/db/repository.relationships.test.ts` — create / validate / reverse-lookup / cascade (REL-01) — analog: `tests/db/repository.crud.test.ts`, `tests/db/delete.cascade.test.ts`
+- [ ] `tests/backup/roundtrip.relationships.test.ts` — endpoints survive export/restore (REL-02) — analog: `tests/backup/roundtrip.entities.test.ts`
+- [ ] `tests/features/connectors.test.ts` — pure connector geometry (REL-03) — analog: `tests/features/coords.test.ts`
+- [ ] `tests/features/graphElements.test.ts` — pure people/groups→nodes, links→edges mapping (REL-04) — analog: `tests/features/appearsOn.test.ts`
+- [ ] `tests/features/positionCache.test.ts` — position cache + invalidation (REL-04)
+- [ ] `e2e/connectors.spec.ts` — drag-follow + persist on dragEnd (REL-03; needs `--mode e2e` test bridge) — analog: `e2e/place-person.spec.ts`
+- [ ] `e2e/graph.spec.ts` — node-tap → sidebar, viewer-only (REL-04; needs `--mode e2e` test bridge) — analog: `e2e/profile.spec.ts`
 - Framework install: **none** — Vitest + Playwright already configured.
 
 ---
