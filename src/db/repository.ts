@@ -202,20 +202,32 @@ export async function deleteEntity(entityType: DeletableEntityType, id: string):
         await db.markers.where('mapId').equals(id).delete();
       }
 
+      // GC-candidate media hashes: the victim's own media, collected BEFORE the link cascade + the
+      // early-out so the links about to be cascaded can fold their OWN media in (WR-02). (`victim`
+      // may be absent when deleting an already-missing entity that still owns orphaned links.)
+      const candidates = new Set<string>(victim ? collectEntityMediaHashes(victim) : []);
+
       // Phase-4 (REL-01 integrity / T-04-03): a Person or Group can be a relationship endpoint, so
       // cascade-delete every link it touches (fromId OR toId) inside this SAME rw transaction. This
       // prevents a dangling edge that would crash a connector/graph projection over a missing node.
-      // Capture the removed link ids first so each gets a delete ChangeEvent after commit (WR-01).
+      // Read the links as objects FIRST: their ids drive the delete events (WR-01) AND their own
+      // photo/gallery hashes must join `candidates` (WR-02) — the still-referenced sweep runs AFTER
+      // the links are gone, so a cascaded link can't protect its blobs and they would otherwise
+      // orphan permanently in the media table.
       if (entityType === 'people' || entityType === 'groups') {
-        removedLinkIds.push(
-          ...(await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).primaryKeys()),
-        );
+        const links = await db.relationshipLinks
+          .where('fromId')
+          .equals(id)
+          .or('toId')
+          .equals(id)
+          .toArray();
+        for (const link of links) {
+          removedLinkIds.push(link.id);
+          for (const hash of collectEntityMediaHashes(link)) candidates.add(hash);
+        }
         await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).delete();
       }
 
-      if (!victim) return;
-
-      const candidates = new Set<string>(collectEntityMediaHashes(victim));
       if (candidates.size === 0) return;
 
       // Hashes STILL referenced by any surviving entity of ANY type (all five families' spine
