@@ -45,6 +45,10 @@ export interface LayersPanelProps {
   showLabels: boolean;
   /** Toggle the D-20 name-label visibility. */
   onShowLabelsChange: (show: boolean) => void;
+  /** D-09/R5: whether relationship (connector) labels show on the canvas (default OFF). */
+  showConnectorLabels: boolean;
+  /** Toggle the connector-label visibility. */
+  onShowConnectorLabelsChange: (show: boolean) => void;
   /** Per-layer object count (shapes + markers resolved to a layer), keyed by layer id. */
   objectCounts: Record<string, number>;
 }
@@ -55,6 +59,8 @@ export function LayersPanel({
   onActiveLayerChange,
   showLabels,
   onShowLabelsChange,
+  showConnectorLabels,
+  onShowConnectorLabelsChange,
   objectCounts,
 }: LayersPanelProps) {
   // Collapsed (icon-only) state for narrow viewports.
@@ -255,6 +261,18 @@ export function LayersPanel({
               onChange={(e) => onShowLabelsChange(e.target.checked)}
             />
             <span>Show name labels</span>
+          </label>
+
+          {/* D-09/R5: relationship (connector) label show/hide toggle (default OFF) — mirrors the
+              Names toggle above; keeps the canvas clean at scale until the curator opts in. */}
+          <label className={styles.labelsToggle}>
+            <input
+              type="checkbox"
+              checked={showConnectorLabels}
+              data-testid="show-connector-labels-toggle"
+              onChange={(e) => onShowConnectorLabelsChange(e.target.checked)}
+            />
+            <span>Relationship labels</span>
           </label>
         </>
       )}

@@ -50,10 +50,17 @@ async function seed(page: import('@playwright/test').Page) {
     const blob = new Blob([bytes], { type: 'image/png' });
     const ref = await rb.storeMedia(blob, { width: 8, height: 8 });
     const map = await rb.createMap({ name: 'Alpha', background: ref, width: 800, height: 600 });
+    // Materialize the default "Markers" layer, exactly as the app does the moment a person is placed
+    // (a fresh map ships layerless — a marker with no resolvable layer is not rendered, D-04). Both
+    // markers land on it so they mount as scene nodes and the drag harness can address them.
+    const layerId = 'layer-markers';
+    await rb.updateMap(map.id, {
+      layers: [{ id: layerId, name: 'Markers', visible: true, locked: false, order: 0 }],
+    });
     const a = await rb.createPerson({ name: 'Ada' });
     const b = await rb.createPerson({ name: 'Bianca' });
-    const markerA = await rb.upsertMarker({ mapId: map.id, personId: a.id, x: 200, y: 160 });
-    await rb.upsertMarker({ mapId: map.id, personId: b.id, x: 400, y: 300 });
+    const markerA = await rb.upsertMarker({ mapId: map.id, personId: a.id, x: 200, y: 160, layerId });
+    await rb.upsertMarker({ mapId: map.id, personId: b.id, x: 400, y: 300, layerId });
     const rel = await rb.createRelationshipLink({
       name: 'rel',
       label: 'mentor',
