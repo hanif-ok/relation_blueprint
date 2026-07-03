@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 Phase: 4 — Relationships & Graph
 Plan: Not started
 Status: Ready to plan Phase 4
-Last activity: 2026-07-02 — Phase 03 complete (UAT 3/3 pass), transitioned to Phase 4
+Last activity: 2026-07-03 — Completed quick task 260703-et9: Add Open-map action to Locations browse list
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -123,6 +123,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260703-f9m | Add a favicon (stop /favicon.ico 404 + browser-tab icon) | 2026-07-03 | c0bf714 | [260703-f9m-add-a-favicon-public-favicon-svg-link-re](./quick/260703-f9m-add-a-favicon-public-favicon-svg-link-re/) |
+| 260703-et9 | Add Open-map action to Locations browse list | 2026-07-03 | ce9c4c8 | [260703-et9-add-open-map-action-to-locations-browse-](./quick/260703-et9-add-open-map-action-to-locations-browse-/) |
 
 ### Roadmap Evolution
 
