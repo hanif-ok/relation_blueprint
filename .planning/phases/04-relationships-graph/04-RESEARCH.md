@@ -462,17 +462,18 @@ export async function loadPositions(): Promise<Record<string, { x: number; y: nu
 
 ## Open Questions
 
-1. **FLAGGED BLOCKER — "can't navigate to a location from the list."**
+*Status: the layout/glyph/sync questions (#2 group-node visual, #3 position sync) are **RESOLVED** — both adopted in plan `04-04`. Question #1 (Locations→open-map defect) remains a **tracked external dependency** to be fixed via a separate `/gsd-debug` pass before REL-03 UAT sign-off (out of scope for Phase 4 execution).*
+
+1. **TRACKED EXTERNAL DEPENDENCY (FLAGGED BLOCKER) — "can't navigate to a location from the list."**
    - What we know: The user reports opening a map from the Locations browse list (Phase-2/3 D-05) is broken. REL-03 connectors render on exactly that surface — you open a map to see connectors.
    - What's unclear: Whether it's a `showOnMap`/`activeMapId` wiring regression, a BrowseList handler gap, or map-seed logic. `App.tsx showOnMap` resolves a person's marker's `mapId`; the Locations list likely needs an analogous "open this map" path.
-   - Recommendation: Run **`/gsd-debug`** before/alongside Phase-4 execution. REL-03 is **not testable** until this is fixed. Track as a hard dependency in the plan.
+   - Disposition: **Out of scope for Phase 4 (a pre-existing Locations-navigation defect, not relationship work).** Run a separate **`/gsd-debug`** pass to fix it. The connectors feature is fully built + testable via the `__rb` bridge and the map-switcher path (`e2e/map-switch.spec.ts`), so Phase-4 execution is unblocked; only REL-03's **user-facing** UAT sign-off is gated on this fix. Tracked as a hard prerequisite in plan `04-03` (`## Prerequisite / Blocking Dependency`).
 
-2. **Group node visual (glyph vs shape-only).**
-   - What we know: UI-SPEC B8 wants a `UsersRound` glyph on group nodes; Cytoscape can't render a Lucide React component directly.
-   - Recommendation: v1 uses **round (person) vs round-rectangle (group)** + label to distinguish type (pre-attentive, honors B8's intent). The glyph-as-SVG-background is optional polish — defer if it adds friction.
+2. **RESOLVED — Group node visual (glyph vs shape-only).**
+   - Decision (adopted in `04-04`): use **round (person) vs round-rectangle + paper-shade fill + label (group)** to distinguish type pre-attentively (honors UI-SPEC B8's intent). The `UsersRound`-glyph-as-SVG-background is optional polish, deferred — Cytoscape can't render a Lucide React component directly, and round-vs-square already carries the type signal.
 
-3. **Should graph positions sync across devices?**
-   - Recommendation: **No for v1** — keep them in `meta` as regenerable local state. Simpler, and a fresh device just runs `cose` once. Revisit only if layout stability across devices becomes a requirement.
+3. **RESOLVED — Should graph positions sync across devices?**
+   - Decision (adopted in `04-04`): **No for v1** — positions live in the Dexie `meta` table (`graphPositions`) as regenerable **local-only** state; a fresh device just runs `cose` once. No cross-device position sync. Revisit only if layout stability across devices becomes a requirement.
 
 ## Environment Availability
 
