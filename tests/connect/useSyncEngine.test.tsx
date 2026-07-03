@@ -182,6 +182,42 @@ describe('useSyncEngine wiring (regression: SyncEngine is actually booted on con
     });
   });
 
+  it('pushes PRE-EXISTING local dirty data on connect, with no further edit (issue 2B cross-browser)', async () => {
+    // The gap: onConnected reconciled (pull) but never pushed existing local data, so anything
+    // created BEFORE connecting only uploaded on a later edit — a second browser could never pull
+    // it. The initial push after reconcile closes that: pre-existing dirty data reaches the cloud
+    // on connect. Runs after reconcile so pull-then-push preserves LWW.
+    const provider = new InMemoryProvider();
+    const folderId = await provider.ensureFolder(APP_FOLDER);
+
+    // Data created BEFORE connecting (dirty, never pushed) — the cross-browser scenario.
+    await createPerson({ name: 'Zoe' });
+    expect((await db.people.toArray())[0].dirty).toBe(true);
+
+    const { result } = renderHook(() =>
+      useSyncEngine({ provider, debounceMs: TEST_DEBOUNCE_MS }),
+    );
+    await act(async () => {
+      result.current.onConnected(folderId);
+    });
+
+    // On connect (NO subsequent edit), the pre-existing person is committed to the cloud shard.
+    await waitFor(async () => {
+      const entries = await provider.list(folderId);
+      const manifestEntry = entries.find((e) => e.name === 'manifest.json');
+      expect(manifestEntry).toBeDefined();
+      const manifest = await readManifest(provider, manifestEntry!.id);
+      const peopleBlob = await provider.readFile(manifest.shards.people.fileId);
+      const restored = await deserializeShards({ [SHARD_NAMES.people]: peopleBlob });
+      expect(restored.people.map((p) => p.name)).toContain('Zoe');
+    });
+
+    // ...and the local record is marked clean by the initial push.
+    await waitFor(async () => {
+      expect((await db.people.toArray())[0].dirty).toBe(false);
+    });
+  });
+
   it('tears down the change subscription on disconnect so writes stop pushing', async () => {
     const provider = new InMemoryProvider();
     const folderId = await provider.ensureFolder(APP_FOLDER);

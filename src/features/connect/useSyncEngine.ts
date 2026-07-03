@@ -136,13 +136,20 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
         try {
           await engine.prepareOnOpen();
           await engine.reconcileOnOpen();
+          // Initial push: upload any pre-existing local dirty data (created before connecting, or
+          // while sync was down). Without this, local data only uploads on a FUTURE edit (onChange),
+          // so a second browser could never pull it (DEBUG oauth-...: "sync doesn't bring back
+          // elements" cross-browser). Runs AFTER reconcile so the pull-then-push order preserves
+          // LWW — the pushed shard is the MERGED local set (pulled cloud data + local additions),
+          // never a stale snapshot that would clobber another device's records.
+          await engine.push();
           if (activeRef.current) markSynced();
         } catch (err) {
           // Log before surfacing: markError only feeds the UI store, so the actual Drive REST
           // status/body would otherwise never reach the console (observability gap, DEBUG oauth-...).
-          console.error('[sync] prepare/reconcile-on-open failed:', err);
+          console.error('[sync] connect sync (reconcile + initial push) failed:', err);
           if (activeRef.current) {
-            markError(err instanceof Error ? err.message : 'Reconcile failed');
+            markError(err instanceof Error ? err.message : 'Sync failed');
           }
         }
       })();
