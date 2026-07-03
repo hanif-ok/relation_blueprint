@@ -1,8 +1,9 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "Google Drive sync is broken. On one browser: a Google OAuth popup on every refresh. On a DIFFERENT browser: sync does not work at all — stuck in a 'drive reconnect / failed to sync' state. Happens on BOTH browsers; the popup appears BOTH on its own AND after clicking Reconnect."
 created: 2026-07-03T00:00:00Z
 updated: 2026-07-03T00:00:00Z
+resolved_by: "SIX-layer root cause, all fixed and HUMAN-VERIFIED (Drive connect, sync, and images all work cross-browser): (1) COOP header same-origin-allow-popups bc1636e; (2) prompt:'none' silent restore 8905d10; (3) manifest backward-compat — groups/relationship-links optional abd5e06; (4) remove non-functional on-mount auto-restore 49e3566; (5) initial push on connect so pre-existing local data uploads f1df06f; (6) reconcileMedia — pull media blobs on connect af124c2. Full suite 276 tests green. OPEN follow-up (non-blocking): production GitHub Pages cannot send the COOP header → deployed OAuth needs a headers-capable host (Cloudflare Pages/Netlify) or FedCM; and an eager→lazy media fetch for scale."
 ---
 
 ## Current Focus
