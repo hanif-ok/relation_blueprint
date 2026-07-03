@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { deleteEntity, upsertMarker } from '@/db/repository';
+import { deleteEntity } from '@/db/repository';
+import { autoPlaceNewPerson } from './autoPlacePerson';
 import type { Group, MapDoc, Person, RelationshipLink } from '@/domain/types';
 import styles from './App.module.css';
 import { MapView } from '@/features/person-map/MapView';
@@ -175,15 +176,10 @@ export function App() {
     // create→place→profile thread is unbroken (Phase-1 behavior preserved, now multi-map aware).
     // Edits leave any existing marker untouched.
     if (form.type === 'people' && activeMap) {
-      const existing = await db.markers.where('personId').equals(savedId).count();
-      if (existing === 0) {
-        await upsertMarker({
-          mapId: activeMap.id,
-          personId: savedId,
-          x: activeMap.width / 2,
-          y: activeMap.height / 2,
-        });
-      }
+      // Auto-place at map center (D-05). autoPlaceNewPerson is a no-op when the person is already
+      // placed, and — mirroring MapView.placePerson/placePortal — materializes a default layer on a
+      // layer-less map so the marker is never culled by orderObjectsForRender.
+      await autoPlaceNewPerson(activeMap, savedId);
       // Open the new person's profile in marker context (they're now on the map).
       setProfile({ type: 'people', id: savedId, openedFrom: 'marker' });
     } else {
