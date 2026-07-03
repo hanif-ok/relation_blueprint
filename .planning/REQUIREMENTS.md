@@ -42,10 +42,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Relationships & Graph
 
-- [ ] **REL-01**: User can define relationships in an entity's details: person↔person, person↔group, and group↔group
-- [ ] **REL-02**: A relationship-link can carry its own data (label, date, notes)
-- [ ] **REL-03**: Relationships are rendered as data-driven connectors between markers on a map (not hand-drawn)
-- [ ] **REL-04**: User can open a viewer-only relationship graph visualizing how people and groups connect
+- [x] **REL-01**: User can define relationships in an entity's details: person↔person, person↔group, and group↔group
+- [x] **REL-02**: A relationship-link can carry its own data (label, date, notes)
+- [x] **REL-03**: Relationships are rendered as data-driven connectors between markers on a map (not hand-drawn)
+- [x] **REL-04**: User can open a viewer-only relationship graph visualizing how people and groups connect
 
 ### Search
 
@@ -128,10 +128,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MAP-05 | Phase 3 | Complete |
 | MAP-06 | Phase 3 | Complete |
 | MAP-07 | Phase 3 | Complete |
-| REL-01 | Phase 4 | Pending |
-| REL-02 | Phase 4 | Pending |
-| REL-03 | Phase 4 | Pending |
-| REL-04 | Phase 4 | Pending |
+| REL-01 | Phase 4 | Complete |
+| REL-02 | Phase 4 | Complete |
+| REL-03 | Phase 4 | Complete |
+| REL-04 | Phase 4 | Complete |
 | SRCH-01 | Phase 5 | Pending |
 | SRCH-02 | Phase 5 | Pending |
 | BRWS-01 | Phase 2 | Pending |
