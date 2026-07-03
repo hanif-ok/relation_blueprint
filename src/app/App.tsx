@@ -44,6 +44,10 @@ export function App() {
     type: ProfileEntityType;
     id: string;
     openedFrom: 'marker' | 'list';
+    // The EXACT marker the profile was opened from (CR-01). Threaded from the map click / show-on-map
+    // so "Remove from map" deletes the clicked placement, not an arbitrary one for a multi-placed
+    // person. Absent for the auto-place-on-create path (that person has a single fresh marker).
+    markerId?: string;
   } | null>(null);
 
   // The open entity form: which type, and the id being edited (null = create).
@@ -154,14 +158,25 @@ export function App() {
     [form?.editingId, form?.type],
   );
 
-  // The marker backing a person profile opened from the map (drives "Remove from map").
-  const selectedMarkerId = useLiveQuery<string | undefined>(
+  // The marker backing a person profile opened from the map (drives "Remove from map"). Prefer the
+  // EXACT marker threaded onto `profile` from the click/show-on-map (CR-01). Only fall back to a
+  // re-derivation for the auto-place-on-create path where no marker id was threaded — and even that
+  // fallback is SCOPED to the active map (`.first()` returns the lowest primary key, a random nanoid,
+  // which for a multi-placed person could otherwise resolve a placement on a DIFFERENT map).
+  const derivedMarkerId = useLiveQuery<string | undefined>(
     async () =>
-      profile?.openedFrom === 'marker' && profile.type === 'people'
-        ? (await db.markers.where('personId').equals(profile.id).first())?.id
+      profile?.openedFrom === 'marker' && profile.type === 'people' && !profile.markerId
+        ? (
+            await db.markers
+              .where('personId')
+              .equals(profile.id)
+              .filter((m) => m.kind === 'person' && m.mapId === activeMapId)
+              .first()
+          )?.id
         : undefined,
-    [profile?.id, profile?.openedFrom, profile?.type],
+    [profile?.id, profile?.openedFrom, profile?.type, profile?.markerId, activeMapId],
   );
+  const selectedMarkerId = profile?.markerId ?? derivedMarkerId;
 
   function openCreate(type: EntityFormType) {
     setForm({ type, editingId: null });
@@ -217,8 +232,14 @@ export function App() {
     }
     setActiveView('map');
     // Only open in marker context when the person is actually placed; otherwise 'list' context so the
-    // profile doesn't render a "Remove from map" action for someone on no map.
-    setProfile({ type: 'people', id, openedFrom: marker ? 'marker' : 'list' });
+    // profile doesn't render a "Remove from map" action for someone on no map. Thread the resolved
+    // marker id so "Remove from map" targets the exact placement we navigated to (CR-01).
+    setProfile({
+      type: 'people',
+      id,
+      openedFrom: marker ? 'marker' : 'list',
+      markerId: marker?.id,
+    });
     setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
   }
 
@@ -288,9 +309,11 @@ export function App() {
           {activeView === 'map' ? (
             <MapView
               selectedPersonId={profile?.type === 'people' ? profile.id : null}
-              onSelect={(personId) =>
+              onSelect={(personId, markerId) =>
                 setProfile(
-                  personId ? { type: 'people', id: personId, openedFrom: 'marker' } : null,
+                  personId
+                    ? { type: 'people', id: personId, openedFrom: 'marker', markerId }
+                    : null,
                 )
               }
               activeMapId={activeMapId}

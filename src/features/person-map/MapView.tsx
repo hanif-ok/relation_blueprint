@@ -131,8 +131,10 @@ function DrawPreview({ draw, transform }: { draw: DrawState; transform: Backgrou
 export interface MapViewProps {
   /** The currently selected person id, mirrored to the marker ring. */
   selectedPersonId: string | null;
-  /** Raised when a marker is clicked — opens the profile sidebar. */
-  onSelect: (personId: string) => void;
+  /** Raised when a marker is clicked — opens the profile sidebar. The clicked marker's own id is
+   *  passed too (when a person marker is selected) so the host can act on the EXACT placement that
+   *  was clicked rather than re-deriving an arbitrary one for a multi-placed person (CR-01). */
+  onSelect: (personId: string, markerId?: string) => void;
   /** The active map id (lifted in App). When null and maps exist, App seeds it. */
   activeMapId: string | null;
   /** Switch the active map (from the MapSwitcher or a breadcrumb crumb). */
@@ -895,8 +897,9 @@ export function MapView({
                     onDragEnd={handleMarkerDragEnd}
                     onSelect={(personId) => {
                       // Selecting a marker opens its profile AND selects it for the Transformer
-                      // (single-select: clear any shape selection, exit bg-edit).
-                      onSelect(personId);
+                      // (single-select: clear any shape selection, exit bg-edit). Thread THIS
+                      // marker's id so the host removes the exact clicked placement (CR-01).
+                      onSelect(personId, mk.id);
                       setSelectedMarkerId(mk.id);
                       setSelectedShapeId(null);
                       setEditingBackground(false);
