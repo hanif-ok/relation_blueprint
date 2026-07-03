@@ -13,7 +13,9 @@
 // toggle is ON, draw as a paper-shade pill (Konva Label/Tag/Text — canvas text, never injected HTML,
 // T-04-01) at the segment midpoint.
 
+import { useEffect, useRef, useState } from 'react';
 import { Group, Arrow, Label, Tag, Text } from 'react-konva';
+import type Konva from 'konva';
 import { colors } from '@/app/tokens';
 import { hexToRgba } from '@/features/common/color';
 import type { BackgroundTransform, Marker, RelationshipLink } from '@/domain/types';
@@ -26,6 +28,38 @@ import { buildConnectors, type DragOverride } from '../connectors';
  * reads from `colors.amber` directly.
  */
 const CONNECTOR_HAIRLINE = hexToRgba(colors.hairline, 0.55);
+
+/**
+ * A relationship-label pill TRULY centered on the segment midpoint (WR-03). Konva's `Label` anchors
+ * at its top-left, so the previous fixed `offsetX={0}` applied no offset and rendered the pill
+ * down-and-right of the connector instead of centered. We measure the rendered pill (the `Tag`
+ * auto-sizes to the `Text`) via `getClientRect({ skipTransform: true })` after mount and offset the
+ * `Label` by half its width/height, recentering it on (`x`, `y`). Re-measures when the label text
+ * (and thus the pill width) changes.
+ */
+function ConnectorLabel({ x, y, label }: { x: number; y: number; label: string }) {
+  const ref = useRef<Konva.Label>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const rect = node.getClientRect({ skipTransform: true });
+    setOffset({ x: rect.width / 2, y: rect.height / 2 });
+  }, [label]);
+  return (
+    <Label ref={ref} x={x} y={y} offsetX={offset.x} offsetY={offset.y} listening={false}>
+      <Tag fill={colors.paperShade} stroke={colors.hairline} strokeWidth={1} cornerRadius={6} />
+      <Text
+        text={label}
+        fontFamily="Inter, system-ui, sans-serif"
+        fontSize={13}
+        fill={colors.ink}
+        padding={4}
+        listening={false}
+      />
+    </Label>
+  );
+}
 
 export interface ConnectorLayerProps {
   /** All relationship-links (live query of db.relationshipLinks). */
@@ -73,27 +107,11 @@ export function ConnectorLayer({
               perfectDrawEnabled={false}
               listening={false}
             />
-            {/* Label pill at the segment midpoint — rendered ONLY when the toggle is ON (D-09) and
-                the link carries a non-empty label. Konva Label/Tag/Text = canvas text (XSS-safe). */}
+            {/* Label pill centered on the segment midpoint — rendered ONLY when the toggle is ON
+                (D-09) and the link carries a non-empty label. Konva Label/Tag/Text = canvas text
+                (XSS-safe). ConnectorLabel measures itself to center the pill (WR-03). */}
             {showConnectorLabels && label.trim().length > 0 && (
-              <Label x={(a.x + b.x) / 2} y={(a.y + b.y) / 2} listening={false}>
-                <Tag
-                  fill={colors.paperShade}
-                  stroke={colors.hairline}
-                  strokeWidth={1}
-                  cornerRadius={6}
-                  // Center the pill on the midpoint (Label anchors at its top-left by default).
-                  offsetX={0}
-                />
-                <Text
-                  text={label}
-                  fontFamily="Inter, system-ui, sans-serif"
-                  fontSize={13}
-                  fill={colors.ink}
-                  padding={4}
-                  listening={false}
-                />
-              </Label>
+              <ConnectorLabel x={(a.x + b.x) / 2} y={(a.y + b.y) / 2} label={label} />
             )}
           </Group>
         );
