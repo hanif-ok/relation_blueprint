@@ -84,6 +84,7 @@
 - Multi-select / bulk relationship editing.
 - Social-network analytics over the graph (v2 ANLY-01).
 
-## Flagged Blocker (not a decision)
+## Flagged Blocker (not a decision) — RESOLVED 2026-07-03
 
-- **"Can't navigate to a location from the list"** — the Phase-2/3 Locations-list → open-map path (D-05) is reported broken. It is the surface Phase 4 connectors render on. Recommend a `/gsd-debug` pass before/alongside Phase 4. Recorded in CONTEXT.md Domain section.
+- **"Can't navigate to a location from the list"** — the Phase-2/3 Locations-list → open-map path (D-05) was reported broken. It is the surface Phase 4 connectors render on. Recommend a `/gsd-debug` pass before/alongside Phase 4. Recorded in CONTEXT.md Domain section.
+- **Update 2026-07-03:** fixed via a `/gsd-debug` pass and human-verified via UAT (commit `76c55d8`). No longer gates REL-03 sign-off.

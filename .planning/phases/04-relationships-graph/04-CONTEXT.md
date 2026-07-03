@@ -23,7 +23,7 @@ This phase turns the existing **endpoint-less `RelationshipLink` shell** (create
 - Editing relationships **inside** the graph view (graph is viewer-only) → out of scope per PROJECT.md.
 - Graph filtering/grouping by relationship type or group (GRPH-01) → **v2**.
 
-**⚠ FLAGGED BLOCKER (surfaced during discussion):** The user reports **"can't navigate to a location from the list"** — opening a map from the Phase-2/3 Locations browse list (D-05) appears broken. This is the exact surface Phase 4 connectors render on (you open a map to see connectors), so it must be fixed for REL-03 to be usable. It is a **defect, not a design decision** — recommend a **`/gsd-debug`** pass before or alongside Phase 4 execution. Captured here so planning/execution don't overlook it.
+**✓ FORMER BLOCKER (surfaced during discussion) — RESOLVED 2026-07-03:** The "can't navigate to a location from the list" defect — opening a map from the Phase-2/3 Locations browse list (D-05) — has been fixed via a **`/gsd-debug`** pass and human-verified via UAT (commit `76c55d8`). This is the exact surface Phase 4 connectors render on, so with it fixed REL-03 is fully usable end-to-end. Left here for provenance; no Phase-4 action required.
 
 </domain>
 
@@ -111,7 +111,7 @@ No external ADRs exist — decisions are captured in this file and the docs abov
 
 ### Integration Points
 - **Storage / export:** endpoint fields on `RelationshipLink` must serialize into the sharded manifest and survive **export/restore** (`BackupSchema`) — the cloud is the only copy.
-- **Locations browse → open map (D-05, Phase 3):** the surface connectors render on. **⚠ Currently reported broken** by the user ("can't navigate to a location from the list") — flagged blocker; see Domain.
+- **Locations browse → open map (D-05, Phase 3):** the surface connectors render on. **✓ Previously-reported-broken defect now RESOLVED** (UAT-verified 2026-07-03, commit `76c55d8`) — see Domain.
 - **Graph is a new top-level surface** via `ViewSwitcher`, reusing `ProfileSidebar` on node click and the canvas→AT bridge for accessibility.
 - **New dependency:** `cytoscape` + `react-cytoscapejs` must be installed (MIT / free-OSS, per `.claude/CLAUDE.md`) — the only net-new libs this phase.
 
