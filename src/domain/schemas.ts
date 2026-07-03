@@ -197,18 +197,21 @@ export const ShardPointerSchema = z.object({
 export const ManifestSchema = z.object({
   version: z.number(),
   updatedAt: z.number(),
-  // Every entity type must carry a shard pointer; a missing pointer is rejected.
+  // The Phase-1 CORE shards (present in every manifest ever written) stay required. Shards for
+  // entity types added in LATER phases are OPTIONAL: a manifest written before an entity type
+  // existed has no such key, and a required key would crash `readManifest` on that pre-existing
+  // cloud manifest — breaking sync for any DB created before the type was added (DEBUG
+  // oauth-prompt-every-refresh: a Phase-1 Drive manifest has no groups/relationship-links). A
+  // PRESENT pointer is still fully validated by `ShardPointerSchema`, so the untrusted-at-rest
+  // gate (threats T-02.1-01 / T-05-02) stays strict for whatever the manifest DOES declare.
   shards: z.object({
     people: ShardPointerSchema,
     maps: ShardPointerSchema,
     markers: ShardPointerSchema,
-    groups: ShardPointerSchema,
-    'relationship-links': ShardPointerSchema,
-    // Custom-field DEFINITIONS shard (DATA-03). OPTIONAL: a manifest written before field-defs
-    // were threaded through the cloud path has no such key, and a required key would crash
-    // `readManifest` on that pre-existing cloud manifest (the second-device reconnect this phase
-    // fixes). A PRESENT pointer is still fully validated by `ShardPointerSchema`, so the
-    // untrusted-at-rest gate (threat T-02.1-01) stays strict.
+    // First-class entity types added after Phase 1 (plan 02-03) — optional for older manifests.
+    groups: ShardPointerSchema.optional(),
+    'relationship-links': ShardPointerSchema.optional(),
+    // Custom-field DEFINITIONS shard (DATA-03) — optional for the same backward-compat reason.
     'field-defs': ShardPointerSchema.optional(),
   }),
   // No `backups` field: rolling backups are discovered by listing the `backups/` folder, the

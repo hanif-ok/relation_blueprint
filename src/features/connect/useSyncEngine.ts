@@ -81,6 +81,9 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
       if (activeRef.current) markSynced();
     } catch (err) {
       // A failed cloud write must not crash the app — surface it and keep working offline.
+      // Also log to the console: markError only feeds the UI store, so without this a sync
+      // failure is invisible to anyone reading the console (observability gap, DEBUG oauth-...).
+      console.error('[sync] push failed:', err);
       if (activeRef.current) {
         markError(err instanceof Error ? err.message : 'Sync failed');
       }
@@ -135,6 +138,9 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
           await engine.reconcileOnOpen();
           if (activeRef.current) markSynced();
         } catch (err) {
+          // Log before surfacing: markError only feeds the UI store, so the actual Drive REST
+          // status/body would otherwise never reach the console (observability gap, DEBUG oauth-...).
+          console.error('[sync] prepare/reconcile-on-open failed:', err);
           if (activeRef.current) {
             markError(err instanceof Error ? err.message : 'Reconcile failed');
           }

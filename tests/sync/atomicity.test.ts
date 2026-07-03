@@ -170,9 +170,15 @@ async function reconstructFromManifest(provider: InMemoryProvider, manifest: Man
     [SHARD_NAMES.people]: await provider.readFile(manifest.shards.people.fileId),
     [SHARD_NAMES.maps]: await provider.readFile(manifest.shards.maps.fileId),
     [SHARD_NAMES.markers]: await provider.readFile(manifest.shards.markers.fileId),
-    [SHARD_NAMES.groups]: await provider.readFile(manifest.shards.groups.fileId),
-    [SHARD_NAMES['relationship-links']]: await provider.readFile(manifest.shards['relationship-links'].fileId),
   };
+  // Post-Phase-1 shard pointers are OPTIONAL in the manifest type (older manifests omit them),
+  // so read each only when present — mirroring the field-defs guard. Present in these tests.
+  const groupsPointer = manifest.shards.groups;
+  if (groupsPointer) shards[SHARD_NAMES.groups] = await provider.readFile(groupsPointer.fileId);
+  const relPointer = manifest.shards['relationship-links'];
+  if (relPointer) {
+    shards[SHARD_NAMES['relationship-links']] = await provider.readFile(relPointer.fileId);
+  }
   const fieldDefsPointer = manifest.shards['field-defs'];
   if (fieldDefsPointer) {
     shards[SHARD_NAMES.fieldDefs] = await provider.readFile(fieldDefsPointer.fileId);

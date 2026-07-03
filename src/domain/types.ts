@@ -322,13 +322,16 @@ export interface Manifest {
   version: number;
   updatedAt: number;
   /**
-   * One pointer per entity-type shard, PLUS an optional `'field-defs'` pointer for the
-   * custom-field DEFINITIONS shard (DATA-03). The field-defs pointer is OPTIONAL so manifests
-   * written before that shard was threaded through the cloud path still validate and reconcile
-   * as a safe no-op. The core `EntityType` union is intentionally NOT widened with `'field-defs'`
-   * (that token is a sync-local concern only — `SyncShardType` in syncEngine.ts).
+   * Shard pointers, keyed by entity type, PLUS an optional `'field-defs'` pointer (DATA-03).
+   * Only the Phase-1 CORE types (people/maps/markers) are guaranteed present; shards for types
+   * added later (groups, relationship-links) and field-defs are OPTIONAL, so a manifest written
+   * before a given type existed still validates and reconciles as a safe no-op (the engine guards
+   * every pointer access with `if (!pointer) continue` and self-heals the manifest on next push).
+   * The core `EntityType` union is intentionally NOT widened with `'field-defs'` (a sync-local
+   * concern only — `SyncShardType` in syncEngine.ts).
    */
-  shards: Record<EntityType, ShardPointer> & { 'field-defs'?: ShardPointer };
+  shards: Record<'people' | 'maps' | 'markers', ShardPointer> &
+    Partial<Record<EntityType, ShardPointer>> & { 'field-defs'?: ShardPointer };
 }
 
 /**

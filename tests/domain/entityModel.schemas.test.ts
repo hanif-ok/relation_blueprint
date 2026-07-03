@@ -191,6 +191,35 @@ describe('ManifestSchema field-defs pointer (DATA-03 cloud-sync backward-compat)
   });
 });
 
+describe('ManifestSchema post-Phase-1 shard pointers (DEBUG oauth-prompt-every-refresh backward-compat)', () => {
+  const pointer = { fileId: 'file-1', hash: 'h', updatedAt: 100 };
+  /** A genuine Phase-1 manifest: only the core shards existed then. groups + relationship-links
+   *  became first-class types in plan 02-03; field-defs in DATA-03. A Drive DB created in Phase 1
+   *  therefore has a manifest with NONE of those keys. */
+  function phase1Manifest() {
+    return { version: 0, updatedAt: 0, shards: { people: pointer, maps: pointer, markers: pointer } };
+  }
+
+  it('accepts a Phase-1 manifest missing groups / relationship-links / field-defs (the reconnect crash this fixes)', () => {
+    // Regression: readManifest used to throw ZodError ("shards.groups: expected object, received
+    // undefined") on any DB created before those types existed — breaking Drive sync entirely.
+    expect(ManifestSchema.safeParse(phase1Manifest()).success).toBe(true);
+  });
+
+  it('still REQUIRES the Phase-1 core shards — a manifest missing people is rejected', () => {
+    const manifest = { ...phase1Manifest(), shards: { maps: pointer, markers: pointer } };
+    expect(ManifestSchema.safeParse(manifest).success).toBe(false);
+  });
+
+  it('rejects a PRESENT-but-malformed groups pointer (optional key does not weaken the gate)', () => {
+    const manifest = {
+      ...phase1Manifest(),
+      shards: { ...phase1Manifest().shards, groups: { hash: 'h', updatedAt: 1 } },
+    };
+    expect(ManifestSchema.safeParse(manifest).success).toBe(false);
+  });
+});
+
 describe('CustomValuesSchema (D-01 per-entity value map)', () => {
   it('accepts the union of allowed value shapes keyed by fieldId', () => {
     const values = {
