@@ -180,6 +180,12 @@ type EntityTableHandle = () =>
  * cleanly on failure. `deletePerson` delegates here for back-compat.
  */
 export async function deleteEntity(entityType: DeletableEntityType, id: string): Promise<void> {
+  // Ids of every row this delete CASCADES (markers + relationship-links). A deleted row can never
+  // be found later by a `dirty` flag, so a `delete` ChangeEvent per id — emitted AFTER commit — is
+  // the ONLY signal the Plan-05 sync engine has to remove those rows from the cloud (WR-01). Without
+  // it the cascade succeeds locally but the cloud keeps dangling links/markers that can resurrect.
+  const removedMarkerIds: string[] = [];
+  const removedLinkIds: string[] = [];
   await db.transaction(
     'rw',
     [db.people, db.maps, db.markers, db.groups, db.relationshipLinks, db.media],
@@ -187,14 +193,23 @@ export async function deleteEntity(entityType: DeletableEntityType, id: string):
       const victim = await DELETABLE_TABLES[entityType]().get(id);
       await DELETABLE_TABLES[entityType]().delete(id);
 
-      // Cascade markers for the spatial types only.
-      if (entityType === 'people') await db.markers.where('personId').equals(id).delete();
-      else if (entityType === 'maps') await db.markers.where('mapId').equals(id).delete();
+      // Cascade markers for the spatial types only — capturing the removed ids first (WR-01).
+      if (entityType === 'people') {
+        removedMarkerIds.push(...(await db.markers.where('personId').equals(id).primaryKeys()));
+        await db.markers.where('personId').equals(id).delete();
+      } else if (entityType === 'maps') {
+        removedMarkerIds.push(...(await db.markers.where('mapId').equals(id).primaryKeys()));
+        await db.markers.where('mapId').equals(id).delete();
+      }
 
       // Phase-4 (REL-01 integrity / T-04-03): a Person or Group can be a relationship endpoint, so
       // cascade-delete every link it touches (fromId OR toId) inside this SAME rw transaction. This
       // prevents a dangling edge that would crash a connector/graph projection over a missing node.
+      // Capture the removed link ids first so each gets a delete ChangeEvent after commit (WR-01).
       if (entityType === 'people' || entityType === 'groups') {
+        removedLinkIds.push(
+          ...(await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).primaryKeys()),
+        );
         await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).delete();
       }
 
@@ -220,6 +235,15 @@ export async function deleteEntity(entityType: DeletableEntityType, id: string):
     },
   );
   emit({ entityType, entityId: id, op: 'delete' });
+  // Emit a delete per cascaded row AFTER commit (WR-01) so subscribers only ever see persisted
+  // state — mirrors applyFieldTypeChange/reorderFieldDefs. entityId is a real row id, never the
+  // entityType string (the ChangeEvent record-id contract).
+  for (const markerId of removedMarkerIds) {
+    emit({ entityType: 'markers', entityId: markerId, op: 'delete' });
+  }
+  for (const linkId of removedLinkIds) {
+    emit({ entityType: 'relationship-links', entityId: linkId, op: 'delete' });
+  }
 }
 
 /**
