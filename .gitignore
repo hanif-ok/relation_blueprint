@@ -21,6 +21,7 @@ test-results
 *.local
 .idea
 .vscode/*
+.claude/*
 !.vscode/extensions.json
 
 # Logs
