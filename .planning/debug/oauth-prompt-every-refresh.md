@@ -93,9 +93,40 @@ fix: |
   SAME COOP failure. Production needs a headers-capable host (Cloudflare Pages / Netlify `_headers`)
   or FedCM. Flagged in the vite.config.ts comment and to the user; likely a roadmap item.
 verification: |
-  PENDING human verification: restart `npm run dev` (server.headers only applies on a fresh dev
-  server start), then click Connect Drive — the Google popup should open, consent should complete,
-  and the status should reach connected/synced instead of looping on reconnect. Static: vite.config
-  change is config-only; no code/type surface. To confirm before archival.
+  LAYERED ROOT CAUSE — three stacked bugs, each surfaced only after the previous was fixed:
+    (1) No COOP header → GIS popup severed (commit bc1636e). VERIFIED: header live on the dev
+        server (curl: `Cross-Origin-Opener-Policy: same-origin-allow-popups`); the connect popup
+        now opens (a Drive REST ensureFolder call succeeds before "connected").
+    (2) On-load restore used prompt:'' → popup blocked off the mount effect (commit 8905d10).
+        VERIFIED via console: the on-load "Failed to open popup window" spam is gone; restore is
+        now silent.
+    (3) Manifest ZodError: readManifest rejected a Phase-1 manifest lacking groups /
+        relationship-links shards (commit abd5e06) — the actual sync failure. Fixed by making
+        those pointers optional (field-defs precedent) + regression tests. Static: tsc clean;
+        full `vitest run` 271 green pre-change, +3 new schema regression tests green.
+  PENDING human verification of (3): hard-refresh, Connect Drive, confirm sync reaches
+  connected/synced with NO `[sync] ... failed` console line. Then archive.
 files_changed:
-  - vite.config.ts
+  - vite.config.ts                           # COOP same-origin-allow-popups (commit bc1636e)
+  - src/storage/drive/auth.ts                # silent restore prompt:'' -> 'none' (commit 8905d10)
+  - src/storage/drive/gis.d.ts               # doc: prompt:'none' non-interactive path (8905d10)
+  - tests/connect/silentReconnect.test.tsx   # stale comment fix (8905d10)
+  - src/domain/schemas.ts                    # ManifestSchema groups/rel-links optional (abd5e06)
+  - src/domain/types.ts                      # Manifest.shards core-required/rest-optional (abd5e06)
+  - src/features/connect/useSyncEngine.ts    # log [sync] push/reconcile failures (abd5e06)
+  - tests/sync/atomicity.test.ts             # guard optional shard pointers (abd5e06)
+  - tests/domain/entityModel.schemas.test.ts # Phase-1 manifest regression tests (abd5e06)
+  - src/app/App.tsx                          # remove non-functional on-mount auto-restore (49e3566)
+  - src/features/connect/useSyncEngine.ts    # initial push after reconcile on connect (f1df06f)
+  - tests/connect/useSyncEngine.test.tsx     # cross-browser push-on-connect regression (f1df06f)
+# FOLLOW-UP ISSUES surfaced during verification (fixed in this session):
+#   - Issue 1 (OAuth prompt every load): INHERENT GIS limitation — token model always uses a
+#     popup (even prompt:'none'), unblockable off a mount effect (no gesture). Fixed by REMOVING
+#     the on-mount restore() (49e3566); app is offline-first so per-session click-to-connect is
+#     the honest model. True silent reconnect needs FedCM/a backend (roadmap).
+#   - Issue 2 (sync doesn't bring back elements, cross-browser): onConnected pulled but never
+#     pushed pre-existing local data. Fixed with an initial push after reconcile (f1df06f).
+#   - Drift: single-curator LWW by updatedAt; pull-then-push on connect makes sequential
+#     browser-switching safe. Concurrent same-record offline edits = last-writer-wins (out of scope).
+# STILL OPEN (non-blocking, not a bug): production on GitHub Pages can't send the COOP header, so
+#   deployed OAuth will fail — needs a headers-capable host (Cloudflare Pages/Netlify) or FedCM.
