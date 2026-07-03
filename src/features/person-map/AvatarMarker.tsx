@@ -21,6 +21,7 @@ import { useEffect, useRef } from 'react';
 import { Group, Circle, Rect, Image as KonvaImage, Text } from 'react-konva';
 import type Konva from 'konva';
 import { colors, marker as M } from '@/app/tokens';
+import { initialsOf } from '@/features/common/initials';
 import { upsertMarker } from '@/db/repository';
 import { useMapImage } from './useMapImage';
 import { stageToImage, type Point } from './coords';
@@ -31,14 +32,6 @@ import {
 import type { BackgroundTransform, Marker, Person } from '@/domain/types';
 
 const R = M.R; // avatar radius (diameter 48px)
-
-/** Up to two initials from a name, for the no-photo fallback. */
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 export interface AvatarMarkerProps {
   marker: Marker;

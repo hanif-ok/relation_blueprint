@@ -20,7 +20,7 @@ import {
   Map as MapIcon,
   MoreHorizontal,
 } from 'lucide-react';
-import { initialsOf } from '@/features/profile/ProfileSidebar';
+import { initialsOf } from '@/features/common/initials';
 import { useEntityThumb } from './useEntityThumb';
 import {
   type BrowseEntity,

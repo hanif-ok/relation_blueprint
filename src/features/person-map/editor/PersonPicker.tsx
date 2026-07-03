@@ -18,7 +18,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { initialsOf } from '@/features/profile/ProfileSidebar';
+import { initialsOf } from '@/features/common/initials';
 import { useMapImage } from '@/features/person-map/useMapImage';
 import type { Person } from '@/domain/types';
 import styles from './PersonPicker.module.css';

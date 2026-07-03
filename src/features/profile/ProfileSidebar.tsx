@@ -35,6 +35,7 @@ import { CustomFieldRows } from './CustomFieldRows';
 import { AddRelationshipDialog } from './AddRelationshipDialog';
 import { buildRelationshipRows, type DirectionGlyph } from './relationships';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
+import { initialsOf } from '@/features/common/initials';
 import type {
   EntityType,
   Group,
@@ -124,13 +125,6 @@ export interface ProfileSidebarProps {
    * Map view via the host's `openMap`. A neutral navigation control (no destructive semantics).
    */
   onOpenMap?: (id: string) => void;
-}
-
-export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 /** Narrowers for spine fields that only exist on some entities (the type decides the table). */
