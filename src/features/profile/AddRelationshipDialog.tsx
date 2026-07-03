@@ -60,6 +60,7 @@ export function AddRelationshipDialog({
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset all fields each time the dialog (re)opens for a fresh authoring pass.
   useEffect(() => {
@@ -71,6 +72,7 @@ export function AddRelationshipDialog({
       setDate('');
       setNotes('');
       setSaving(false);
+      setError(null);
     }
   }, [open]);
 
@@ -93,22 +95,33 @@ export function AddRelationshipDialog({
   async function save() {
     if (!picked || saving) return;
     setSaving(true);
+    setError(null);
     const trimmedLabel = label.trim();
     // Derived name: the label if given, else "{from} → {other}" (a human-readable record name).
     const name = trimmedLabel || `${fromName} → ${picked.name}`;
-    const link = await createRelationshipLink({
-      name,
-      label: trimmedLabel || undefined,
-      date: date || undefined,
-      notes: notes.trim() || undefined,
-      fromType,
-      fromId,
-      toType: picked.type,
-      toId: picked.id,
-      directed,
-    });
-    onCreated?.(link.id);
-    onOpenChange(false);
+    // `createRelationshipLink` can throw (zod validation, QuotaExceededError, aborted Dexie txn).
+    // Without this guard a rejection left the dialog open with `saving` stuck true — permanently
+    // disabling the "Add relationship" button — and surfaced an unhandled promise rejection (WR-06).
+    // Reset `saving` in `finally` and surface an inline error so the author can retry.
+    try {
+      const link = await createRelationshipLink({
+        name,
+        label: trimmedLabel || undefined,
+        date: date || undefined,
+        notes: notes.trim() || undefined,
+        fromType,
+        fromId,
+        toType: picked.type,
+        toId: picked.id,
+        directed,
+      });
+      onCreated?.(link.id);
+      onOpenChange(false);
+    } catch {
+      setError("Couldn't save this relationship. Try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -248,6 +261,12 @@ export function AddRelationshipDialog({
                 />
               </div>
             </>
+          )}
+
+          {error && (
+            <p className={styles.error} role="alert" data-testid="add-relationship-error">
+              {error}
+            </p>
           )}
 
           <div className={styles.actions}>

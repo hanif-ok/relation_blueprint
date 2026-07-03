@@ -184,6 +184,16 @@
   padding-top: var(--space-xs);
 }
 
+/* Inline save-failure message (WR-06) — brick text, mirrors the EntityForm error treatment. */
+.error {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brick);
+  padding: 0 var(--space-md) var(--space-xs);
+  margin: 0;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
