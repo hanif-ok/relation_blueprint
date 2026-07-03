@@ -30,8 +30,17 @@ import type { RelationBlueprintDB } from '@/db/schema';
 
 const JSON_TYPE = 'application/json';
 const MANIFEST_NAME = 'manifest.json';
-const MEDIA_FOLDER = 'media';
+/** Folder (under the app folder) holding content-addressed media blobs named `media/<hash>`. */
+export const MEDIA_FOLDER = 'media';
 const BACKUP_KEEP = 5;
+
+/**
+ * Dexie `meta` key holding the set of media content-hashes already present in the cloud, so a
+ * push never re-uploads a blob the provider already has (dedup by content address — STOR-04 /
+ * scale). Exported so the on-connect media PULL can mark pulled hashes synced too — otherwise the
+ * next push would re-upload them as DUPLICATE cloud files (writeFile creates a new file each call).
+ */
+export const SYNCED_MEDIA_KEY = 'syncedMediaHashes';
 
 /**
  * A sync-shard token: the five entity families PLUS the custom-field DEFINITIONS shard
@@ -335,11 +344,8 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
  */
 export function createDexieRepoPort(db: RelationBlueprintDB): RepositoryPort {
   const metaKey = (type: SyncShardType) => `shardMeta:${type}`;
-  // Tracks which content-addressed media hashes have already been pushed to the cloud, so
-  // `getNewMedia` only returns blobs the provider hasn't seen. Content addressing means the
-  // upload is idempotent regardless, but skipping already-synced hashes avoids re-uploading
-  // the entire media library on every push (matters as the gallery grows — STOR-04 / scale).
-  const SYNCED_MEDIA_KEY = 'syncedMediaHashes';
+  // SYNCED_MEDIA_KEY (module scope) tracks which content-addressed media hashes are already in the
+  // cloud, so `getNewMedia` only returns blobs the provider hasn't seen (dedup — STOR-04 / scale).
 
   async function getSyncedMediaHashes(): Promise<Set<string>> {
     const row = await db.meta.get(SYNCED_MEDIA_KEY);

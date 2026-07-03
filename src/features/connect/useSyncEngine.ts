@@ -21,13 +21,66 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { db } from '@/db/schema';
 import { onChange } from '@/db/repository';
-import { SyncEngine, createDexieRepoPort, type RepositoryPort } from '@/sync/syncEngine';
+import {
+  SyncEngine,
+  createDexieRepoPort,
+  MEDIA_FOLDER,
+  SYNCED_MEDIA_KEY,
+  type RepositoryPort,
+} from '@/sync/syncEngine';
 import { getActiveProvider } from '@/storage/providerFactory';
 import type { StorageProvider } from '@/storage/StorageProvider';
 import { markSyncing, markSynced, markError } from './syncStatusStore';
 
 /** Debounce window (ms) so a burst of edits coalesces into one atomic push. */
 const PUSH_DEBOUNCE_MS = 800;
+
+/**
+ * Pull media blobs the cloud has but this device lacks into local Dexie, BEFORE the entity
+ * reconcile so photos are present when the pulled entities render (the media hooks — useEntityThumb
+ * / useMapImage — resolve a hash ONCE and don't retry, so a late pull would leave images broken
+ * until a manual refresh). Writes db.media DIRECTLY (no repository `emit` → no re-push loop) and
+ * marks each pulled hash synced so the next push never re-uploads it as a DUPLICATE cloud file.
+ * Per-file failures are swallowed — a single missing photo must never block sync. Eager: downloads
+ * ALL missing media on connect; a lazy on-demand fetch is the future scale optimization.
+ * (DEBUG oauth-prompt-every-refresh: "sync works but images don't load" on a second browser.)
+ */
+async function reconcileMedia(provider: StorageProvider, folderId: string): Promise<void> {
+  const mediaFolder = await provider.ensureFolder(MEDIA_FOLDER, folderId);
+  const entries = await provider.list(mediaFolder);
+  if (entries.length === 0) return;
+  const localHashes = new Set((await db.media.toArray()).map((m) => m.hash));
+
+  const pulled: { hash: string; bytes: ArrayBuffer; mime: string }[] = [];
+  for (const entry of entries) {
+    // Cloud media files are named `media/<hash>` (the prefix is part of the name) — recover the hash.
+    const hash = entry.name.startsWith(`${MEDIA_FOLDER}/`)
+      ? entry.name.slice(MEDIA_FOLDER.length + 1)
+      : entry.name;
+    if (!hash || localHashes.has(hash)) continue;
+    try {
+      const blob = await provider.readFile(entry.id);
+      pulled.push({
+        hash,
+        bytes: await blob.arrayBuffer(),
+        mime: blob.type || 'application/octet-stream',
+      });
+    } catch (err) {
+      console.error(`[sync] media pull failed for ${hash}:`, err);
+    }
+  }
+  if (pulled.length === 0) return;
+
+  // One transaction: write the blobs + extend the synced-media watermark so they are never
+  // re-uploaded. No `emit` — these blobs are already in the cloud, so no push must be triggered.
+  await db.transaction('rw', [db.media, db.meta], async () => {
+    for (const p of pulled) await db.media.put(p);
+    const row = await db.meta.get(SYNCED_MEDIA_KEY);
+    const synced = new Set<string>(Array.isArray(row?.value) ? (row.value as string[]) : []);
+    for (const p of pulled) synced.add(p.hash);
+    await db.meta.put({ key: SYNCED_MEDIA_KEY, value: [...synced] });
+  });
+}
 
 export interface UseSyncEngineOptions {
   /**
@@ -119,8 +172,9 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
       teardown();
       activeRef.current = true;
 
+      const provider = providerRef.current ?? getActiveProvider();
       const engine = new SyncEngine({
-        provider: providerRef.current ?? getActiveProvider(),
+        provider,
         folderId,
         repo: repoRef.current ?? createDexieRepoPort(db),
       });
@@ -135,6 +189,9 @@ export function useSyncEngine(options: UseSyncEngineOptions = {}): SyncEngineWir
         markSyncing();
         try {
           await engine.prepareOnOpen();
+          // Pull media BEFORE the entity reconcile so photos are local by the time the pulled
+          // entities render — the media hooks resolve a hash once and don't retry (DEBUG oauth-...).
+          await reconcileMedia(provider, folderId);
           await engine.reconcileOnOpen();
           // Initial push: upload any pre-existing local dirty data (created before connecting, or
           // while sync was down). Without this, local data only uploads on a FUTURE edit (onChange),

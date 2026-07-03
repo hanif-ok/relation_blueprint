@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useSyncEngine } from '@/features/connect/useSyncEngine';
-import { SyncEngine } from '@/sync/syncEngine';
+import { SyncEngine, createDexieRepoPort } from '@/sync/syncEngine';
 import { deserializeShards, SHARD_NAMES } from '@/sync/serializer';
 import { readManifest } from '@/sync/manifest';
 import { InMemoryProvider } from '@/storage/memory/InMemoryProvider';
@@ -23,7 +23,8 @@ import {
   __resetForTests as resetSyncStatus,
   getSnapshot,
 } from '@/features/connect/syncStatusStore';
-import { createPerson } from '@/db/repository';
+import { createPerson, getMedia, putMedia } from '@/db/repository';
+import { buildMediaRef } from '@/media/mediaManager';
 import { db } from '@/db/schema';
 
 const APP_FOLDER = 'Relation Blueprint';
@@ -218,6 +219,38 @@ describe('useSyncEngine wiring (regression: SyncEngine is actually booted on con
     });
   });
 
+  it("pulls cloud media into local storage on connect so images resolve (cross-browser 'image doesn't load')", async () => {
+    // The bug: media was push-only — uploaded but never pulled. A second browser had the entity
+    // (with a photo hash) but not the bytes, so resolveMediaUrl returned null and no image showed.
+    const provider = new InMemoryProvider();
+    const folderId = await provider.ensureFolder(APP_FOLDER);
+
+    // Device A: store a photo locally and sync it up to the cloud media folder.
+    const blob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/png' });
+    const ref = await buildMediaRef(blob);
+    await putMedia(ref, blob);
+    const engineA = new SyncEngine({ provider, folderId, repo: createDexieRepoPort(db) });
+    await engineA.bootstrap();
+    await engineA.push(); // newMedia is non-empty even with no dirty entities → media/<hash> uploaded
+
+    // Device B: a fresh device on the SAME cloud folder but with NO local media / watermarks.
+    await db.media.clear();
+    await db.meta.clear();
+    expect(await getMedia(ref.hash)).toBeUndefined();
+
+    const { result } = renderHook(() =>
+      useSyncEngine({ provider, debounceMs: TEST_DEBOUNCE_MS }),
+    );
+    await act(async () => {
+      result.current.onConnected(folderId);
+    });
+
+    // reconcileMedia (on connect) pulled the blob back, so getMedia now resolves it.
+    await waitFor(async () => {
+      expect(await getMedia(ref.hash)).toBeDefined();
+    });
+  });
+
   it('tears down the change subscription on disconnect so writes stop pushing', async () => {
     const provider = new InMemoryProvider();
     const folderId = await provider.ensureFolder(APP_FOLDER);
@@ -229,7 +262,9 @@ describe('useSyncEngine wiring (regression: SyncEngine is actually booted on con
     await act(async () => {
       result.current.onConnected(folderId);
     });
-    await waitFor(() => expect(provider.list(folderId)).resolves.toBeDefined());
+    // Wait for the FULL connect sequence (reconcile media + entities + initial push) to settle so
+    // the connect-time push can't be miscounted by the spy created after disconnect below.
+    await waitFor(() => expect(getSnapshot().lastSyncedAt).not.toBeNull());
 
     // Disconnect tears down the engine + subscription.
     await act(async () => {
