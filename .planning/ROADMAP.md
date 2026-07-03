@@ -180,13 +180,13 @@ Plans:
   3. Relationships the user authored appear automatically as data-driven connectors between markers on the map (not hand-drawn) and update when markers move
   4. User can open a viewer-only relationship graph that visualizes how people and groups connect
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Relationship data foundation: optional endpoint pair + `directed` on the type↔zod↔Dexie triple, `version(5)` fromId/toId indexes, `listRelationshipsFor` reverse lookup, cascade-on-delete, backup round-trip (REL-01, REL-02)
+- [x] 04-01-PLAN.md — Relationship data foundation: optional endpoint pair + `directed` on the type↔zod↔Dexie triple, `version(5)` fromId/toId indexes, `listRelationshipsFor` reverse lookup, cascade-on-delete, backup round-trip (REL-01, REL-02)
 
 **Wave 2** *(all three parallel; each depends only on 04-01)*
 
@@ -238,6 +238,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
-| 4. Relationships & Graph | 0/4 | Planned | - |
+| 4. Relationships & Graph | 1/4 | In Progress|  |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |

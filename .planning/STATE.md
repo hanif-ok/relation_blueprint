@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Relationships & Graph
-status: ready_to_plan
+current_phase: 04
+current_phase_name: relationships-graph
+status: executing
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-03T03:59:32.062Z"
+last_updated: "2026-07-03T08:03:40.479Z"
 last_activity: 2026-07-03
-last_activity_desc: "Quick task 260703-f9m — added favicon (Phase 4 still ready_to_plan)"
+last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 29
+  completed_plans: 26
   percent: 57
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** You can place people on a map of real locations and instantly see who is where, open any person to their full profile, and trace how people and groups relate — all from data you fully own, with no server.
-**Current focus:** Phase 4 — Relationships & Graph
+**Current focus:** Phase 04 — relationships-graph
 
 ## Current Position
 
-Phase: 4 — Relationships & Graph
-Plan: Not started
-Status: Ready to plan Phase 4
-Last activity: 2026-07-03 — Completed quick task 260703-et9: Add Open-map action to Locations browse list
+Phase: 04 (relationships-graph) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 04
+Last activity: 2026-07-03 — Phase 04 execution started
 
 Progress: [████████████████████] 25/25 plans (100%)
 
