@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Relation Blueprint">
+  <!-- App icon: a small relationship graph on the slate canvas color. Palette mirrors UI-SPEC
+       tokens (src/app/tokens.ts): slate #1B2230, paper #F4F1EA, amber #C8742B, hairline #D8D2C4.
+       Amber stays the single reserved accent (one node). -->
+  <rect width="32" height="32" rx="7" fill="#1B2230" />
+  <g stroke="#D8D2C4" stroke-width="2" stroke-linecap="round">
+    <line x1="10" y1="11" x2="22" y2="11" />
+    <line x1="10" y1="11" x2="16" y2="22" />
+    <line x1="22" y1="11" x2="16" y2="22" />
+  </g>
+  <circle cx="10" cy="11" r="4" fill="#F4F1EA" />
+  <circle cx="22" cy="11" r="4" fill="#F4F1EA" />
+  <circle cx="16" cy="22" r="4.5" fill="#C8742B" />
+</svg>
