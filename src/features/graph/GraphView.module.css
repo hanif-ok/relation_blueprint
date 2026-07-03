@@ -1,0 +1,92 @@
+/* GraphView — the viewer-only Cytoscape surface. The canvas is the deep-slate hero surface
+   (shared with the map, UI-SPEC R6) with a slim paper toolbar hosting the edge-label toggle and
+   the viewer-only note. Empty + loading states center on slate. */
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-slate, #1b2230);
+  overflow: hidden;
+}
+
+/* Slim top toolbar (paper) — edge-label toggle + viewer-only note. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md, 16px);
+  padding: var(--space-sm, 8px) var(--space-md, 16px);
+  background: var(--color-paper, #f4f1ea);
+  border-bottom: 1px solid var(--color-hairline, #d8d2c4);
+  flex: 0 0 auto;
+  z-index: 1;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  min-height: 44px; /* ≥44px hit area (UI-SPEC accessibility exception) */
+  padding: 0 var(--space-sm, 8px);
+  border: 1px solid var(--color-hairline, #d8d2c4);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--color-ink, #26211a);
+  font: 600 13px/1.35 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.toggle[aria-pressed='true'] {
+  background: var(--color-paper-shade, #e7e2d6);
+}
+
+.viewerNote {
+  margin-left: auto;
+  color: var(--color-ink-muted, #6b6358);
+  font: 400 13px/1.35 'Inter', system-ui, sans-serif;
+}
+
+/* The Cytoscape mount — fills the remaining space below the toolbar. */
+.canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Centered empty + loading states on the slate canvas. */
+.centered {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-xl, 32px);
+  text-align: center;
+  color: var(--color-paper, #f4f1ea);
+}
+
+.emptyGlyph {
+  color: var(--color-amber, #c8742b);
+}
+
+.emptyHeading {
+  font: 560 28px/1.2 'Fraunces', Georgia, serif;
+  color: var(--color-paper, #f4f1ea);
+  margin: 0;
+}
+
+.emptySub {
+  max-width: 42ch;
+  color: var(--color-ink-muted, #a7a08f);
+  font: 400 15px/1.5 'Inter', system-ui, sans-serif;
+  margin: 0;
+}
+
+.loading {
+  color: var(--color-paper, #f4f1ea);
+  font: 400 15px/1.5 'Inter', system-ui, sans-serif;
+  opacity: 0.75;
+}

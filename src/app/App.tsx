@@ -6,6 +6,7 @@ import { autoPlaceNewPerson } from './autoPlacePerson';
 import type { Group, MapDoc, Person, RelationshipLink } from '@/domain/types';
 import styles from './App.module.css';
 import { MapView } from '@/features/person-map/MapView';
+import { GraphView } from '@/features/graph/GraphView';
 import { BrowseList } from '@/features/browse/BrowseList';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import { PrivacyNotice } from '@/features/onboarding/PrivacyNotice';
@@ -21,8 +22,8 @@ import { useSyncEngine } from '@/features/connect/useSyncEngine';
 import { ReconnectBanner } from '@/features/connect/ReconnectBanner';
 import { BackupMenu } from '@/features/backup/BackupMenu';
 
-/** A view key narrowed to the four entity tables (everything except 'map'). */
-type EntityView = Exclude<ViewKey, 'map'>;
+/** A view key narrowed to the four entity tables (everything except the spatial 'map'/'graph'). */
+type EntityView = Exclude<ViewKey, 'map' | 'graph'>;
 
 /**
  * Multi-surface app shell (plan 02-03). A left-nav ViewSwitcher swaps the main surface between
@@ -299,6 +300,14 @@ export function App() {
               focusMarkerId={focusMarkerId}
               onFocusHandled={() => setFocusMarkerId(null)}
             />
+          ) : activeView === 'graph' ? (
+            // Viewer-only relationship graph (REL-04/D-11). A node tap opens its profile in list
+            // context via the same selection→AT bridge the browse lists use; an open profile is the
+            // ego node (centered + amber-highlighted, D-12).
+            <GraphView
+              egoId={profile && (profile.type === 'people' || profile.type === 'groups') ? profile.id : null}
+              onSelectNode={(kind, id) => setProfile({ type: kind, id, openedFrom: 'list' })}
+            />
           ) : (
             <BrowseList
               key={activeView}
@@ -359,7 +368,9 @@ export function App() {
       <FieldManager
         open={fieldsOpen}
         onOpenChange={setFieldsOpen}
-        entityType={activeView === 'map' ? 'people' : (activeView as EntityView)}
+        entityType={
+          activeView === 'map' || activeView === 'graph' ? 'people' : (activeView as EntityView)
+        }
       />
 
       {/* Browse-row "Delete {entity}" — brick, full cascade (S21). */}

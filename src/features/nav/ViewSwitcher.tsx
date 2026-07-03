@@ -17,6 +17,7 @@ import {
   Building2,
   UsersRound,
   ArrowLeftRight,
+  Share2,
   Settings2,
   Info,
 } from 'lucide-react';
@@ -24,11 +25,14 @@ import type { LucideIcon } from 'lucide-react';
 import { db } from '@/db/schema';
 import styles from './ViewSwitcher.module.css';
 
-/** The selectable main-surface views. 'map' is the Phase-1 Konva surface; the rest are lists. */
-export type ViewKey = 'map' | 'people' | 'maps' | 'groups' | 'relationship-links';
+/**
+ * The selectable main-surface views. 'map' is the Phase-1 Konva surface; 'graph' is the Phase-4
+ * viewer-only Cytoscape relationship graph (D-11); the rest are browse lists.
+ */
+export type ViewKey = 'map' | 'people' | 'maps' | 'groups' | 'relationship-links' | 'graph';
 
-/** Entity view keys that carry a live count pill (everything except the Map view). */
-type EntityViewKey = Exclude<ViewKey, 'map'>;
+/** Entity view keys that carry a live count pill (everything except the Map and Graph views). */
+type EntityViewKey = Exclude<ViewKey, 'map' | 'graph'>;
 
 export interface ViewSwitcherProps {
   active: ViewKey;
@@ -49,7 +53,11 @@ const VIEW_ITEMS: ViewItem[] = [
   { key: 'maps', label: 'Locations', icon: Building2 },
   { key: 'groups', label: 'Groups', icon: UsersRound },
   { key: 'relationship-links', label: 'Relationship-links', icon: ArrowLeftRight },
+  { key: 'graph', label: 'Graph', icon: Share2 },
 ];
+
+/** Views with no trailing count pill (spatial surfaces, not entity lists). */
+const NO_PILL: ReadonlySet<ViewKey> = new Set<ViewKey>(['map', 'graph']);
 
 /** Format a live count, or "—" while the query is still resolving. */
 function pill(count: number | undefined): string {
@@ -116,7 +124,9 @@ export function ViewSwitcher({
         {VIEW_ITEMS.map((item, index) => {
           const isActive = active === item.key;
           const Icon = item.icon;
-          const countLabel = item.key === 'map' ? undefined : pill(counts[item.key as EntityViewKey]);
+          const countLabel = NO_PILL.has(item.key)
+            ? undefined
+            : pill(counts[item.key as EntityViewKey]);
           return (
             <li key={item.key} role="listitem">
               <button
