@@ -14,11 +14,13 @@ export interface NewEntityMenuProps {
   disabled?: boolean;
 }
 
+// Relationship-links are authored FROM a Person/Group profile ("+ Add relationship"), never as a
+// standalone endpoint-less shell — the standalone "+ Relationship-link" create item was removed
+// (D-05, 04-02). Relationship-links remain browsable/editable via their browse list.
 const ITEMS: { type: EntityFormType; label: string }[] = [
   { type: 'people', label: '+ Person' },
   { type: 'maps', label: '+ Location' },
   { type: 'groups', label: '+ Group' },
-  { type: 'relationship-links', label: '+ Relationship-link' },
 ];
 
 export function NewEntityMenu({ onCreate, disabled }: NewEntityMenuProps) {

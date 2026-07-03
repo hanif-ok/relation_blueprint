@@ -62,7 +62,7 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
 });
 
-test('+ New creates all four entity types and each appears in its browse list', async ({
+test('+ New creates the create-able entity types and each appears in its browse list', async ({
   page,
 }) => {
   await seedMap(page);
@@ -71,7 +71,16 @@ test('+ New creates all four entity types and each appears in its browse list', 
 
   await createViaMenu(page, 'people', 'Ada Lovelace');
   await createViaMenu(page, 'groups', 'Analytical Society');
-  await createViaMenu(page, 'relationship-links', 'Mentorship');
+  // Relationship-links are no longer create-able from the standalone +New menu (D-05, 04-02) — an
+  // endpoint-less shell is meaningless; they are authored from a profile. Seed one directly so the
+  // browse-list assertion below still proves the relationship-links list renders.
+  await page.evaluate(async () => {
+    await window.__rb!.createRelationshipLink({ name: 'Mentorship' });
+  });
+  // The standalone menu item is gone.
+  await page.getByTestId('new-entity-trigger').click();
+  await expect(page.getByTestId('new-entity-relationship-links')).toHaveCount(0);
+  await page.keyboard.press('Escape');
 
   // Each created entity persisted to its own table (DATA-01).
   const counts = await page.evaluate(async () => {

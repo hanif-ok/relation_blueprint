@@ -1,0 +1,223 @@
+/* AddRelationshipDialog — paper dialog for authoring a relationship from a profile (UI-SPEC R2).
+ * Mirrors PersonPicker's paper surface + tokens. Amber is used ONLY for the selected candidate
+ * (selection) and focus rings — never for the save action (authoring is neutral, B3). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 34, 48, 0.32);
+  z-index: var(--z-popover);
+}
+
+.content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - var(--space-xl)));
+  max-height: calc(100vh - var(--space-xl));
+  overflow-y: auto;
+  background: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-lg);
+  z-index: var(--z-popover-content);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sectionLabel {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.input,
+.textarea {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  outline: none;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* A candidate row: name + a muted type tag; ≥44px hit target. */
+.item,
+.itemSelected {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--hairline);
+}
+
+/* Selected candidate — amber is the selection accent (the ONE reserved use here). */
+.itemSelected {
+  border: 2px solid var(--amber);
+  outline: none;
+}
+
+.item:focus-visible,
+.itemSelected:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.itemName {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemType {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.emptyHint,
+.emptyBody {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: var(--space-sm) var(--space-md);
+  margin: 0;
+}
+
+/* Direction control — two neutral options; the active one is emphasized (not amber). */
+.directionRow {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.dirOption,
+.dirOptionOn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1 1 0;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.dirOptionOn {
+  background: var(--hairline);
+  border: 2px solid var(--ink-muted);
+}
+
+.dirOption:focus-visible,
+.dirOptionOn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.preview {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding-top: var(--space-xs);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.secondary,
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+/* Primary (save) — a stronger neutral, NOT amber (authoring is not the reserved amber act, B3). */
+.primary {
+  border: 2px solid var(--ink-muted);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
