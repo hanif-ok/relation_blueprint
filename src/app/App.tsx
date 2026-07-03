@@ -225,6 +225,15 @@ export function App() {
     setAnnounce(person ? `Showing ${person.name} on the map.` : 'Showing on the map.');
   }
 
+  /** Open a Location on the canvas (a Location IS a map): set it active + switch to the Map view.
+   *  Reuses the SAME `setActiveMapId` + `setActiveView('map')` setters MapSwitcher/jumpToPlacement
+   *  use — no new navigation mechanism. No `focusMarkerId`: that centers a PERSON's placement, a
+   *  concept that doesn't apply when the target IS the map itself. Doesn't open a profile. */
+  function openMap(id: string) {
+    setActiveMapId(id);
+    setActiveView('map');
+  }
+
   /** Jump-to-placement (D-12): an "Appears on" row sets the target map active, switches to the Map
    *  view, and hands MapView the target marker id to select + center that placement. Reuses the
    *  active-map setter (03-02) + the focusMarkerId plumbing into MapView (Task 1). */
@@ -302,6 +311,7 @@ export function App() {
               onEdit={(id) => openEdit(activeView as EntityView, id)}
               onDelete={(id) => void requestDelete(activeView as EntityView, id)}
               onShowOnMap={(id) => void showOnMap(id)}
+              onOpenMap={(id) => openMap(id)}
               onCreate={() => openCreate(activeView as EntityView)}
             />
           )}
