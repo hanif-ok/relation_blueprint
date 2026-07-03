@@ -180,7 +180,20 @@ Plans:
   3. Relationships the user authored appear automatically as data-driven connectors between markers on the map (not hand-drawn) and update when markers move
   4. User can open a viewer-only relationship graph that visualizes how people and groups connect
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Relationship data foundation: optional endpoint pair + `directed` on the type↔zod↔Dexie triple, `version(5)` fromId/toId indexes, `listRelationshipsFor` reverse lookup, cascade-on-delete, backup round-trip (REL-01, REL-02)
+
+**Wave 2** *(all three parallel; each depends only on 04-01)*
+
+- [ ] 04-02-PLAN.md — Author relationships in profiles: Relationships section on Person/Group, "+ Add relationship" flow (direction + label/date/notes), one canonical link on both ends, remove standalone menu item (REL-01, REL-02)
+- [ ] 04-03-PLAN.md — Data-driven map connectors: image-space Konva connectors layer (listening=false) beneath markers, live drag-follow, person↔person-only render rule, labels-off toggle (REL-03)
+- [ ] 04-04-PLAN.md — Viewer-only relationship graph: react-cytoscapejs host, cose + preset position cache, node-tap→ProfileSidebar via AT bridge, ego highlight, ViewSwitcher entry (REL-04)
+
 **Research flag:** Standard patterns — Cytoscape.js is well-documented. Light research only on layout-algorithm selection for performance; pre-cache node positions for larger graphs.
 **UI hint**: yes
 
@@ -225,6 +238,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
-| 4. Relationships & Graph | 0/TBD | Not started | - |
+| 4. Relationships & Graph | 0/4 | Planned | - |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
