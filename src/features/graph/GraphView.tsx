@@ -185,7 +185,13 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
       const node = e.target;
       onSelectRef.current(node.data('kind') as 'people' | 'groups', node.id());
     });
-    cy.one('layoutstop', () => {
+    // Persist positions after EVERY layout, not just the first (WR-03). react-cytoscapejs keeps one
+    // `cy` for the component's lifetime, so `cy.one` fired only on the initial `cose` and every later
+    // re-run (a node added → cache invalidated → `cose` again) had no listener — the new node's
+    // position was never saved and `hasCachedPositions` stayed false forever, defeating the D-13
+    // `preset` fast-path for any DB that is ever edited. `cy.on` is registered once (guarded above)
+    // and re-saves idempotently on each `layoutstop`.
+    cy.on('layoutstop', () => {
       void savePositions(cy);
     });
   }, []);
