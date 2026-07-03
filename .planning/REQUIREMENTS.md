@@ -33,12 +33,12 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Maps & Editor
 
 - [x] **MAP-01**: User can create a map using an uploaded image as the background
-- [ ] **MAP-02**: User can draw shapes, lines, and zones on a map to mark rooms/areas
-- [ ] **MAP-03**: User can organize map content into layers
+- [x] **MAP-02**: User can draw shapes, lines, and zones on a map to mark rooms/areas
+- [x] **MAP-03**: User can organize map content into layers
 - [x] **MAP-04**: User can place a person on a map as a round photo-avatar marker
-- [ ] **MAP-05**: A single person can be placed on multiple maps at once
-- [ ] **MAP-06**: User can place a location-link marker with a distinctive unique shape that navigates ("portals") to another map
-- [ ] **MAP-07**: User can nest maps into spatial map-groups (floor → building → street) and navigate the hierarchy
+- [x] **MAP-05**: A single person can be placed on multiple maps at once
+- [x] **MAP-06**: User can place a location-link marker with a distinctive unique shape that navigates ("portals") to another map
+- [x] **MAP-07**: User can nest maps into spatial map-groups (floor → building → street) and navigate the hierarchy
 
 ### Relationships & Graph
 
@@ -122,12 +122,12 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PROF-02 | Phase 1 | Complete |
 | PROF-03 | Phase 1 | Complete |
 | MAP-01 | Phase 1 | Complete |
-| MAP-02 | Phase 3 | Pending |
-| MAP-03 | Phase 3 | Pending |
+| MAP-02 | Phase 3 | Complete |
+| MAP-03 | Phase 3 | Complete |
 | MAP-04 | Phase 1 | Complete |
-| MAP-05 | Phase 3 | Pending |
-| MAP-06 | Phase 3 | Pending |
-| MAP-07 | Phase 3 | Pending |
+| MAP-05 | Phase 3 | Complete |
+| MAP-06 | Phase 3 | Complete |
+| MAP-07 | Phase 3 | Complete |
 | REL-01 | Phase 4 | Pending |
 | REL-02 | Phase 4 | Pending |
 | REL-03 | Phase 4 | Pending |
