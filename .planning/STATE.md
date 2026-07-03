@@ -6,9 +6,9 @@ current_phase: 4
 current_phase_name: Relationships & Graph
 status: ready_to_plan
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-03T02:07:15.477Z"
-last_activity: 2026-07-02
-last_activity_desc: Phase 03 complete (UAT 3/3 pass), transitioned to Phase 4
+last_updated: "2026-07-03T03:59:32.062Z"
+last_activity: 2026-07-03
+last_activity_desc: "Quick task 260703-f9m — added favicon (Phase 4 still ready_to_plan)"
 progress:
   total_phases: 7
   completed_phases: 4
@@ -117,6 +117,12 @@ Recent decisions affecting current work:
 
 - ⚠️ [Phase 3] Polygon draw tool is armed in ToolPalette (shortcut P) but its multi-click wiring in MapView was never delivered; the pure `addPolygonVertex`/`closePolygon` helpers exist and are unit-tested. Non-blocking — Rect/Ellipse/Line satisfy MAP-02. Either wire the multi-click path or formally drop the tool. See 03-VERIFICATION.md (non-blocking warning).
 - Phase 6 (Mega megajs) still carries a research flag — spike the browser SDK before planning. (Phase 1 Drive-auth and Phase 3 Konva-at-scale research flags are now resolved.)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260703-f9m | Add a favicon (stop /favicon.ico 404 + browser-tab icon) | 2026-07-03 | c0bf714 | [260703-f9m-add-a-favicon-public-favicon-svg-link-re](./quick/260703-f9m-add-a-favicon-public-favicon-svg-link-re/) |
 
 ### Roadmap Evolution
 
