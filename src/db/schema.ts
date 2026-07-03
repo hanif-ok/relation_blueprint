@@ -119,6 +119,16 @@ export class RelationBlueprintDB extends Dexie {
           }
         });
     });
+    // Phase 4 (REL-01): add the `fromId`/`toId` indexes to `relationshipLinks` so the reverse
+    // lookup (`listRelationshipsFor`) is a single indexed `.where('fromId').equals(x).or('toId')`
+    // union instead of a full-table scan. This is INDEX-ONLY: Dexie skips records whose indexed
+    // key is `undefined` (pre-Phase-4 shells have no endpoints), so NO `.upgrade()` callback and
+    // NO data rewrite are needed. This is a Dexie schema, NOT a Drizzle/Prisma migration — the
+    // browser auto-upgrades on open, there is NO migration-push step (see the file header + the
+    // schema-gate-dexie-false-positive project-memory note).
+    this.version(5).stores({
+      relationshipLinks: 'id, name, updatedAt, dirty, fromId, toId',
+    });
   }
 }
 

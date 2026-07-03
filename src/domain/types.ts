@@ -224,10 +224,23 @@ export interface Group {
 }
 
 /**
- * A Relationship-link (D-08) — a data-bearing shell in Phase 2. It is a real entity record
- * with its own data (REL-02: optional `label`/`date`/`notes`) + the universal spine + custom
- * values, but it carries NO endpoints yet — attaching person↔person / person↔group /
- * group↔group wiring (and the connectors/graph) is Phase 4.
+ * The two entity families a relationship endpoint may point at (D-07): a Person or a social
+ * Group. A Location (`maps`) is deliberately excluded — relationships connect people and groups,
+ * never places. The closed set is the runtime validation gate at both the write path and the
+ * backup-import boundary (T-04-02).
+ */
+export type RelationshipEndpointType = 'people' | 'groups';
+
+/**
+ * A Relationship-link (D-08). Phase 2 shipped this as a data-bearing SHELL (spine + custom + the
+ * REL-02 `label`/`date`/`notes`) with no endpoints. Phase 4 attaches the ordered endpoint pair
+ * (`fromType`/`fromId` → `toType`/`toId`) plus a `directed` flag (D-01 per-link direction), so
+ * one canonical link is queried from BOTH ends (D-04) and the connectors/graph project from it.
+ *
+ * The endpoint fields are OPTIONAL, mirroring the `Marker.kind`/`personId` optional precedent: a
+ * pre-Phase-4 shell record (and any older backup) still validates with no data migration. An
+ * absent `directed` is treated as `false` at every read site (normalize at read, not a required
+ * schema default).
  */
 export interface RelationshipLink {
   id: string;
@@ -239,6 +252,16 @@ export interface RelationshipLink {
   label?: string;
   /** REL-02: an associated date (ISO string). */
   date?: string;
+  /** D-07: the `from` endpoint's entity family (people|groups only). OPTIONAL for old shells. */
+  fromType?: RelationshipEndpointType;
+  /** The `from` endpoint entity id. OPTIONAL for old shells. */
+  fromId?: string;
+  /** D-07: the `to` endpoint's entity family (people|groups only). OPTIONAL for old shells. */
+  toType?: RelationshipEndpointType;
+  /** The `to` endpoint entity id. OPTIONAL for old shells. */
+  toId?: string;
+  /** D-01: `true` = directed from→to; absent/`false` = symmetric. Normalized to false at read. */
+  directed?: boolean;
   custom: CustomValues;
   updatedAt: number;
   dirty: boolean;

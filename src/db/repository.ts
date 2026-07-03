@@ -29,6 +29,7 @@ import type {
   MarkerKind,
   MediaRef,
   Person,
+  RelationshipEndpointType,
   RelationshipLink,
   Shape,
 } from '@/domain/types';
@@ -189,6 +190,13 @@ export async function deleteEntity(entityType: DeletableEntityType, id: string):
       // Cascade markers for the spatial types only.
       if (entityType === 'people') await db.markers.where('personId').equals(id).delete();
       else if (entityType === 'maps') await db.markers.where('mapId').equals(id).delete();
+
+      // Phase-4 (REL-01 integrity / T-04-03): a Person or Group can be a relationship endpoint, so
+      // cascade-delete every link it touches (fromId OR toId) inside this SAME rw transaction. This
+      // prevents a dangling edge that would crash a connector/graph projection over a missing node.
+      if (entityType === 'people' || entityType === 'groups') {
+        await db.relationshipLinks.where('fromId').equals(id).or('toId').equals(id).delete();
+      }
 
       if (!victim) return;
 
@@ -453,6 +461,13 @@ export type CreateRelationshipLinkInput = {
   notes?: string;
   label?: string;
   date?: string;
+  // Phase-4 endpoints (D-01/D-07). Optional so the shell can still be created without them; the
+  // closed people|groups enum on RelationshipLinkSchema rejects a Location endpoint at parse time.
+  fromType?: RelationshipEndpointType;
+  fromId?: string;
+  toType?: RelationshipEndpointType;
+  toId?: string;
+  directed?: boolean;
   custom?: CustomValues;
 };
 
@@ -467,6 +482,12 @@ export async function createRelationshipLink(
     notes: input.notes,
     label: input.label,
     date: input.date,
+    // Endpoints ride through the same validated parse — a `maps` fromType/toType throws here (T-04-02).
+    fromType: input.fromType,
+    fromId: input.fromId,
+    toType: input.toType,
+    toId: input.toId,
+    directed: input.directed,
     custom: input.custom ?? {},
     updatedAt: Date.now(),
     dirty: true,
@@ -474,6 +495,16 @@ export async function createRelationshipLink(
   await db.relationshipLinks.put(link);
   emit({ entityType: 'relationship-links', entityId: link.id, op: 'create' });
   return link;
+}
+
+/**
+ * REL-01 reverse lookup (D-04): every relationship-link where `entityId` is EITHER endpoint. A
+ * single indexed union over the Phase-4 `fromId`/`toId` indexes (not a full-table filter), so it
+ * stays fast as the link set grows. The same canonical link is returned whether the entity is the
+ * `from` or the `to` end.
+ */
+export async function listRelationshipsFor(entityId: string): Promise<RelationshipLink[]> {
+  return db.relationshipLinks.where('fromId').equals(entityId).or('toId').equals(entityId).toArray();
 }
 
 export type UpdateRelationshipLinkPatch = Partial<

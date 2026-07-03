@@ -132,6 +132,13 @@ export const GroupSchema = z.object({
   dirty: z.boolean(),
 });
 
+/**
+ * D-07: the closed people|groups endpoint family. This enum is the V5 input-validation control
+ * (T-04-02): a Location (`maps`) endpoint is rejected at BOTH the repository write path AND the
+ * BackupSchema import boundary (untrusted-at-rest).
+ */
+export const RelationshipEndpointTypeSchema = z.enum(['people', 'groups']);
+
 export const RelationshipLinkSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -140,6 +147,14 @@ export const RelationshipLinkSchema = z.object({
   notes: z.string().optional(),
   label: z.string().optional(),
   date: z.string().optional(),
+  // Phase-4 endpoints (D-01/D-07). OPTIONAL so a pre-Phase-4 shell record and older backups still
+  // validate with no migration (mirrors the Marker optional-with-default precedent). The closed
+  // enum rejects a `maps`/Location endpoint at the write path and the import gate (T-04-02).
+  fromType: RelationshipEndpointTypeSchema.optional(),
+  fromId: z.string().optional(),
+  toType: RelationshipEndpointTypeSchema.optional(),
+  toId: z.string().optional(),
+  directed: z.boolean().optional(),
   custom: CustomValuesSchema,
   updatedAt: z.number(),
   dirty: z.boolean(),
