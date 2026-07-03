@@ -1,8 +1,8 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "In the people/location browse view, the SORTER and the sticky HEADER (people/location) draw over (render on top of) the new/edit profile modal — the modal is obscured by that chrome. A z-index / stacking-context bug. NOTE: NOT the Konva map — the reporter corrected this; it is the browse-list chrome."
 created: 2026-07-02T00:00:00Z
-updated: 2026-07-03T00:00:00Z
+updated: 2026-07-03T08:35:00Z
 ---
 
 ## Current Focus
@@ -93,8 +93,10 @@ verification: |
     each of the six modal overlays+panels declares var(--z-modal). Proven to have teeth:
     temporarily deleting one modal's z-index turned it RED (1 failed), restored to green.
   - `tsc --noEmit` exit 0. Full `vitest run` green: 46 files / 271 tests (incl. the 9 new).
-  - Awaiting human confirmation that the modal now visually renders above the header +
-    sorter in the running browse view.
+  - Human visually CONFIRMED (2026-07-03): ran `npm run dev`, opened the People/Locations
+    browse list, and opened the new/edit profile modal — the modal panel + scrim now sit
+    fully above the browse sticky header and the A–Z sorter (no bleed-through). Delete-confirm
+    and photo lightbox also cover the chrome correctly. Fix verified end-to-end; session resolved.
 files_changed:
   - src/app/tokens.css (added the shared z-index scale)
   - src/features/entity-form/EntityForm.module.css (overlay+panel → --z-modal)
