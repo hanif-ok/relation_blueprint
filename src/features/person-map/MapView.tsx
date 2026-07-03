@@ -37,6 +37,7 @@ import { ZoneLabel } from './editor/ZoneLabel';
 import { StylePopover } from './editor/StylePopover';
 import { TransformerOverlay } from './editor/TransformerOverlay';
 import { LayersPanel } from './editor/LayersPanel';
+import { ConnectorLayer } from './editor/ConnectorLayer';
 import { PortalGlyph, PORTAL_TARGET_DELETED_MESSAGE } from './editor/PortalGlyph';
 import { PortalTargetPicker } from './editor/PortalTargetPicker';
 import { PersonPicker } from './editor/PersonPicker';
@@ -199,6 +200,11 @@ export function MapView({
     [] as Marker[],
   );
   const people = useLiveQuery(() => db.people.toArray(), [], []);
+  // REL-03: all relationship-links drive the connector projection. A connector renders only for a
+  // person↔person link whose both endpoints have a marker on THIS map (buildConnectors filters the
+  // rest) — group-involving/endpoint-less/unplaced links draw nothing. Reactive so authoring a new
+  // relationship (or moving a marker) recomputes the lines from source.
+  const links = useLiveQuery(() => db.relationshipLinks.toArray(), [], []);
 
   const bgImage = useMapImage(map?.background.hash);
 
@@ -798,6 +804,16 @@ export function MapView({
                 onTransformEnd={editingBackground ? handleBackgroundTransformEnd : undefined}
               />
             )}
+          </Layer>
+
+          {/* Connectors (REL-03) — the data-driven relationship lines. A dedicated NON-INTERACTIVE
+              physical Konva layer inserted BETWEEN L0 (background) and L1 (content) so the lines
+              paint BENEATH the markers and never intercept a marker drag/click (D-08/D-10, B7).
+              This is a physical-layer insertion, NOT a user-facing logical (MapDoc.layers) layer.
+              Endpoints compose through the SAME background transform as markers (imageToStage) so
+              they stay anchored on a background re-fit and follow a marker live during a drag. */}
+          <Layer listening={false}>
+            <ConnectorLayer links={links ?? []} markers={markers ?? []} transform={transform} />
           </Layer>
 
           {/* L1 — content. ALL objects (shapes + markers) live in this SINGLE physical Konva layer

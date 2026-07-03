@@ -53,7 +53,7 @@ async function seed(page: import('@playwright/test').Page) {
     const a = await rb.createPerson({ name: 'Ada' });
     const b = await rb.createPerson({ name: 'Bianca' });
     const markerA = await rb.upsertMarker({ mapId: map.id, personId: a.id, x: 200, y: 160 });
-    const markerB = await rb.upsertMarker({ mapId: map.id, personId: b.id, x: 400, y: 300 });
+    await rb.upsertMarker({ mapId: map.id, personId: b.id, x: 400, y: 300 });
     const rel = await rb.createRelationshipLink({
       name: 'rel',
       label: 'mentor',
