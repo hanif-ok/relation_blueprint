@@ -207,7 +207,17 @@ export function App() {
   async function showOnMap(id: string) {
     const person = await db.people.get(id);
     const marker = await db.markers.where('personId').equals(id).first();
-    if (marker) setActiveMapId(marker.mapId);
+    if (marker) {
+      setActiveMapId(marker.mapId);
+      // Select + CENTER the placement, not just switch to the map. Reuse the exact focusMarkerId
+      // plumbing the profile "Appears on" jump uses (jumpToPlacement → MapView's focusMarkerId
+      // effect selects the marker and recenters the Stage on it). Without this, "Show on map" only
+      // switched the active map + view: MapView remounts with a fresh (0,0)/scale-1 Stage and no
+      // fit-to-viewport, so a placement on a map larger than the viewport is culled off-screen —
+      // the action reached the map but never the LOCATION (03-UI-SPEC l.254: show-on-map focuses/
+      // centers the placement). (DEBUG list-no-goto-map-location.)
+      setFocusMarkerId(marker.id);
+    }
     setActiveView('map');
     // Only open in marker context when the person is actually placed; otherwise 'list' context so the
     // profile doesn't render a "Remove from map" action for someone on no map.
