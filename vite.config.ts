@@ -93,6 +93,25 @@ export default defineConfig({
       },
     }),
   ],
+  // Google Identity Services' OAuth token popup needs THIS app to keep its opener↔popup link.
+  // accounts.google.com sends a Cross-Origin-Opener-Policy header; unless the app is served with
+  // `same-origin-allow-popups`, the browser severs the popup so GIS can't poll window.closed and
+  // the flow dies with "Failed to open popup window" (see .planning/debug/resolved/
+  // oauth-prompt-every-refresh.md). The header must come from whatever SERVES the app: set here
+  // for `vite dev` (server) and `vite preview` (preview).
+  // ⚠ GitHub Pages cannot send custom response headers, so the PRODUCTION deploy must provide this
+  // COOP header another way (a headers-capable host such as Cloudflare Pages / Netlify `_headers`,
+  // or enabling FedCM) — otherwise Drive OAuth breaks in production exactly as it did in dev.
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
