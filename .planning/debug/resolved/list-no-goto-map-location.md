@@ -1,8 +1,9 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "the map bug, from the list, no option to go to the map location from the object list"
 created: 2026-07-03T00:00:00Z
-updated: 2026-07-03T12:40:00Z
+updated: 2026-07-03T13:05:00Z
+resolved: 2026-07-03T13:05:00Z
 ---
 
 ## Current Focus
@@ -10,7 +11,7 @@ updated: 2026-07-03T12:40:00Z
 hypothesis: PRESENT-but-broken. The browse-list "Show on map ↗" affordance EXISTS (BrowseRow → onShowOnMap → App.showOnMap) and is enabled for People, but it only switches the active map + the view to Map and opens the profile — it never sets `focusMarkerId`, which is the ONLY mechanism that selects the target marker AND recenters the Stage on it. So the action reaches the map but not the LOCATION; for any map larger than the viewport the person's marker is off the fresh (0,0)/scale-1 Stage and gets culled before mount → invisible.
 test: (done) Compared App.showOnMap vs App.jumpToPlacement; read MapView focusMarkerId effect (l.672-685); read coords.imageToStage (identity at default transform); confirmed Stage mounts with no initial fit-to-viewport and off-screen markers are culled; confirmed via git history that focusMarkerId centering (03-07) postdates showOnMap (02-03) and showOnMap was never updated; confirmed 03-UI-SPEC.md l.254 specifies the placement-focus jump "extends Phase-2 D-16 'show on map'".
 expecting: Adding `setFocusMarkerId(marker.id)` to showOnMap (reusing the exact tested plumbing jumpToPlacement uses) will select + recenter the placement, making "Show on map" go to the LOCATION.
-next_action: "Fix applied + self-verified (unit 275/275, typecheck clean for changed files, new e2e green with fix / red without). Awaiting human confirmation the browse-list 'Show on map' now lands on the person's LOCATION."
+next_action: "RESOLVED — human-verified 2026-07-03 (UAT passed). Fix committed in e6d7121; regression e2e e2e/show-on-map.spec.ts green. No further action."
 
 reasoning_checkpoint:
   hypothesis: "The browse-list 'Show on map' handler (App.showOnMap) never sets focusMarkerId, so MapView never selects/recenters the person's marker; it only switches map+view. focusMarkerId is the sole select+recenter mechanism (MapView effect l.672-685)."
@@ -73,7 +74,7 @@ started: Unknown — likely never implemented (no prior "go to map location" fea
 
 root_cause: "The browse-list 'Show on map ↗' action (BrowseRow → onShowOnMap → App.showOnMap) switched the active map + view and opened the profile, but never set `focusMarkerId` — the sole signal that makes MapView select the target marker and recenter the Stage on it (MapView effect, MapView.tsx l.672-685). MapView unmounts on view-switch and remounts with a fresh (0,0)/scale-1 Stage and no fit-to-viewport; off-screen markers are culled before mount. So 'Show on map' reached the map but not the LOCATION (and on a map larger than the viewport the placement was culled/invisible). The centering plumbing was added in Phase 3 (03-07) for the profile 'Appears on' jump; the pre-existing 02-03 showOnMap caller was never wired to it, despite 03-UI-SPEC l.254 specifying show-on-map focuses/centers the placement."
 fix: "In src/app/App.tsx `showOnMap`, when a marker is found, also call `setFocusMarkerId(marker.id)` — reusing the exact tested plumbing `jumpToPlacement` uses. This makes MapView select + recenter the placement, so the action lands on the person's location. Added regression e2e e2e/show-on-map.spec.ts (green with the fix; red without — the Transformer never attaches)."
-verification: "Self-verified: `npm run typecheck` clean for the changed files (App.tsx + new spec); `npm test` 275/275 pass; new e2e green with the fix (Stage recenters on the marker + Transformer attaches + marker Group mounts on-screen) and red with the fix removed (proves reproduction). Awaiting human confirmation in the real workflow. NOTE: an UNRELATED, uncommitted WIP edit to tests/connect/useSyncEngine.test.tsx (missing `createDexieRepoPort` import) currently breaks `tsc` project-wide — not caused by this fix and not part of this commit."
+verification: "Self-verified: `npm run typecheck` clean for the changed files (App.tsx + new spec); `npm test` 275/275 pass; new e2e green with the fix (Stage recenters on the marker + Transformer attaches + marker Group mounts on-screen) and red with the fix removed (proves reproduction). HUMAN-VERIFIED 2026-07-03 (UAT passed): browse-list 'Show on map' now lands on the person's LOCATION. Fix committed in e6d7121. The earlier note about an uncommitted tests/connect/useSyncEngine.test.tsx import breaking tsc is now moot — build:e2e is green (open-map.spec.ts passed through the Playwright webServer)."
 files_changed:
   - "src/app/App.tsx — showOnMap now sets focusMarkerId(marker.id) so the browse-list 'Show on map' selects + recenters the placement (goes to the LOCATION, not just the map)."
   - "e2e/show-on-map.spec.ts — new regression e2e: browse-list 'Show on map' recenters + selects the off-screen placement."
