@@ -200,7 +200,15 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     // `preset` fast-path for any DB that is ever edited. `cy.on` is registered once (guarded above)
     // and re-saves idempotently on each `layoutstop`.
     cy.on('layoutstop', () => {
-      void savePositions(cy);
+      // Persist the fresh layout, THEN refresh the in-memory cache (IN-02). Without the reload the
+      // React `posCache` state stayed stale after a node was added: `hasCachedPositions` kept
+      // returning false and the D-13 `preset` fast-path stayed disabled for the rest of the session
+      // (only a full reopen re-probed the cache). Reloading here lets a subsequent same-node-set
+      // render re-enter the preset path without a reload. `setPosCache` is a stable state setter,
+      // safe to call from this once-registered handler.
+      void savePositions(cy).then(() =>
+        loadPositions().then((positions) => setPosCache({ probed: true, positions })),
+      );
     });
   }, []);
 
