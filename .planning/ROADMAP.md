@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Storage Spine & First Person on a Map** - Prove the serverless spine end-to-end: Drive connect, sharded local-first storage, a Person placed on an image-background map, profile, and tested export/restore (completed 2026-06-24)
 - [x] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (verification 2026-06-26: gaps found — 5/6 must-haves; D-05 type-change coercion unwired, awaiting gap closure) (completed 2026-06-26)
 - [x] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps (completed 2026-06-27)
-- [ ] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph
+- [x] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph (completed 2026-07-03)
 - [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
 - [ ] **Phase 6: Mega.nz Provider** - Second-class opt-in Mega storage behind the existing provider abstraction
 
@@ -180,7 +180,7 @@ Plans:
   3. Relationships the user authored appear automatically as data-driven connectors between markers on the map (not hand-drawn) and update when markers move
   4. User can open a viewer-only relationship graph that visualizes how people and groups connect
 
-**Plans**: 1/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 
@@ -190,9 +190,9 @@ Plans:
 
 **Wave 2** *(all three parallel; each depends only on 04-01)*
 
-- [ ] 04-02-PLAN.md — Author relationships in profiles: Relationships section on Person/Group, "+ Add relationship" flow (direction + label/date/notes), one canonical link on both ends, remove standalone menu item (REL-01, REL-02)
-- [ ] 04-03-PLAN.md — Data-driven map connectors: image-space Konva connectors layer (listening=false) beneath markers, live drag-follow, person↔person-only render rule, labels-off toggle (REL-03)
-- [ ] 04-04-PLAN.md — Viewer-only relationship graph: react-cytoscapejs host, cose + preset position cache, node-tap→ProfileSidebar via AT bridge, ego highlight, ViewSwitcher entry (REL-04)
+- [x] 04-02-PLAN.md — Author relationships in profiles: Relationships section on Person/Group, "+ Add relationship" flow (direction + label/date/notes), one canonical link on both ends, remove standalone menu item (REL-01, REL-02)
+- [x] 04-03-PLAN.md — Data-driven map connectors: image-space Konva connectors layer (listening=false) beneath markers, live drag-follow, person↔person-only render rule, labels-off toggle (REL-03)
+- [x] 04-04-PLAN.md — Viewer-only relationship graph: react-cytoscapejs host, cose + preset position cache, node-tap→ProfileSidebar via AT bridge, ego highlight, ViewSwitcher entry (REL-04)
 
 **Research flag:** Standard patterns — Cytoscape.js is well-documented. Light research only on layout-algorithm selection for performance; pre-cache node positions for larger graphs.
 **UI hint**: yes
@@ -238,6 +238,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Storage Spine & First Person on a Map | 10/10 | Complete   | 2026-06-25 |
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
-| 4. Relationships & Graph | 1/4 | In Progress|  |
+| 4. Relationships & Graph | 4/4 | Complete   | 2026-07-03 |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
