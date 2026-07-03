@@ -126,6 +126,13 @@ files_changed:
 #     the honest model. True silent reconnect needs FedCM/a backend (roadmap).
 #   - Issue 2 (sync doesn't bring back elements, cross-browser): onConnected pulled but never
 #     pushed pre-existing local data. Fixed with an initial push after reconcile (f1df06f).
+#   - Issue 3 (sync works but images don't load, cross-browser): media was PUSH-ONLY — uploaded
+#     to media/<hash> but never pulled, and resolveMediaUrl has no cloud fallback. Fixed with
+#     reconcileMedia() on connect, run BEFORE the entity reconcile so photos are local by the time
+#     entities render (the image hooks resolve a hash once and don't retry). Writes db.media
+#     directly (no re-push loop), marks pulled hashes synced (no duplicate uploads). Eager
+#     download-all; lazy on-demand is the scale follow-up (af124c2). Files: src/sync/syncEngine.ts
+#     (export MEDIA_FOLDER + SYNCED_MEDIA_KEY), src/features/connect/useSyncEngine.ts.
 #   - Drift: single-curator LWW by updatedAt; pull-then-push on connect makes sequential
 #     browser-switching safe. Concurrent same-record offline edits = last-writer-wins (out of scope).
 # STILL OPEN (non-blocking, not a bug): production on GitHub Pages can't send the COOP header, so
