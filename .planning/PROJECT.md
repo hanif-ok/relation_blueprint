@@ -95,7 +95,7 @@ You can place people on a map of real locations and instantly see **who is where
 | Single curator per database (no multi-user sync) | Removes conflict-resolution complexity; makes serverless feasible | — Pending |
 | Four first-class object types incl. Groups and Relationship-links | Rich relationship modeling (person↔person/group, group↔group) with data-bearing links | — Pending |
 | Typed custom fields | Powers per-field checkbox search and validation; the search feature depends on it | — Pending |
-| Relationships are data-driven, graph is viewer-only | Single source of truth in entity data; connectors/graph are projections of it | — Pending |
+| Relationships are data-driven, graph is viewer-only | Single source of truth in entity data; connectors/graph are projections of it | ✓ Phase 4 — data-driven map connectors + viewer-only Cytoscape graph shipped, UAT-confirmed |
 | Social Groups separate from spatial Map-groups | Keeps social grouping and floor→building→street nesting from colliding | — Pending |
 | Marker/shape coordinates stored in image-space, composed through `backgroundTransform` (Phase 3) | One background re-fit keeps every placement anchored to its physical spot — no per-marker recompute | ✓ Phase 3 — anchoring UAT-confirmed |
 | Multi-placement = a new Marker row per placement over one canonical Person (D-13, Phase 3) | Person edits propagate to all placements; each placement keeps its own x/y | ✓ Phase 3 |
@@ -123,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after Phase 4 — relationships ship: author person↔person/person↔group/group↔group links (with label/date/notes) from the profile sidebar as one canonical link visible on both ends, see them projected as data-driven image-space map connectors that follow markers live, and explore a viewer-only Cytoscape relationship graph. All 4 success criteria verified (4/4 must-haves; 320/320 tests). Advisory code review (04-REVIEW.md) flagged 1 critical graph-edge robustness bug (deleted-endpoint node) + 6 warnings — tracked for a --fix pass.*
+*Last updated: 2026-07-07 after Phase 4 — relationships ship: author person↔person/person↔group/group↔group links (with label/date/notes) from the profile sidebar as one canonical link visible on both ends, see them projected as data-driven image-space map connectors that follow markers live, and explore a viewer-only Cytoscape relationship graph. Phase closed out: code review re-run clean (0 critical; all prior findings + the fresh 3 warning / 2 info fixed and committed), UAT 10/10 passed with 0 issues, and the 7-threat security register formally accepted under the single-curator / provider-level-security v1 boundary (04-SECURITY.md, threats_open: 0). Phase 4 marked complete; next is Phase 5 — field-scoped search.*

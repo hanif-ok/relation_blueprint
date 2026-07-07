@@ -5,9 +5,9 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Field-Scoped Search
 status: executing
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-07-03T09:07:51.321Z"
-last_activity: 2026-07-03
+stopped_at: Phase 4 complete (review + UAT + security); ready to plan Phase 5
+last_updated: "2026-07-07T01:57:37.499Z"
+last_activity: 2026-07-07
 last_activity_desc: Phase 04 complete, transitioned to Phase 5
 progress:
   total_phases: 7
@@ -21,17 +21,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-02)
+See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** You can place people on a map of real locations and instantly see who is where, open any person to their full profile, and trace how people and groups relate — all from data you fully own, with no server.
-**Current focus:** Phase 04 — relationships-graph
+**Current focus:** Phase 5 — Field-Scoped Search
 
 ## Current Position
 
 Phase: 5 — Field-Scoped Search
 Plan: Not started
-Status: Executing Phase 04
-Last activity: 2026-07-03 — Phase 04 complete, transitioned to Phase 5
+Status: Ready to plan
+Last activity: 2026-07-07 — Phase 04 complete (code review + UAT 10/10 + security accepted), transitioned to Phase 5
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -39,7 +39,7 @@ Progress: [████████████████████] 25/25 p
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 16
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -74,6 +74,9 @@ Progress: [████████████████████] 25/25 p
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 04]: Relationship-links are ONE canonical record with optional `people`|`groups` endpoints (`z.enum` gate at BOTH the repository write and the backup-import boundary); authored/visible from BOTH endpoints via the `listRelationshipsFor` reverse index — attached to the canonical Person/Group, never a placement
+- [Phase 04]: Map connectors and the Cytoscape graph are PURE projections of link data — `buildConnectors`/`toGraphElements` drop endpoint-less / unplaced / deleted-endpoint links so no dangling edge or crash occurs; the graph is viewer-only (`autoungrabify`, no data-mutating drag)
+- [Phase 04]: All user text (labels/notes/entity names) renders as JSX children / Konva `Text` / Cytoscape canvas text — never `dangerouslySetInnerHTML` (XSS boundary). Phase-4 7-threat STRIDE register formally ACCEPTED under the single-curator / provider-level-security v1 boundary (04-SECURITY.md, threats_open: 0)
 - [Phase 03]: Marker/shape coords stored in IMAGE-space, composed at render through `imageToStage(backgroundTransform)` — a background re-fit keeps every placement anchored to its physical spot (UAT-confirmed); Phase 4 connectors must draw in the same image-space so relationship lines stay anchored too
 - [Phase 03]: Multi-placement = a new Marker row per placement over one canonical Person (D-13); `db.markers.where('personId')` is the reverse index ("Appears on:") — Phase 4 relationships attach to the canonical Person/Group, never to a placement
 - [Phase 03]: Portal marker is a distinct door-arch glyph (`colors.portal`), single-click select / double-click navigate (D-06/D-07); precedent for a per-marker-kind glyph vocabulary
@@ -142,6 +145,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-03T02:07:15.462Z
-Stopped at: Phase 4 UI-SPEC approved
-Resume file: .planning/phases/04-relationships-graph/04-UI-SPEC.md
+Last session: 2026-07-07
+Stopped at: Phase 4 complete — code review (0 critical, all fixed), UAT 10/10 passed, security accepted (threats_open: 0). Ready to plan Phase 5.
+Resume file: None
