@@ -114,6 +114,9 @@ Recent decisions affecting current work:
 
 - (ui) Map-editor & profile-media UX enhancements deferred from Phase 1 UAT — resizable markers, image/marker transform handles, photo lightbox, gallery sort/reorder. See `.planning/todos/pending/2026-06-24-map-editor-and-profile-media-ux-enhancements-deferred-from-p.md`
 - (tooling) Enable COOP header in production for Drive OAuth — GitHub Pages can't send `Cross-Origin-Opener-Policy: same-origin-allow-popups` that GIS OAuth needs; move to Cloudflare Pages/Netlify `_headers` or adopt FedCM before shipping Drive sync. See `.planning/todos/pending/2026-07-03-enable-coop-header-in-production-for-drive-oauth.md`
+- (ui) Map & graph appearance settings — customizable marker name-label + connector line colors (white-on-white legibility). Phase 04 UAT. See `.planning/todos/pending/2026-07-07-map-graph-appearance-settings-customizable-label-and-connect.md`
+- (ui) Graph node repositioning — drag nodes to rearrange layout, viewer-only (no data mutation), optional persist to position cache. Phase 04 UAT. See `.planning/todos/pending/2026-07-07-graph-node-repositioning-drag-to-rearrange-layout.md`
+- (ui) Dynamic ego focus — re-layout graph around the focused person and follow taps (clicking another node re-egos onto them). Phase 04 UAT. See `.planning/todos/pending/2026-07-07-dynamic-ego-focus-graph-re-center-and-follow-tapped-node.md`
 
 ### Blockers/Concerns
 
