@@ -10,7 +10,7 @@ last_updated: "2026-07-07T01:57:37.499Z"
 last_activity: 2026-07-07
 last_activity_desc: Phase 04 complete, transitioned to Phase 5
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 5
   total_plans: 29
   completed_plans: 29
@@ -137,6 +137,7 @@ Recent decisions affecting current work:
 - Phase 2 edited: added success criteria 5-6: profile photo lightbox/expand + gallery sort/reorder (deferred from Phase 1 UAT)
 - Phase 3 edited: added success criteria 6-7: resizable/rotatable markers + map image transform handles via Konva Transformer (deferred from Phase 1 UAT)
 - Phase 02.1 inserted after Phase 2: Close gap: DATA-03 — sync fieldDefs through the manifest cloud path (ENTITY_TYPES + reconcile + ManifestSchema) + push/reconcile regression test (URGENT)
+- Phase 7 added: Relationships & Map Visual Polish — folds in the 3 Phase-04 UAT enhancement todos (appearance settings, graph node repositioning, dynamic ego focus); polish extending Phase 3/4, sequenced after Phase 6, non-urgent
 
 ## Deferred Items
 

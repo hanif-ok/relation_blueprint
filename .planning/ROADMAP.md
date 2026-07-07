@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph (completed 2026-07-03)
 - [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
 - [ ] **Phase 6: Mega.nz Provider** - Second-class opt-in Mega storage behind the existing provider abstraction
+- [ ] **Phase 7: Relationships & Map Visual Polish** - Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout (folds in the Phase 04 UAT enhancement todos)
 
 ## Phase Details
 
@@ -228,10 +229,24 @@ Plans:
 **Plans**: TBD
 **Research flag:** NEEDS DEEPER RESEARCH — megajs browser-build real-world behavior, session-token lifecycle and whether a session id (never the password) can be safely serialized, and quota/throttle under real photo uploads. Full spike before PLAN.
 
+### Phase 7: Relationships & Map Visual Polish
+
+**Goal:** A curator can visually tailor and more fluidly navigate the already-shipped relationship/map/graph features — customize map marker name-label and connector line colors, drag graph nodes to rearrange the layout, and use a dynamic ego focus that re-lays-out the graph around the focused person and follows taps.
+**Depends on:** Phase 3 (map markers/labels), Phase 4 (connectors + graph)
+**Requirements:** TBD — bundles three enhancement todos captured from Phase 04 UAT (`.planning/todos/pending/2026-07-07-*.md`); formalize during `/gsd-plan-phase 7`
+**Success Criteria** (what must be TRUE):
+
+  1. User can change the map marker name-label text color and the map relationship connector line color; sensible defaults still read well over light and dark background images, and the choice persists across reloads (Dexie meta) — resolves the white-on-white legibility gap raised in Phase 04 UAT
+  2. User can drag graph nodes to rearrange the layout for readability without ever mutating relationship data (viewer-only); manual positions may optionally persist via the existing graph position cache
+  3. Ego focus is dynamic — opening/tapping a node re-lays-out the graph around that person, tapping a different node re-egos onto it (focus follows the tap), and exiting focus restores the saved layout
+
+**Plans:** 0 plans (run `/gsd-plan-phase 7` to break down)
+**Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -241,3 +256,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
 | 5. Field-Scoped Search | 0/TBD | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
+| 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
