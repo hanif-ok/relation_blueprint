@@ -54,6 +54,11 @@ export function useSearchIndex(): UseSearchIndex {
   // is dropped by both paths and stays unsearchable until the next coarse rebuild (WR-02). Drained
   // in emit order once the build completes.
   const pendingEventsRef = useRef<ChangeEvent[]>([]);
+  // Late-bound mirror of `enqueueMaintenance` so `handleEvent` can RE-enqueue an event (CR-01)
+  // without a circular useCallback dep: handleEvent → enqueueMaintenance → handleEvent would form a
+  // cycle (and, given declaration order, a temporal-dead-zone reference). The ref is filled in an
+  // effect once enqueueMaintenance exists; handleEvent reads it only at call time.
+  const enqueueMaintenanceRef = useRef<(ev: ChangeEvent) => void>(() => {});
   // Sync the schema mirror in an effect (never during render) so the onChange callback — which fires
   // only after mount/commit, on repository writes — always reads the current field set.
   useEffect(() => {
@@ -72,6 +77,13 @@ export function useSearchIndex(): UseSearchIndex {
     const personById = new Map<string, Person>();
     if (person) personById.set(person.id, person);
     await applyChange(current.index, current.fieldTextById, ev, personById, customDefsRef.current);
+    // A coarse rebuild swapped the bundle out from under us mid-await: `current` is now a discarded
+    // index, so publishing `swapped` here would clobber the newer bundle and pin search to the stale
+    // field schema (CR-01). Don't publish — re-enqueue so the event re-applies to the fresh index.
+    if (bundleRef.current !== current) {
+      enqueueMaintenanceRef.current(ev);
+      return;
+    }
     const swapped: SearchIndexBundle = {
       index: current.index,
       fieldTextById: current.fieldTextById,
@@ -92,6 +104,13 @@ export function useSearchIndex(): UseSearchIndex {
     },
     [handleEvent],
   );
+
+  // Keep the late-bound re-enqueue mirror pointed at the current enqueueMaintenance so handleEvent's
+  // CR-01 re-enqueue path always chains onto the live queue. enqueueMaintenance is stable, so this
+  // runs once.
+  useEffect(() => {
+    enqueueMaintenanceRef.current = enqueueMaintenance;
+  }, [enqueueMaintenance]);
 
   // ONE build from the current people snapshot on mount, and a coarse REBUILD whenever the field
   // schema changes. People create/update/delete do NOT trigger this — they flow through the
