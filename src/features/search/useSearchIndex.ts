@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
 import { listFieldDefs, onChange } from '@/db/repository';
+import type { ChangeEvent } from '@/db/repository';
 import type { FieldDef, Person } from '@/domain/types';
 import { applyChange, buildIndex, search, type SearchHit, type SearchIndexBundle } from './searchIndex';
 
@@ -44,6 +45,10 @@ export function useSearchIndex(): UseSearchIndex {
   // Ref mirrors so the once-installed onChange subscription always sees the latest bundle + schema.
   const bundleRef = useRef<SearchIndexBundle | null>(null);
   const customDefsRef = useRef<FieldDef[]>([]);
+  // Serializes ALL incremental index maintenance: every change event is chained onto this promise so
+  // applyChange calls apply strictly in emit order, never interleaving their async projectFieldText
+  // reads (WR-03). Mirrors the rw-transaction serialization useScopeSelection uses for its writes.
+  const maintenanceQueueRef = useRef<Promise<void>>(Promise.resolve());
   // Sync the schema mirror in an effect (never during render) so the onChange callback — which fires
   // only after mount/commit, on repository writes — always reads the current field set.
   useEffect(() => {
@@ -68,31 +73,50 @@ export function useSearchIndex(): UseSearchIndex {
     };
   }, [customDefs]);
 
+  // ONE serialized maintenance step for a single change event. Reads the LATEST bundle (a prior
+  // queued step may already have swapped it) and the current schema, applies the change, then swaps
+  // in a NEW bundle wrapper (around the same mutated index) to bump the `search`/`fieldText`
+  // identities so an open result view re-queries and reflects the change LIVE. Reads refs only, so
+  // its identity is stable across renders.
+  const handleEvent = useCallback(async (ev: ChangeEvent) => {
+    const current = bundleRef.current;
+    if (!current) return; // index not built yet — the event was (or will be) captured elsewhere
+    const person = ev.op === 'delete' ? undefined : await db.people.get(ev.entityId);
+    const personById = new Map<string, Person>();
+    if (person) personById.set(person.id, person);
+    await applyChange(current.index, current.fieldTextById, ev, personById, customDefsRef.current);
+    const swapped: SearchIndexBundle = {
+      index: current.index,
+      fieldTextById: current.fieldTextById,
+    };
+    bundleRef.current = swapped;
+    setBundle(swapped);
+  }, []);
+
+  // Chain one event onto the serial maintenance queue. `.catch` keeps the queue alive if a single
+  // step throws (a rejected link is otherwise poisoned and drops every later event, WR-03).
+  const enqueueMaintenance = useCallback(
+    (ev: ChangeEvent) => {
+      maintenanceQueueRef.current = maintenanceQueueRef.current
+        .then(() => handleEvent(ev))
+        .catch((err) => {
+          console.error('[useSearchIndex] incremental index maintenance failed', err);
+        });
+    },
+    [handleEvent],
+  );
+
   // Incremental maintenance (criterion 3): subscribe ONCE (mirroring useSyncEngine's onChange
-  // lifecycle) and route People create/update/delete through `applyChange` — never a full rebuild.
-  // All emits are post-commit, so a fresh read reflects the persisted row. Swapping in a NEW bundle
-  // wrapper (around the same mutated index) bumps the `search`/`fieldText` identities so an open
-  // result view re-queries and reflects the change LIVE, with no reload.
+  // lifecycle) and route People create/update/delete through the serial queue — never a full
+  // rebuild. All emits are post-commit, so a fresh read reflects the persisted row.
   useEffect(() => {
     const off = onChange((ev) => {
       if (ev.entityType !== 'people') return;
-      const current = bundleRef.current;
-      if (!current) return; // not built yet — the initial build will read the persisted row
-      void (async () => {
-        const person = ev.op === 'delete' ? undefined : await db.people.get(ev.entityId);
-        const personById = new Map<string, Person>();
-        if (person) personById.set(person.id, person);
-        await applyChange(current.index, current.fieldTextById, ev, personById, customDefsRef.current);
-        const swapped: SearchIndexBundle = {
-          index: current.index,
-          fieldTextById: current.fieldTextById,
-        };
-        bundleRef.current = swapped;
-        setBundle(swapped);
-      })();
+      if (!bundleRef.current) return; // not built yet — the initial build will read the persisted row
+      enqueueMaintenance(ev);
     });
     return off;
-  }, []);
+  }, [enqueueMaintenance]);
 
   // Stable across renders — identity changes only when the bundle is rebuilt OR incrementally
   // updated, so callers re-query exactly when (and only when) the index actually changed.
