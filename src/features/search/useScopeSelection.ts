@@ -76,10 +76,13 @@ export function useScopeSelection(): UseScopeSelection {
   );
 
   const setFieldChecked = useCallback(async (fieldKey: string, checked: boolean) => {
-    // Re-read inside the writer so concurrent toggles compose over the latest persisted map rather
-    // than a stale render snapshot.
-    const current = (await db.meta.get(SCOPE_META_KEY))?.value as ScopeSelection | undefined;
-    await db.meta.put({ key: SCOPE_META_KEY, value: applyScopeChange(current, fieldKey, checked) });
+    // Serialize the read-modify-write in a single rw transaction so rapid concurrent toggles (e.g.
+    // clicking several checkboxes in quick succession) each compose over the LATEST persisted map
+    // instead of a stale snapshot — without it, overlapping toggles would lose un-checks.
+    await db.transaction('rw', db.meta, async () => {
+      const current = (await db.meta.get(SCOPE_META_KEY))?.value as ScopeSelection | undefined;
+      await db.meta.put({ key: SCOPE_META_KEY, value: applyScopeChange(current, fieldKey, checked) });
+    });
   }, []);
 
   return { stored, setFieldChecked };
