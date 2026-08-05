@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Custom Fields & Full Entity Model** - Typed custom fields plus all four first-class entity types and browse lists (verification 2026-06-26: gaps found — 5/6 must-haves; D-05 type-change coercion unwired, awaiting gap closure) (completed 2026-06-26)
 - [x] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps (completed 2026-06-27)
 - [x] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph (completed 2026-07-03)
-- [ ] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature)
+- [x] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature) (completed 2026-08-05)
 - [ ] **Phase 6: Mega.nz Provider** - Second-class opt-in Mega storage behind the existing provider abstraction
 - [ ] **Phase 7: Relationships & Map Visual Polish** - Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout (folds in the Phase 04 UAT enhancement todos)
 
@@ -210,7 +210,7 @@ Plans:
   2. User can toggle per-attribute checkboxes to scope which fields a search matches (e.g. "smith" with the job field off matches names, not blacksmiths)
   3. Search results stay fast as the database grows toward thousands of multi-field records, with the index updating incrementally on entity changes rather than rebuilding every load
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 Plans:
 
 **Wave 1**
@@ -223,7 +223,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 05-03-PLAN.md — Evidence + freshness: matched-field snippet with `<mark>` highlight (D-09); incremental index updates via the repository change signal (criterion 3)
+- [x] 05-03-PLAN.md — Evidence + freshness: matched-field snippet with `<mark>` highlight (D-09); incremental index updates via the repository change signal (criterion 3)
 
 **Research flag:** Standard patterns — skip research phase. MiniSearch per-field indexing is well-documented; optional Web Worker for large databases.
 **UI hint**: yes
@@ -268,6 +268,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
-| 5. Field-Scoped Search | 2/3 | In Progress|  |
+| 5. Field-Scoped Search | 3/3 | Complete   | 2026-08-05 |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
 | 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
