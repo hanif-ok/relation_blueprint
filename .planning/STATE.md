@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Field-Scoped Search
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-08-04T08:30:28.685Z"
+stopped_at: Phase 5 UI-SPEC approved
+last_updated: "2026-08-05T08:44:22.590Z"
 last_activity: 2026-07-07
 last_activity_desc: Phase 04 complete (code review + UAT 10/10 + security accepted), transitioned to Phase 5
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 Phase: 5 — Field-Scoped Search
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-07-07 — Phase 04 complete (code review + UAT 10/10 + security accepted), transitioned to Phase 5
 
 Progress: [████████████████████] 25/25 plans (100%)
@@ -149,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-04T08:30:28.669Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-field-scoped-search/05-CONTEXT.md
+Last session: 2026-08-04T08:47:26.651Z
+Stopped at: Phase 5 UI-SPEC approved
+Resume file: .planning/phases/05-field-scoped-search/05-UI-SPEC.md
