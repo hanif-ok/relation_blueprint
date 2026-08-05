@@ -12,6 +12,7 @@
 
 import MiniSearch, { type SearchResult } from 'minisearch';
 import { db } from '@/db/schema';
+import type { ChangeEvent } from '@/db/repository';
 import type { CustomValue, EntityType, FieldDef, Person } from '@/domain/types';
 
 /**
@@ -97,7 +98,10 @@ export interface SearchHit {
   id: string;
   score: number;
   match: MatchInfo;
+  /** Matched DOCUMENT terms (e.g. the indexed suffix "smith" for the "blacksmith" value). */
   terms: string[];
+  /** Matched QUERY terms (what the user actually typed, e.g. "smith") — the preferred highlight. */
+  queryTerms: string[];
 }
 
 /**
@@ -250,5 +254,53 @@ export function search(
     score: r.score,
     match: r.match,
     terms: r.terms,
+    queryTerms: r.queryTerms,
   }));
+}
+
+/**
+ * Apply ONE repository change event to an existing index — the incremental freshness path (SRCH-01
+ * criterion 3): the index updates through the repository change signal instead of being rebuilt on
+ * every load. Maps `op` to MiniSearch:
+ *   - `create` → build the person's document and `index.add` it (+ set its `fieldTextById` entry),
+ *   - `update` → `index.replace` (discard+add); guarded by `index.has` so an update for a not-yet-
+ *     indexed row falls back to `add`,
+ *   - `delete` → `index.discard` the id and drop its `fieldTextById` entry.
+ * Only `entityType === 'people'` acts here — a `fieldDefs` schema change (which alters the indexed
+ * field SET) is a coarse rebuild owned by the hook, not this per-entity path.
+ *
+ * `personById` supplies the current row for a create/update (the caller reads it post-commit); a
+ * create/update whose person is absent (a create racing a delete) converges to the deleted state.
+ * Async because the document build resolves `link-to-entity` target names via a Dexie read.
+ */
+export async function applyChange(
+  index: MiniSearch<SearchDocument>,
+  fieldTextById: FieldTextById,
+  ev: ChangeEvent,
+  personById: Map<string, Person>,
+  customDefs: FieldDef[] = [],
+): Promise<void> {
+  if (ev.entityType !== 'people') return;
+
+  if (ev.op === 'delete') {
+    if (index.has(ev.entityId)) index.discard(ev.entityId);
+    fieldTextById.delete(ev.entityId);
+    return;
+  }
+
+  const person = personById.get(ev.entityId);
+  if (!person) {
+    // The row is gone (a create/update racing a delete) — converge to the deleted state.
+    if (index.has(ev.entityId)) index.discard(ev.entityId);
+    fieldTextById.delete(ev.entityId);
+    return;
+  }
+
+  const activeDefs = customDefs.filter((def) => !def.deleted && def.type !== 'photo');
+  const text = await projectFieldText(person, activeDefs);
+  fieldTextById.set(person.id, text);
+  const doc: SearchDocument = { id: person.id, ...text };
+  // replace = discard+add; guard the not-yet-indexed case (a fresh create arriving as an update).
+  if (index.has(person.id)) index.replace(doc);
+  else index.add(doc);
 }

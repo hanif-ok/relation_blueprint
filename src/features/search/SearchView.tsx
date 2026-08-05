@@ -16,7 +16,7 @@ import { Search, SearchX, FilterX } from 'lucide-react';
 import { db } from '@/db/schema';
 import { listFieldDefs } from '@/db/repository';
 import type { FieldDef, Person } from '@/domain/types';
-import { BUILTIN_FIELD_KEYS, MIN_QUERY_LENGTH } from './searchIndex';
+import { BUILTIN_FIELD_KEYS, BUILTIN_FIELD_LABELS, MIN_QUERY_LENGTH, type SearchHit } from './searchIndex';
 import { useSearchIndex } from './useSearchIndex';
 import { useScopeSelection, resolveActiveFields } from './useScopeSelection';
 import { ScopePanel } from './ScopePanel';
@@ -41,7 +41,7 @@ export interface SearchViewProps {
 export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const { search } = useSearchIndex();
+  const { search, fieldText } = useSearchIndex();
 
   // Debounce the query so a fast typist runs one search, not one per keystroke (D-02).
   useEffect(() => {
@@ -66,13 +66,22 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
   );
   const allFieldsOff = activeFields.length === 0;
 
-  // The ranked, live-resolved results. Recomputes when the query, index, people, or scope change.
-  const results = useMemo<Person[]>(() => {
+  // Field-key → display label (built-ins + every live custom People field) for the snippet prefix.
+  const fieldLabels = useMemo<Record<string, string>>(() => {
+    const labels: Record<string, string> = { ...BUILTIN_FIELD_LABELS };
+    for (const def of customDefs ?? []) labels[def.id] = def.label;
+    return labels;
+  }, [customDefs]);
+
+  // The ranked, live-resolved results — each carries its Person AND the hit's match metadata so the
+  // row can render the matched-field snippet. Recomputes when the query, index, people, or scope
+  // change (the incremental index bumps the `search` identity, so a live add re-queries here too).
+  const results = useMemo<{ person: Person; hit: SearchHit }[]>(() => {
     const hits = search(debouncedQuery, activeFields);
-    const out: Person[] = [];
+    const out: { person: Person; hit: SearchHit }[] = [];
     for (const hit of hits) {
       const person = peopleById.get(hit.id);
-      if (person) out.push(person);
+      if (person) out.push({ person, hit });
     }
     return out;
   }, [search, debouncedQuery, activeFields, peopleById]);
@@ -177,10 +186,15 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
               onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
               <div style={{ paddingTop: padTop, paddingBottom: padBottom }}>
-                {results.slice(start, end).map((person) => (
+                {results.slice(start, end).map(({ person, hit }) => (
                   <SearchResultRow
                     key={person.id}
                     entity={person}
+                    match={hit.match}
+                    terms={hit.terms}
+                    queryTerms={hit.queryTerms}
+                    fieldText={fieldText(person.id)}
+                    fieldLabels={fieldLabels}
                     onOpen={onOpen}
                     onShowOnMap={onShowOnMap}
                   />
