@@ -28,6 +28,10 @@ You can place people on a map of real locations and instantly see **who is where
 - ✓ Render data-defined relationships as connectors (derived from data, not hand-drawn) that follow markers live — Phase 4 (REL-03)
 - ✓ Graph view (viewer-only) visualizing how people and groups connect — Phase 4 (REL-04)
 
+**Search** — Phase 5, verified 2026-08-05
+- ✓ Smart fuzzy search over people across their attributes (tolerant prefix+fuzzy, name-boosted, with matched-field snippet evidence) — Phase 5 (SRCH-01)
+- ✓ Per-field checkbox toggles to scope which attributes search matches — the "smith" vs "blacksmith" behavior (subtractive, persisted across sessions) — Phase 5 (SRCH-02)
+
 ### Active
 
 <!-- Current scope. Building toward these. All are hypotheses until shipped and validated. -->
@@ -49,8 +53,7 @@ You can place people on a map of real locations and instantly see **who is where
 **Browse & search**
 - [ ] Browse people as a list
 - [ ] Browse locations as a list (alongside direct map navigation)
-- [ ] Smart fuzzy search over people across their attributes
-- [ ] Per-field checkbox toggles to scope which attributes search matches (the "smith" vs "blacksmith" behavior)
+- (Fuzzy field-scoped search over people shipped in Phase 5 — see Validated ▸ Search)
 
 ### Out of Scope
 
@@ -123,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-07 after Phase 4 — relationships ship: author person↔person/person↔group/group↔group links (with label/date/notes) from the profile sidebar as one canonical link visible on both ends, see them projected as data-driven image-space map connectors that follow markers live, and explore a viewer-only Cytoscape relationship graph. Phase closed out: code review re-run clean (0 critical; all prior findings + the fresh 3 warning / 2 info fixed and committed), UAT 10/10 passed with 0 issues, and the 7-threat security register formally accepted under the single-curator / provider-level-security v1 boundary (04-SECURITY.md, threats_open: 0). Phase 4 marked complete; next is Phase 5 — field-scoped search.*
+*Last updated: 2026-08-05 after Phase 5 — field-scoped search ships: a dedicated Search view where typing surfaces tolerant, name-boosted fuzzy matches over People's built-in and custom attributes (MiniSearch, local rebuildable projection of db.people — no cloud/backup/schema change), a subtractive per-field checkbox panel that persists across sessions and delivers the signature "smith" (names) vs "blacksmith" (jobs) scoping, a matched-field snippet as visible scoping evidence (D-09), and incremental index freshness via the repository change signal. Phase verified 15/15 must-haves (automated e2e drives the smith-vs-blacksmith scenario through a real browser); code review clean on security with 4 advisory non-blocking warnings on incremental-index race/lifecycle edge cases (index self-heals on reload) — logged in 05-REVIEW.md for optional hardening. Phase 5 marked complete (SRCH-01, SRCH-02). Roadmap-next is Phase 6 — Mega.nz provider (needs a research spike before planning); Phase 7 (map/graph visual polish) follows.*
