@@ -132,6 +132,12 @@ None - the search spine is fully wired end-to-end (live index over db.people, re
 - **Ready for 05-02** (field-scope checkboxes): `searchIndex.search(index, query, fields)` already restricts by field set; the built-in field keys + labels are exported for the scope panel; `useScopeSelection` can pass a subset of `BUILTIN_FIELD_KEYS` unchanged. The all-fields-off guard seam is left un-folded (distinct from zero-match).
 - **Ready for 05-03** (snippet + incremental index): `SearchHit` retains `match`/`terms`; the current full-rebuild in `useSearchIndex` is the documented seam to replace with incremental add/replace/discard over the repository change signal.
 
+## Self-Check: PASSED
+
+All created files verified present on disk; all task commits verified in git log:
+- Files: searchIndex.ts, useSearchIndex.ts, SearchView.tsx, SearchResultRow.tsx, SearchView.module.css, tests/features/searchIndex.test.ts, e2e/search.spec.ts, 05-01-SUMMARY.md — all FOUND.
+- Commits: b7a6112 (Task 2), a914f53 (Task 3), 0bb55eb (SUMMARY) — all FOUND.
+
 ---
 *Phase: 05-field-scoped-search*
 *Completed: 2026-08-05*
