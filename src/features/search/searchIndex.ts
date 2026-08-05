@@ -56,6 +56,18 @@ export const BUILTIN_FIELD_BOOSTS: Record<BuiltinFieldKey, number> = {
 /** D-08 two-char threshold: a trimmed query shorter than this returns no results. */
 export const MIN_QUERY_LENGTH = 2;
 
+/**
+ * The single source of truth for "is this custom FieldDef part of the search index?" — a def is
+ * indexable when it is NOT soft-deleted AND NOT a `photo` field (photo/gallery has no searchable
+ * text, D-03). Exported so the scope panel and the active-field resolver agree with `buildIndex`/
+ * `applyChange` and cannot drift apart (WR-01). Callers over an already non-deleted list (e.g. the
+ * scope panel's `listFieldDefs` result) still get the correct answer — the `!def.deleted` clause is
+ * simply redundant there.
+ */
+export function isIndexableDef(def: FieldDef): boolean {
+  return !def.deleted && def.type !== 'photo';
+}
+
 /** MiniSearch's built-in term processor (lower-casing etc.) — the search-time processor so a query
  *  is NOT expanded into suffixes (only the INDEX expands). Falls back to a plain lower-case. */
 const DEFAULT_PROCESS_TERM =
@@ -205,7 +217,7 @@ export async function buildIndex(
   people: Person[],
   customDefs: FieldDef[] = [],
 ): Promise<SearchIndexBundle> {
-  const activeDefs = customDefs.filter((def) => !def.deleted && def.type !== 'photo');
+  const activeDefs = customDefs.filter(isIndexableDef);
   const fieldKeys = [...BUILTIN_FIELD_KEYS, ...activeDefs.map((def) => def.id)];
 
   const index = new MiniSearch<SearchDocument>({
@@ -296,7 +308,7 @@ export async function applyChange(
     return;
   }
 
-  const activeDefs = customDefs.filter((def) => !def.deleted && def.type !== 'photo');
+  const activeDefs = customDefs.filter(isIndexableDef);
   const text = await projectFieldText(person, activeDefs);
   fieldTextById.set(person.id, text);
   const doc: SearchDocument = { id: person.id, ...text };

@@ -12,7 +12,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { listFieldDefs } from '@/db/repository';
 import type { FieldDef } from '@/domain/types';
-import { BUILTIN_FIELD_KEYS, BUILTIN_FIELD_LABELS, type BuiltinFieldKey } from './searchIndex';
+import { BUILTIN_FIELD_KEYS, BUILTIN_FIELD_LABELS, isIndexableDef, type BuiltinFieldKey } from './searchIndex';
 import { isFieldChecked, type ScopeSelection } from './useScopeSelection';
 import styles from './SearchView.module.css';
 
@@ -51,8 +51,12 @@ function ScopeRow({
 
 export function ScopePanel({ stored, onToggle }: ScopePanelProps) {
   // Live custom People fields — soft-deleted defs are already excluded and the list is order-sorted
-  // by listFieldDefs, so the panel re-derives on any field add/rename/soft-delete (D-03).
-  const customDefs = useLiveQuery<FieldDef[]>(() => listFieldDefs('people'), []) ?? [];
+  // by listFieldDefs, so the panel re-derives on any field add/rename/soft-delete (D-03). Photo
+  // fields are dropped: they are never indexed (WR-01), so a checkbox for one would be a dead
+  // control that also defeats the all-fields-off guard.
+  const customDefs = (useLiveQuery<FieldDef[]>(() => listFieldDefs('people'), []) ?? []).filter(
+    isIndexableDef,
+  );
 
   return (
     <fieldset className={styles.scopePanel} data-testid="scope-panel">

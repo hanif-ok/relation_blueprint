@@ -15,6 +15,7 @@ import { useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
 import type { FieldDef } from '@/domain/types';
+import { isIndexableDef } from './searchIndex';
 
 /** The single stable Dexie `meta` key under which the whole scope map lives (local, un-synced). */
 export const SCOPE_META_KEY = 'searchFieldScope';
@@ -24,7 +25,8 @@ export type ScopeSelection = Record<string, boolean>;
 
 /**
  * PURE resolver — the currently-ACTIVE scope keys. Candidates are the built-in keys plus every
- * NON-deleted custom def's id; a candidate is active unless the stored map records it as `false`.
+ * INDEXABLE custom def's id (non-deleted, non-photo — matching the index; WR-01); a candidate is
+ * active unless the stored map records it as `false`.
  * A soft-deleted def is not a candidate, so its stale `false` is ignored (and does not touch the
  * built-ins); a brand-new def (absent from the map) defaults ON (D-04 subtractive). Returns `[]`
  * only when every candidate is un-checked — the all-fields-off condition the guard state reads.
@@ -36,7 +38,7 @@ export function resolveActiveFields(
 ): string[] {
   const candidates = [
     ...builtinKeys,
-    ...customDefs.filter((def) => !def.deleted).map((def) => def.id),
+    ...customDefs.filter(isIndexableDef).map((def) => def.id),
   ];
   return candidates.filter((key) => stored?.[key] !== false);
 }
