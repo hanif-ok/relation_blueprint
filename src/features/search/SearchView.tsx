@@ -112,8 +112,12 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
     if (count === 0 || viewportH === 0) {
       return { start: 0, end: count, padTop: 0, padBottom: 0 };
     }
-    const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
     const visible = Math.ceil(viewportH / ROW_HEIGHT) + OVERSCAN * 2;
+    // Clamp the window start to the last valid position (`count - visible`) so narrowing the query
+    // while scrolled down (a shrunken `results`) can never point `first` past the end and paint a
+    // tall blank spacer with zero rows (WR-02). `count - visible` goes negative when everything
+    // fits; max(0, …) floors it back to the top.
+    const first = Math.max(0, Math.min(Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN, count - visible));
     const last = Math.min(count, first + visible);
     return {
       start: first,
