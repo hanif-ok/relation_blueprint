@@ -1,0 +1,65 @@
+/* SearchView (S1) — a paper-chrome query surface. Token-only: the input mirrors the `.input`
+ * treatment from PersonPicker.module.css (paper-shade fill, hairline border, amber focus ring),
+ * and the results column / state panels reuse BrowseList.module.css classes (imported in the TSX)
+ * rather than forking them. No amber except the inherited focus ring. */
+
+.view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+/* Input block — the leading Search glyph sits inside the field's leading edge. */
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-hairline);
+}
+
+.inputIcon {
+  position: absolute;
+  left: calc(var(--space-lg) + var(--space-sm));
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper-shade);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  /* Leading padding leaves room for the decorative glyph. */
+  padding: var(--space-sm) var(--space-md) var(--space-sm) calc(var(--space-md) + var(--space-lg));
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--ink-muted);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+/* Visually-hidden live region (result-count announcements for AT). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
