@@ -210,7 +210,21 @@ Plans:
   2. User can toggle per-attribute checkboxes to scope which fields a search matches (e.g. "smith" with the job field off matches names, not blacksmiths)
   3. Search results stay fast as the database grows toward thousands of multi-field records, with the index updating incrementally on entity changes rather than rebuilding every load
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Search spine (SRCH-01): dedicated Search view in the nav rail; MiniSearch index + hook; typing surfaces tolerant fuzzy People matches over built-ins; click→ProfileSidebar + Show-on-map
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 05-02-PLAN.md — Field-scope checkboxes (SRCH-02): live built-in + custom-field checkbox panel (default-ON/subtractive, persisted by stable field id); custom-field indexing; the smith-vs-blacksmith scoping + all-fields-off guard
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 05-03-PLAN.md — Evidence + freshness: matched-field snippet with `<mark>` highlight (D-09); incremental index updates via the repository change signal (criterion 3)
+
 **Research flag:** Standard patterns — skip research phase. MiniSearch per-field indexing is well-documented; optional Web Worker for large databases.
 **UI hint**: yes
 
@@ -254,6 +268,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
-| 5. Field-Scoped Search | 0/TBD | Not started | - |
+| 5. Field-Scoped Search | 0/3 | Not started | - |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
 | 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
