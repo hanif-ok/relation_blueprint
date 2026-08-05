@@ -89,6 +89,15 @@ describe('buildSnippet — the highlighted, XSS-safe evidence line (D-09/T-05-01
     expect(markOf(start)).toBeDefined();
   });
 
+  it('honors priority order: the first-found term wins (query term over a fuzzy suffix artifact)', () => {
+    // The caller passes the query term first, then document terms. With suffix indexing the query
+    // "smith" over "blacksmith" also fuzzy-matches the suffix "ksmith" (an earlier position), but
+    // the query term "smith" is passed first and must win the highlight.
+    const nodes = buildSnippet('Job', 'blacksmith', ['smith', 'ksmith']);
+    expect(markOf(nodes)?.props.children).toBe('smith');
+    expect(textOf(nodes)).toBe('Job: black');
+  });
+
   it('ellipsizes both sides when the matched term is in the middle of a long value', () => {
     const value = 'aaaaaaaaaa smith bbbbbbbbbb cccccccccc';
     const nodes = buildSnippet('Notes', value, ['smith'], 5);

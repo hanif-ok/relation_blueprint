@@ -192,6 +192,7 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
                     entity={person}
                     match={hit.match}
                     terms={hit.terms}
+                    queryTerms={hit.queryTerms}
                     fieldText={fieldText(person.id)}
                     fieldLabels={fieldLabels}
                     onOpen={onOpen}

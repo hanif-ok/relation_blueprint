@@ -59,10 +59,12 @@ export function pickMatchedField(
 
 /**
  * Build the matched-field snippet as React children: a `{fieldLabel}: ` prefix, a ~`contextChars`
- * window either side of the first matched term (ellipsized only when the window is actually
- * truncated), and the matched substring wrapped in a real <mark>. The matched term is located
- * case-insensitively; with the index's suffix expansion the document term (e.g. "smith") is a
- * substring of the value (e.g. "blacksmith"), so the highlight lands on that substring.
+ * window either side of the matched term (ellipsized only when the window is actually truncated),
+ * and the matched substring wrapped in a real <mark>. `terms` is a PRIORITY-ORDERED list (the
+ * caller puts the QUERY terms the user typed first, then the matched document terms as a fallback):
+ * the first term found in the value wins. Preferring the query term avoids highlighting a fuzzy
+ * suffix artifact — e.g. for query "smith" over the "blacksmith" value, the index also fuzzy-matches
+ * the suffix "ksmith", but the query term "smith" is what we highlight.
  *
  * Never returns an HTML string; the <mark> is a genuine React element (T-05-01).
  */
@@ -76,16 +78,16 @@ export function buildSnippet(
   const prefix = `${fieldLabel}: `;
   const lower = value.toLowerCase();
 
-  // Earliest-matching term within the value. MiniSearch's `terms` are the matched DOCUMENT terms
-  // (with suffix indexing, e.g. "smith" for a "blacksmith" value), so an indexOf lands the highlight.
+  // First term (in the caller's priority order) that occurs in the value wins the highlight.
   let start = -1;
   let length = 0;
   for (const term of terms) {
     if (!term) continue;
     const at = lower.indexOf(term.toLowerCase());
-    if (at !== -1 && (start === -1 || at < start)) {
+    if (at !== -1) {
       start = at;
       length = term.length;
+      break;
     }
   }
 

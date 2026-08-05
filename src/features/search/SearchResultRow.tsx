@@ -25,8 +25,10 @@ export interface SearchResultRowProps {
   entity: Person;
   /** MiniSearch match metadata for this hit (term → matched field keys) — drives the snippet. */
   match: MatchInfo;
-  /** The document terms that matched (the substrings to highlight). */
+  /** The matched document terms (fallback highlight, e.g. the suffix "smith" of "blacksmith"). */
   terms: string[];
+  /** The matched query terms the user typed (preferred highlight, e.g. "smith"). */
+  queryTerms: string[];
   /** This person's exact per-field indexed text (`fieldKey -> string`) — the snippet's value source. */
   fieldText: Record<string, string> | undefined;
   /** Display labels for every field key (built-ins + custom), for the snippet's `{label}:` prefix. */
@@ -46,6 +48,7 @@ export function SearchResultRow({
   entity,
   match,
   terms,
+  queryTerms,
   fieldText,
   fieldLabels,
   onOpen,
@@ -57,9 +60,10 @@ export function SearchResultRow({
   // The highest-boosted NON-name field that matched (undefined for a name-only match, B6).
   const matchedKey = pickMatchedField(match, BUILTIN_FIELD_BOOSTS);
   const snippetValue = matchedKey ? fieldText?.[matchedKey] : undefined;
+  // Highlight the QUERY term the user typed first, then the matched document terms as a fallback.
   const snippet =
     matchedKey && snippetValue
-      ? buildSnippet(fieldLabels[matchedKey] ?? matchedKey, snippetValue, terms)
+      ? buildSnippet(fieldLabels[matchedKey] ?? matchedKey, snippetValue, [...queryTerms, ...terms])
       : null;
 
   return (
