@@ -11,7 +11,8 @@
 // (plan 02) as the scope-checkbox keys — so plan 02 supplies a SUBSET of these keys unchanged.
 
 import MiniSearch, { type SearchResult } from 'minisearch';
-import type { Person } from '@/domain/types';
+import { db } from '@/db/schema';
+import type { CustomValue, EntityType, FieldDef, Person } from '@/domain/types';
 
 /**
  * The five searchable built-in People attributes, keyed by STABLE ids (never by label — a label
@@ -54,6 +55,37 @@ export const BUILTIN_FIELD_BOOSTS: Record<BuiltinFieldKey, number> = {
 /** D-08 two-char threshold: a trimmed query shorter than this returns no results. */
 export const MIN_QUERY_LENGTH = 2;
 
+/** MiniSearch's built-in term processor (lower-casing etc.) — the search-time processor so a query
+ *  is NOT expanded into suffixes (only the INDEX expands). Falls back to a plain lower-case. */
+const DEFAULT_PROCESS_TERM =
+  (MiniSearch.getDefault('processTerm') as (term: string) => string | string[] | null | undefined) ??
+  ((term: string) => term.toLowerCase());
+
+/**
+ * INDEX-time term processor enabling INFIX / substring matching (the phase's signature behavior:
+ * "smith" must match the Job value "blacksmith", where "smith" is a SUFFIX, not a prefix, of the
+ * token — and MiniSearch's `prefix` only matches from a token's START). For each normalized token
+ * we index the token PLUS every suffix down to the 2-char query threshold, so a later prefix/exact
+ * query on "smith" hits the indexed suffix "smith" of "blacksmith". Only applied at index time;
+ * the query keeps the default processor (above) so it is never itself expanded into suffixes.
+ */
+export function indexTermWithSuffixes(term: string): string[] {
+  const processed = DEFAULT_PROCESS_TERM(term);
+  if (!processed) return [];
+  const bases = Array.isArray(processed) ? processed : [processed];
+  const out = new Set<string>();
+  for (const base of bases) {
+    if (base.length < MIN_QUERY_LENGTH) {
+      out.add(base);
+      continue;
+    }
+    for (let start = 0; start <= base.length - MIN_QUERY_LENGTH; start++) {
+      out.add(base.slice(start));
+    }
+  }
+  return [...out];
+}
+
 /** Per-term → matched-field-names match metadata from MiniSearch (kept so plan 03 can snippet). */
 export type MatchInfo = SearchResult['match'];
 
@@ -68,39 +100,136 @@ export interface SearchHit {
   terms: string[];
 }
 
-/** A person's indexable document: `id` + each built-in key mapped to its (stringified) value. */
-type PersonDocument = Record<BuiltinFieldKey, string> & { id: string };
+/**
+ * An indexable document: `id` + one string per field key. Built-in keys are always present;
+ * custom keys (stable `FieldDef.id`) are added when the People schema defines them (D-03). The
+ * shape is dynamic because the custom-field set is data-driven, so keys beyond `id` are `string`.
+ */
+export type SearchDocument = { id: string } & Record<string, string>;
 
-/** Map a Person to its index document — tags joined with a space; absent built-ins → empty string. */
-function toDocument(person: Person): PersonDocument {
-  return {
-    id: person.id,
+/**
+ * The exact per-field TEXT indexed for one person — `fieldKey -> stringified value` (built-ins +
+ * every non-photo custom field). Retained alongside the index as the single source of truth for
+ * "the text of field X on person P"; plan 03's matched-field snippet reads it synchronously.
+ */
+export type FieldTextById = Map<string, Record<string, string>>;
+
+/** The built + retained index pair: the MiniSearch instance and the per-person field-text map. */
+export interface SearchIndexBundle {
+  index: MiniSearch<SearchDocument>;
+  fieldTextById: FieldTextById;
+}
+
+/** Resolve a Dexie table for a `link-to-entity` target family (mirrors CustomFieldRows.LinkValue). */
+function tableFor(targetType: EntityType | undefined) {
+  switch (targetType) {
+    case 'people':
+      return db.people;
+    case 'maps':
+      return db.maps;
+    case 'groups':
+      return db.groups;
+    case 'relationship-links':
+      return db.relationshipLinks;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Stringify ONE custom value to its searchable text (D-03): text/phone as-is; number/date
+ * stringified; tags joined; `link-to-entity` → the target entity's display NAME (resolved exactly
+ * like CustomFieldRows.LinkValue — a removed/wrong-type target contributes nothing); photo excluded
+ * upstream. An empty/absent value yields the empty string.
+ */
+async function stringifyCustomValue(def: FieldDef, value: CustomValue | undefined): Promise<string> {
+  if (value === null || value === undefined) return '';
+  switch (def.type) {
+    case 'text':
+    case 'phone':
+      return typeof value === 'string' ? value : String(value);
+    case 'number':
+    case 'date':
+      return String(value);
+    case 'tags':
+      return Array.isArray(value) ? value.join(' ') : '';
+    case 'link-to-entity': {
+      const table = tableFor(def.targetType);
+      if (!table || typeof value !== 'string') return '';
+      const target = await table.get(value);
+      return target?.name ?? '';
+    }
+    default:
+      // photo has no text (D-03) and is never passed here; any unknown type → no text.
+      return '';
+  }
+}
+
+/**
+ * Project ONE person to its per-field text map. Built-ins first (name/phone/description/tags/notes),
+ * then every non-deleted, non-photo custom field keyed by `FieldDef.id`. Quarantine keys never
+ * appear: we read values BY `FieldDef.id`, never by iterating the raw `custom` map, so a
+ * `__quarantine:*` set-aside key is inherently skipped (repository.ts QUARANTINE_KEY_PREFIX intent).
+ */
+async function projectFieldText(person: Person, activeDefs: FieldDef[]): Promise<Record<string, string>> {
+  const text: Record<string, string> = {
     'builtin:name': person.name ?? '',
     'builtin:phone': person.phone ?? '',
     'builtin:description': person.description ?? '',
     'builtin:tags': (person.tags ?? []).join(' '),
     'builtin:notes': person.notes ?? '',
   };
+  const custom = person.custom ?? {};
+  for (const def of activeDefs) {
+    if (def.type === 'photo') continue; // photo/gallery excluded from the index (no text, D-03)
+    text[def.id] = await stringifyCustomValue(def, custom[def.id]);
+  }
+  return text;
 }
 
 /**
- * Build a fresh MiniSearch index over the given people. Configured with `fuzzy: 0.2` (moderate
- * edit-distance typo tolerance) + `prefix: true` (so "smi" matches "Smith" as you type) + the
- * name-boosted ranking. These live in `searchOptions` so they are the DEFAULTS every `search`
- * call inherits; a per-search `{ fields }` restriction merges over them without dropping them.
+ * Build a fresh MiniSearch index over the given people AND the live People custom `FieldDef`s
+ * (D-03). The field set is the five built-in keys plus each NON-deleted custom def's id; custom
+ * fields keep the neutral default boost (they are simply absent from the boost map). Configured
+ * with `fuzzy: 0.2` + `prefix: true` + the name-boosted ranking in `searchOptions`, so those are
+ * the DEFAULTS every `search` inherits and a per-search `{ fields }` restriction merges over them.
+ *
+ * Async because `link-to-entity` values resolve to their target's name via a Dexie read. Returns
+ * the index PLUS the `fieldTextById` projection (single source of truth for plan 03's snippet).
  */
-export function buildIndex(people: Person[]): MiniSearch<PersonDocument> {
-  const index = new MiniSearch<PersonDocument>({
-    fields: [...BUILTIN_FIELD_KEYS],
+export async function buildIndex(
+  people: Person[],
+  customDefs: FieldDef[] = [],
+): Promise<SearchIndexBundle> {
+  const activeDefs = customDefs.filter((def) => !def.deleted && def.type !== 'photo');
+  const fieldKeys = [...BUILTIN_FIELD_KEYS, ...activeDefs.map((def) => def.id)];
+
+  const index = new MiniSearch<SearchDocument>({
+    fields: fieldKeys,
     idField: 'id',
+    // Index-time infix expansion (suffix indexing) so a substring query like "smith" matches the
+    // "blacksmith" Job value (SRCH-02 signature behavior) — MiniSearch prefix only matches token
+    // starts, so a suffix must be indexed explicitly.
+    processTerm: indexTermWithSuffixes,
     searchOptions: {
       fuzzy: 0.2,
       prefix: true,
       boost: { ...BUILTIN_FIELD_BOOSTS },
+      // Do NOT expand the QUERY into suffixes — only the index is expanded (above).
+      processTerm: DEFAULT_PROCESS_TERM,
     },
   });
-  index.addAll(people.map(toDocument));
-  return index;
+
+  const fieldTextById: FieldTextById = new Map();
+  const documents: SearchDocument[] = [];
+  for (const person of people) {
+    const text = await projectFieldText(person, activeDefs);
+    fieldTextById.set(person.id, text);
+    documents.push({ id: person.id, ...text });
+  }
+  index.addAll(documents);
+
+  return { index, fieldTextById };
 }
 
 /**
@@ -110,7 +239,7 @@ export function buildIndex(people: Person[]): MiniSearch<PersonDocument> {
  * `match`/`terms` for plan 03.
  */
 export function search(
-  index: MiniSearch<PersonDocument>,
+  index: MiniSearch<SearchDocument>,
   query: string,
   fields: string[],
 ): SearchHit[] {

@@ -1,21 +1,25 @@
-// SearchView — the SRCH-01 Search surface (S1 input + S3 windowed results + S4 states). A native
-// debounced `<input type="search">` drives a main-thread MiniSearch query (D-02) over all built-in
-// People fields; matches render as BrowseRow-variant rows whose click opens the ProfileSidebar
-// (D-10). Two DISTINCT state panels (D-11): a pre-query prompt below the 2-char threshold (D-08),
-// and a zero-match panel that echoes the query as a React child (never injected HTML, T-05-01).
+// SearchView — the Search surface (S1 input + S2 scope panel + S3 windowed results + S4 states).
+// A native debounced `<input type="search">` drives a main-thread MiniSearch query (D-02) over the
+// ACTIVE scope fields; matches render as BrowseRow-variant rows whose click opens the ProfileSidebar
+// (D-10). The field-scope panel (S2) drives WHICH fields the query matches: `resolveActiveFields`
+// merges the live People field schema with the persisted subtractive selection, and that active
+// key set is passed as the search `fields` argument — so unchecking "Job" drops the blacksmiths.
 //
-// The all-fields-off guard (a third state) and the field-scope checkbox panel arrive in plan 02 —
-// this slice searches every built-in field and leaves that seam clear.
-//
-// Windowing (constant 64px rows) is copied from BrowseList so the list stays cheap toward thousands.
+// Three DISTINCT state panels (D-11): a pre-query prompt below the 2-char threshold (D-08), a
+// zero-match panel echoing the query as a React child (T-05-01), and the all-fields-off guard when
+// every checkbox is OFF (a distinct branch, never the zero-match message, B9). Windowing (constant
+// 64px rows) is copied from BrowseList so the list stays cheap toward thousands.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, SearchX } from 'lucide-react';
+import { Search, SearchX, FilterX } from 'lucide-react';
 import { db } from '@/db/schema';
-import type { Person } from '@/domain/types';
+import { listFieldDefs } from '@/db/repository';
+import type { FieldDef, Person } from '@/domain/types';
 import { BUILTIN_FIELD_KEYS, MIN_QUERY_LENGTH } from './searchIndex';
 import { useSearchIndex } from './useSearchIndex';
+import { useScopeSelection, resolveActiveFields } from './useScopeSelection';
+import { ScopePanel } from './ScopePanel';
 import { SearchResultRow } from './SearchResultRow';
 import browse from '@/features/browse/BrowseList.module.css';
 import styles from './SearchView.module.css';
@@ -26,8 +30,8 @@ const ROW_HEIGHT = 64;
 const OVERSCAN = 6;
 /** Debounce before querying as-you-type (D-02). */
 const DEBOUNCE_MS = 200;
-/** This slice searches every built-in field; plan 02's checkboxes pass a subset. */
-const ALL_FIELDS: string[] = [...BUILTIN_FIELD_KEYS];
+/** The built-in scope keys, always candidates before the subtractive selection is applied. */
+const BUILTIN_KEYS: string[] = [...BUILTIN_FIELD_KEYS];
 
 export interface SearchViewProps {
   onOpen: (id: string) => void;
@@ -53,20 +57,29 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
     return map;
   }, [people]);
 
-  // The ranked, live-resolved results. Recomputes only when the query, index, or people change.
+  // The live People custom fields + the persisted subtractive scope selection → the ACTIVE keys.
+  const customDefs = useLiveQuery<FieldDef[]>(() => listFieldDefs('people'), []);
+  const { stored, setFieldChecked } = useScopeSelection();
+  const activeFields = useMemo(
+    () => resolveActiveFields(BUILTIN_KEYS, customDefs ?? [], stored),
+    [customDefs, stored],
+  );
+  const allFieldsOff = activeFields.length === 0;
+
+  // The ranked, live-resolved results. Recomputes when the query, index, people, or scope change.
   const results = useMemo<Person[]>(() => {
-    const hits = search(debouncedQuery, ALL_FIELDS);
+    const hits = search(debouncedQuery, activeFields);
     const out: Person[] = [];
     for (const hit of hits) {
       const person = peopleById.get(hit.id);
       if (person) out.push(person);
     }
     return out;
-  }, [search, debouncedQuery, peopleById]);
+  }, [search, debouncedQuery, activeFields, peopleById]);
 
   const trimmed = debouncedQuery.trim();
   const belowThreshold = trimmed.length < MIN_QUERY_LENGTH;
-  const hasNoResults = results.length === 0;
+  const showList = !allFieldsOff && !belowThreshold && results.length > 0;
 
   // --- Windowing (copied from BrowseList) -----------------------------------------------
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,7 +96,7 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [belowThreshold, hasNoResults]);
+  }, [allFieldsOff, belowThreshold, showList]);
 
   const { start, end, padTop, padBottom } = useMemo(() => {
     const count = results.length;
@@ -102,11 +115,13 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
   }, [results.length, scrollTop, viewportH]);
 
   // --- Live-region announcement (mirrors App.tsx Show-on-map) ----------------------------
-  const announce = belowThreshold
-    ? ''
-    : results.length === 0
-      ? 'No people match'
-      : `${results.length} people match`;
+  const announce = allFieldsOff
+    ? 'No fields selected'
+    : belowThreshold
+      ? ''
+      : results.length === 0
+        ? 'No people match'
+        : `${results.length} people match`;
 
   return (
     <section className={styles.view} data-testid="search-view">
@@ -123,43 +138,58 @@ export function SearchView({ onOpen, onShowOnMap }: SearchViewProps) {
         />
       </div>
 
-      {belowThreshold ? (
-        // Pre-query prompt (S4) — below the 2-char threshold (D-08). No CTA (B4).
-        <div className={browse.empty} data-testid="search-prequery">
-          <Search size={32} strokeWidth={1.75} className={browse.emptyGlyph} aria-hidden="true" />
-          <h2 className={browse.emptyHeading}>Search people</h2>
-          <p className={browse.emptyBody}>
-            Search people by name, tags, or any field — then narrow it with the checkboxes.
-          </p>
+      <div className={styles.main}>
+        <ScopePanel stored={stored} onToggle={(key, checked) => void setFieldChecked(key, checked)} />
+
+        <div className={styles.results}>
+          {allFieldsOff ? (
+            // All-fields-off guard (S4/D-11/B9) — a DISTINCT state, never the zero-match message.
+            <div className={browse.empty} data-testid="search-all-off">
+              <FilterX size={32} strokeWidth={1.75} className={browse.emptyGlyph} aria-hidden="true" />
+              <h2 className={browse.emptyHeading}>Nothing to search</h2>
+              <p className={browse.emptyBody}>
+                Every field is turned off. Turn at least one field on to search.
+              </p>
+            </div>
+          ) : belowThreshold ? (
+            // Pre-query prompt (S4) — below the 2-char threshold (D-08). No CTA (B4).
+            <div className={browse.empty} data-testid="search-prequery">
+              <Search size={32} strokeWidth={1.75} className={browse.emptyGlyph} aria-hidden="true" />
+              <h2 className={browse.emptyHeading}>Search people</h2>
+              <p className={browse.emptyBody}>
+                Search people by name, tags, or any field — then narrow it with the checkboxes.
+              </p>
+            </div>
+          ) : results.length === 0 ? (
+            // Zero-match (S4) — the query echoes as a React child, never injected HTML (T-05-01).
+            <div className={browse.empty} data-testid="search-zero-match">
+              <SearchX size={32} strokeWidth={1.75} className={browse.emptyGlyph} aria-hidden="true" />
+              <h2 className={browse.emptyHeading}>No people match &ldquo;{trimmed}&rdquo;</h2>
+              <p className={browse.emptyBody}>
+                Check your spelling, or turn more fields on to widen the search.
+              </p>
+            </div>
+          ) : (
+            <div
+              ref={scrollRef}
+              className={browse.body}
+              data-testid="search-scroll"
+              onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+            >
+              <div style={{ paddingTop: padTop, paddingBottom: padBottom }}>
+                {results.slice(start, end).map((person) => (
+                  <SearchResultRow
+                    key={person.id}
+                    entity={person}
+                    onOpen={onOpen}
+                    onShowOnMap={onShowOnMap}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      ) : results.length === 0 ? (
-        // Zero-match (S4) — the query echoes as a React child, never injected HTML (T-05-01).
-        <div className={browse.empty} data-testid="search-zero-match">
-          <SearchX size={32} strokeWidth={1.75} className={browse.emptyGlyph} aria-hidden="true" />
-          <h2 className={browse.emptyHeading}>No people match &ldquo;{trimmed}&rdquo;</h2>
-          <p className={browse.emptyBody}>
-            Check your spelling, or turn more fields on to widen the search.
-          </p>
-        </div>
-      ) : (
-        <div
-          ref={scrollRef}
-          className={browse.body}
-          data-testid="search-scroll"
-          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        >
-          <div style={{ paddingTop: padTop, paddingBottom: padBottom }}>
-            {results.slice(start, end).map((person) => (
-              <SearchResultRow
-                key={person.id}
-                entity={person}
-                onOpen={onOpen}
-                onShowOnMap={onShowOnMap}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Visually-hidden result-count live region (announces as results change). */}
       <div className={styles.srOnly} aria-live="polite" role="status">
