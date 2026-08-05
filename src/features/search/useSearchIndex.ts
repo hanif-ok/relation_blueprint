@@ -49,28 +49,15 @@ export function useSearchIndex(): UseSearchIndex {
   // applyChange calls apply strictly in emit order, never interleaving their async projectFieldText
   // reads (WR-03). Mirrors the rw-transaction serialization useScopeSelection uses for its writes.
   const maintenanceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // Buffers change events that arrive while the index is still building (bundleRef is null). Without
+  // this, a person created after the build's `toArray()` snapshot but before the bundle is assigned
+  // is dropped by both paths and stays unsearchable until the next coarse rebuild (WR-02). Drained
+  // in emit order once the build completes.
+  const pendingEventsRef = useRef<ChangeEvent[]>([]);
   // Sync the schema mirror in an effect (never during render) so the onChange callback — which fires
   // only after mount/commit, on repository writes — always reads the current field set.
   useEffect(() => {
     customDefsRef.current = customDefs ?? [];
-  }, [customDefs]);
-
-  // ONE build from the current people snapshot on mount, and a coarse REBUILD whenever the field
-  // schema changes. People create/update/delete do NOT trigger this — they flow through the
-  // incremental subscription below. Guard against a stale async build clobbering a newer one.
-  useEffect(() => {
-    if (customDefs === undefined) return;
-    let cancelled = false;
-    void (async () => {
-      const people = await db.people.toArray();
-      const next = await buildIndex(people, customDefs);
-      if (cancelled) return;
-      bundleRef.current = next;
-      setBundle(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [customDefs]);
 
   // ONE serialized maintenance step for a single change event. Reads the LATEST bundle (a prior
@@ -106,13 +93,47 @@ export function useSearchIndex(): UseSearchIndex {
     [handleEvent],
   );
 
+  // ONE build from the current people snapshot on mount, and a coarse REBUILD whenever the field
+  // schema changes. People create/update/delete do NOT trigger this — they flow through the
+  // incremental subscription below. Guard against a stale async build clobbering a newer one.
+  useEffect(() => {
+    if (customDefs === undefined) return;
+    let cancelled = false;
+    void (async () => {
+      const people = await db.people.toArray();
+      const next = await buildIndex(people, customDefs);
+      if (cancelled) return;
+      bundleRef.current = next;
+      setBundle(next);
+      // Replay any events received during the build window (WR-02). This runs synchronously right
+      // after bundleRef is set, so no new emit can interleave: events buffered here are drained in
+      // emit order, and any later emit sees a non-null bundleRef and enqueues directly. A buffered
+      // event is idempotent against the fresh snapshot — applyChange's index.has guard turns a
+      // now-already-present create into a replace and an already-absent delete into a no-op.
+      if (pendingEventsRef.current.length > 0) {
+        const buffered = pendingEventsRef.current;
+        pendingEventsRef.current = [];
+        for (const ev of buffered) enqueueMaintenance(ev);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // enqueueMaintenance is stable (empty-dep callback chain), so it never re-triggers a rebuild.
+  }, [customDefs, enqueueMaintenance]);
+
   // Incremental maintenance (criterion 3): subscribe ONCE (mirroring useSyncEngine's onChange
   // lifecycle) and route People create/update/delete through the serial queue — never a full
-  // rebuild. All emits are post-commit, so a fresh read reflects the persisted row.
+  // rebuild. All emits are post-commit, so a fresh read reflects the persisted row. An event that
+  // arrives before the index is built is buffered (not dropped) and replayed by the build (WR-02).
   useEffect(() => {
     const off = onChange((ev) => {
       if (ev.entityType !== 'people') return;
-      if (!bundleRef.current) return; // not built yet — the initial build will read the persisted row
+      if (!bundleRef.current) {
+        // Index still building — buffer so a write racing the initial build isn't dropped (WR-02).
+        pendingEventsRef.current.push(ev);
+        return;
+      }
       enqueueMaintenance(ev);
     });
     return off;
