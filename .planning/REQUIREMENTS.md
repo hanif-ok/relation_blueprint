@@ -49,8 +49,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Search
 
-- [ ] **SRCH-01**: User can fuzzy-search people across their attributes
-- [ ] **SRCH-02**: User can toggle per-attribute checkboxes to scope which fields a search matches (e.g. "smith" with the job field off matches the name, not blacksmiths)
+- [x] **SRCH-01**: User can fuzzy-search people across their attributes
+- [x] **SRCH-02**: User can toggle per-attribute checkboxes to scope which fields a search matches (e.g. "smith" with the job field off matches the name, not blacksmiths)
 
 ### Browse
 
@@ -132,8 +132,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | REL-02 | Phase 4 | Complete |
 | REL-03 | Phase 4 | Complete |
 | REL-04 | Phase 4 | Complete |
-| SRCH-01 | Phase 5 | Pending |
-| SRCH-02 | Phase 5 | Pending |
+| SRCH-01 | Phase 5 | Complete |
+| SRCH-02 | Phase 5 | Complete |
 | BRWS-01 | Phase 2 | Pending |
 | BRWS-02 | Phase 2 | Pending |
 | EXPT-01 | Phase 1 | Complete |

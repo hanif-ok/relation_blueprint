@@ -254,7 +254,7 @@ Plans:
   2. User can drag graph nodes to rearrange the layout for readability without ever mutating relationship data (viewer-only); manual positions may optionally persist via the existing graph position cache
   3. Ego focus is dynamic — opening/tapping a node re-lays-out the graph around that person, tapping a different node re-egos onto it (focus follows the tap), and exiting focus restores the saved layout
 
-**Plans:** 0 plans (run `/gsd-plan-phase 7` to break down)
+**Plans:** 3/3 plans complete
 **Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes.
 
 ## Progress
@@ -268,6 +268,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
-| 5. Field-Scoped Search | 3/3 | Complete   | 2026-08-05 |
+| 5. Field-Scoped Search | 3/3 | Complete    | 2026-08-05 |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
 | 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
