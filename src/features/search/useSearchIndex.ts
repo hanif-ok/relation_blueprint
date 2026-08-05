@@ -114,27 +114,39 @@ export function useSearchIndex(): UseSearchIndex {
 
   // ONE build from the current people snapshot on mount, and a coarse REBUILD whenever the field
   // schema changes. People create/update/delete do NOT trigger this — they flow through the
-  // incremental subscription below. Guard against a stale async build clobbering a newer one.
+  // incremental subscription below.
+  //
+  // The rebuild runs THROUGH `maintenanceQueueRef`, so the `toArray()` snapshot, `buildIndex`, and
+  // the bundle swap execute as one atomic step ordered against every incremental apply — a build and
+  // an apply can never interleave (WR-01, CR-01 at the root). A people write racing a rebuild is
+  // serialized around it: enqueued BEFORE the rebuild → it applies to the old index, but the
+  // rebuild's fresh snapshot re-captures that same row anyway (idempotent, not lost); enqueued AFTER
+  // → it applies to the freshly-swapped bundle. Either way no create is dropped in the rebuild window.
   useEffect(() => {
     if (customDefs === undefined) return;
+    const defs = customDefs;
     let cancelled = false;
-    void (async () => {
-      const people = await db.people.toArray();
-      const next = await buildIndex(people, customDefs);
-      if (cancelled) return;
-      bundleRef.current = next;
-      setBundle(next);
-      // Replay any events received during the build window (WR-02). This runs synchronously right
-      // after bundleRef is set, so no new emit can interleave: events buffered here are drained in
-      // emit order, and any later emit sees a non-null bundleRef and enqueues directly. A buffered
-      // event is idempotent against the fresh snapshot — applyChange's index.has guard turns a
-      // now-already-present create into a replace and an already-absent delete into a no-op.
-      if (pendingEventsRef.current.length > 0) {
-        const buffered = pendingEventsRef.current;
-        pendingEventsRef.current = [];
-        for (const ev of buffered) enqueueMaintenance(ev);
-      }
-    })();
+    maintenanceQueueRef.current = maintenanceQueueRef.current
+      .then(async () => {
+        const people = await db.people.toArray();
+        const next = await buildIndex(people, defs);
+        if (cancelled) return;
+        bundleRef.current = next;
+        setBundle(next);
+        // Drain events buffered before the FIRST bundle existed (the null-bundle initial-build
+        // window, WR-02). Rebuild-window events are already serialized behind this step through the
+        // shared queue, so only that initial buffer still needs an explicit replay here. A buffered
+        // event is idempotent against the fresh snapshot — applyChange's index.has guard turns a
+        // now-already-present create into a replace and an already-absent delete into a no-op.
+        if (pendingEventsRef.current.length > 0) {
+          const buffered = pendingEventsRef.current;
+          pendingEventsRef.current = [];
+          for (const ev of buffered) enqueueMaintenance(ev);
+        }
+      })
+      .catch((err) => {
+        console.error('[useSearchIndex] index build failed', err);
+      });
     return () => {
       cancelled = true;
     };
