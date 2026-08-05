@@ -1,6 +1,6 @@
 ---
 phase: 05-field-scoped-search
-reviewed: 2026-08-05T10:57:30Z
+reviewed: 2026-08-05T12:00:00Z
 depth: standard
 files_reviewed: 17
 files_reviewed_list:
@@ -22,109 +22,148 @@ files_reviewed_list:
   - tests/features/searchScope.test.ts
   - tests/features/snippet.test.ts
 findings:
-  critical: 0
-  warning: 3
+  critical: 1
+  warning: 1
   info: 2
-  total: 5
+  total: 4
 status: issues_found
 ---
 
-# Phase 5: Code Review Report
+# Phase 05: Code Review Report
 
-**Reviewed:** 2026-08-05T10:57:30Z
+**Reviewed:** 2026-08-05T12:00:00Z
 **Depth:** standard
-**Files Reviewed:** 17
 **Status:** issues_found
+
+> This is a fresh, second-cycle review of the CURRENT code. The prior cycle's WR-01 (photo scope
+> exclusion), WR-02 (initial-build event buffering), and WR-03 (serial maintenance queue) are all
+> confirmed present and correctly applied. The findings below are NEW.
 
 ## Summary
 
-Reviewed the field-scoped People search slice: the MiniSearch index service (`searchIndex.ts`),
-the incremental-freshness hook (`useSearchIndex.ts`), the subtractive scope-selection store
-(`useScopeSelection.ts`), the UI surfaces (`SearchView.tsx`, `ScopePanel.tsx`, `SearchResultRow.tsx`),
-the XSS-safe snippet helper (`snippet.ts`), the nav wiring (`ViewSwitcher.tsx`, `App.tsx`), and the
-associated unit + e2e suites.
+The field-scoped search slice is largely well-constructed and the security boundary it advertises
+(T-05-01) genuinely holds: every snippet fragment, field label, and echoed query renders as a React
+child, and there is no `dangerouslySetInnerHTML` / `innerHTML` / `eval` / injection surface anywhere
+in scope. The prior review-fix cycle landed cleanly — `isIndexableDef` is now the single shared
+predicate for index/scope-panel/resolver (so the photo mismatch and the all-fields-off guard are
+consistent), initial-build events buffer in `pendingEventsRef` and drain synchronously after the
+swap, and incremental maintenance chains through `maintenanceQueueRef` with a live `.catch`.
 
-Overall the code is careful and well-tested. The security boundary the phase advertises (T-05-01)
-holds: every snippet fragment — including the highlight — is a genuine React child, never an HTML
-string, and I confirmed there is no `dangerouslySetInnerHTML` or `innerHTML` anywhere in scope. No
-secrets, no injection, no unsafe deserialization. I found **no BLOCKER-class defects**.
+The remaining defects are in the coordination between the **coarse rebuild** path and the
+**incremental maintenance** path in `useSearchIndex.ts`. Both write `bundleRef.current` with no
+coordination, and only the *initial* build (null bundle) is protected — *rebuilds* are not. This
+yields one BLOCKER (an in-flight incremental event can overwrite a completed rebuild, pinning the
+index to a stale field schema) and one related WARNING (writes during a rebuild window land on a
+soon-discarded index and are lost). Both are reachable by a normal action: changing a People custom
+field's type. `repository.applyFieldTypeChange` emits a `fieldDefs:update` **and** a `people:update`
+per coerced row in the same tick — deliberately racing the rebuild it triggers against the
+incremental events it emits.
 
-The defects that remain are correctness-under-concurrency gaps in the incremental index maintenance
-and one scope/index field-set mismatch (photo custom fields). I verified empirically that the photo
-mismatch does **not** crash MiniSearch (searching an unknown field alongside valid fields returns
-results normally and does not throw), which is why it is a WARNING rather than a BLOCKER. Details
-below.
+## Critical Issues
+
+### CR-01: In-flight incremental `handleEvent` overwrites a completed coarse rebuild, pinning the index to a stale field schema
+
+**File:** `src/features/search/useSearchIndex.ts:68-81` (interacts with `:99-123`)
+
+**Issue:** `handleEvent` captures `current = bundleRef.current` at entry, then `await`s
+(`db.people.get`, then `applyChange`), and finally writes `bundleRef.current = swapped` where
+`swapped` wraps `current.index` — **unconditionally**, with no check that `bundleRef.current` is
+still `current`. The build effect (`:99-123`) is the only other writer of `bundleRef.current`, driven
+by a separate `useLiveQuery(listFieldDefs('people'))` and completely uncoordinated with the
+maintenance queue.
+
+Race (reliably provoked by a People field **type change**, since `applyFieldTypeChange` emits
+`fieldDefs:update` **and** `people:update` per coerced row in the same tick):
+
+1. A `people:update` event is enqueued while `bundleRef` still holds the OLD bundle; `handleEvent`
+   captures `current = bundleOld` and suspends on `await db.people.get(...)`.
+2. The `fieldDefs` change re-runs `customDefs`; the build effect rebuilds and sets
+   `bundleRef.current = bundleNew` — a fresh index over the NEW field set.
+3. `handleEvent` resumes, applies the change to `bundleOld.index`, then runs
+   `bundleRef.current = swapped` — **clobbering `bundleNew` with a wrapper around the stale
+   `bundleOld.index`.**
+
+The index then reflects the *old* field schema: a just-removed/retyped field still matches with stale
+text, or a newly added field is absent. It is sticky — later incremental events capture the clobbered
+old bundle and keep using it; recovery needs a rebuild with no racing in-flight event, or a reload.
+This is persistent, user-visible incorrectness of search results (and the scope panel can list a
+field the index does not actually cover), not a transient flash.
+
+**Fix:** Never let a stale maintenance step publish over a newer bundle, and don't silently drop the
+event. Minimal guard (prevents the clobber; re-enqueues so the event still lands on the fresh index):
+
+```ts
+const handleEvent = useCallback(async (ev: ChangeEvent) => {
+  const current = bundleRef.current;
+  if (!current) return;
+  const person = ev.op === 'delete' ? undefined : await db.people.get(ev.entityId);
+  const personById = new Map<string, Person>();
+  if (person) personById.set(person.id, person);
+  await applyChange(current.index, current.fieldTextById, ev, personById, customDefsRef.current);
+  // A rebuild swapped the bundle out from under us mid-await: our result belongs to a discarded
+  // index. Don't publish over the fresh bundle — re-enqueue so the event lands on the new index.
+  if (bundleRef.current !== current) {
+    enqueueMaintenance(ev);
+    return;
+  }
+  const swapped: SearchIndexBundle = { index: current.index, fieldTextById: current.fieldTextById };
+  bundleRef.current = swapped;
+  setBundle(swapped);
+}, [enqueueMaintenance]);
+```
+
+Robust alternative: run the rebuild itself *through* `maintenanceQueueRef` so build and apply can
+never interleave, resetting/replaying the queue at each rebuild boundary. That also fixes WR-01.
 
 ## Warnings
 
-### WR-01: Photo custom fields render a scope checkbox that does nothing and breaks the all-fields-off guard
+### WR-01: People writes during a coarse REBUILD window are applied to the about-to-be-discarded index and lost
 
-**File:** `src/features/search/ScopePanel.tsx:55,74-82`, `src/features/search/useScopeSelection.ts:37-42`, `src/features/search/searchIndex.ts:208`
-**Issue:**
-The scope candidate set and the indexed field set disagree on `photo` fields.
+**File:** `src/features/search/useSearchIndex.ts:129-140` (interacts with `:99-118`)
 
-- `buildIndex` excludes photo fields from the index: `customDefs.filter((def) => !def.deleted && def.type !== 'photo')` (`searchIndex.ts:208`).
-- `ScopePanel` renders a checkbox for **every** non-deleted custom def — `listFieldDefs('people')` does not filter by type (`repository.ts:844-846`), so a `photo` custom field gets a checkbox (`ScopePanel.tsx:74-82`).
-- `resolveActiveFields` includes every non-deleted def id as a candidate — again without the `photo` exclusion (`useScopeSelection.ts:37-42`).
+**Issue:** The initial-build buffering only fires when `bundleRef.current` is null, which holds
+**only during the very first build**. During a *rebuild* (any `fieldDefs` create / update /
+soft-delete / reorder), `bundleRef.current` still holds the OLD bundle, so the `onChange` handler
+takes the `enqueueMaintenance` branch and applies the write to the old index. When the rebuild swaps
+in a fresh bundle built from its own `db.people.toArray()` snapshot, any person created *after* that
+snapshot but whose event was applied to the old index is dropped from the search index —
+unsearchable until the next rebuild or reload. (An `update` self-heals via `applyChange`'s
+`index.has` → `add` fallback the next time that person is touched; a plain `create` does not.)
 
-Two user-visible consequences:
-1. A `photo` custom field's checkbox is a **dead control** — toggling it changes `activeFields`, but that field is never in the index, so search behavior is unaffected.
-2. It **defeats the all-fields-off guard (D-11/B9)**. If a DB has a photo custom field and the user unchecks all five built-ins plus every text field but leaves the photo box checked, `activeFields` is non-empty (`[fld_photo]`), so `allFieldsOff` is `false`. The user then sees the generic "No people match" zero-match panel instead of the intended distinct "Nothing to search" guard — even though effectively nothing searchable is selected.
-
-I confirmed MiniSearch does **not** throw on an unknown field in the search `fields` option (valid fields still match), so this is a correctness/UX inconsistency, not a crash.
-
-**Fix:** Apply the same `type !== 'photo'` filter used by `buildIndex` at the two candidate sources so the scope panel and the resolver agree with the index:
-```ts
-// ScopePanel.tsx
-const customDefs = (useLiveQuery<FieldDef[]>(() => listFieldDefs('people'), []) ?? [])
-  .filter((def) => def.type !== 'photo');
-
-// useScopeSelection.ts – resolveActiveFields
-const candidates = [
-  ...builtinKeys,
-  ...customDefs.filter((def) => !def.deleted && def.type !== 'photo').map((def) => def.id),
-];
-```
-Consider exporting a shared `isIndexableDef(def)` predicate from `searchIndex.ts` so the three call sites cannot drift apart again.
-
-### WR-02: A person created during the initial async index build is silently dropped from the index
-
-**File:** `src/features/search/useSearchIndex.ts:56-95`
-**Issue:**
-The one-time build effect is async: it awaits `db.people.toArray()` then `buildIndex(...)` before assigning `bundleRef.current`/`setBundle` (`lines 59-65`). The incremental `onChange` subscription is installed in a separate effect and guards with `if (!current) return; // not built yet` (`line 80`).
-
-If a `people` `create`/`update` commits **after** the build's `toArray()` snapshot but **before** `bundleRef.current` is set, the change event is received while `bundleRef.current` is still `null` and is dropped on the floor — and it was not in the snapshot either. That row stays **unsearchable** until an unrelated field-schema change triggers the coarse rebuild (or the view is remounted). The comment on `line 80` ("the initial build will read the persisted row") is only true when the write precedes the snapshot read, not when it lands in this window.
-
-This is narrow (a write racing mount), but the e2e "created while Search is open" test only exercises the post-build path, so the gap is uncovered.
-
-**Fix:** After the build resolves, drain any events missed during the build window, or make the subscription buffer while `bundleRef.current === null` and replay on assignment. Minimal approach — record events received before the bundle exists and replay them once `bundleRef.current` is set; or install the `onChange` subscription and begin buffering **before** the first `toArray()`.
-
-### WR-03: Concurrent `applyChange` calls are not atomic across their internal await and can leave stale index state
-
-**File:** `src/features/search/useSearchIndex.ts:76-93`, `src/features/search/searchIndex.ts:276-306`
-**Issue:**
-Each `onChange` emit spawns an independent `void (async () => { ... })()` (`useSearchIndex.ts:81`) that awaits `db.people.get` then `applyChange`, and `applyChange` itself awaits `projectFieldText` (`searchIndex.ts:300`) — whose latency varies (a `link-to-entity` field resolves a target name via a Dexie read) — **before** the non-atomic `index.has(...)` → `index.replace/add` decision (`searchIndex.ts:304-305`).
-
-Because these IIFEs run concurrently with no per-entity serialization, two rapid updates to the same person can complete in an order that does not match their commit order: the operation that resolves its `projectFieldText` last writes last, so the index can retain the **older** field text. Note the `useScopeSelection.setFieldChecked` writer deliberately serializes its read-modify-write in a Dexie `rw` transaction (`useScopeSelection.ts:82-85`) precisely to avoid this class of bug; the index-maintenance path has no equivalent guard.
-
-**Fix:** Serialize index maintenance — e.g. chain events through a promise queue (`pending = pending.then(() => handle(ev))`) so `applyChange` calls apply strictly in emit order, or make the `index.has`/`replace`/`add` decision immediately after a single fresh read with no interleaving await. A queue also closes the ordering exposure in WR-02.
+**Fix:** Buffer/replay across rebuilds, not just the null-bundle initial build — e.g. serialize the
+rebuild through `maintenanceQueueRef` and drain `pendingEventsRef` after every swap, or capture the
+rebuild snapshot inside the serial queue so no event can land between `toArray()` and the swap. Shares
+a root cause with CR-01.
 
 ## Info
 
-### IN-01: Result-count live-region announcement is not pluralized
+### IN-01: Redundant `photo` guard in `projectFieldText` (dead defensive branch)
 
-**File:** `src/features/search/SearchView.tsx:127-133`
-**Issue:** `announce` renders `` `${results.length} people match` `` unconditionally, so a single result is announced to assistive tech as "1 people match".
-**Fix:** `` `${results.length} ${results.length === 1 ? 'person matches' : 'people match'}` ``.
+**File:** `src/features/search/searchIndex.ts:199-202`
 
-### IN-02: `snippet.ts` re-derives constants independently of `searchIndex.ts`
+**Issue:** `projectFieldText` iterates `activeDefs` and does `if (def.type === 'photo') continue;`,
+but every caller passes `activeDefs = customDefs.filter(isIndexableDef)` (`buildIndex:220`,
+`applyChange:311`) and `isIndexableDef` already excludes `type === 'photo'`. The inner branch is
+unreachable. Two owners of the same invariant that could silently disagree later.
 
-**File:** `src/features/search/snippet.ts:15-19`
-**Issue:** `NAME_KEY`, `NEUTRAL_BOOST`, and `BUILTIN_ORDER` restate constants whose source of truth lives in `searchIndex.ts` (`BUILTIN_FIELD_KEYS[0]` is the name key; custom fields' neutral weight is "absent from the boost map"). If the boost model or built-in ordering changes, these can drift silently.
-**Fix:** Derive `NAME_KEY` from `BUILTIN_FIELD_KEYS[0]` (already imported) and centralize the neutral-boost constant in `searchIndex.ts`, importing it here.
+**Fix:** Drop the inner branch (rely on the pre-filter) or push the filter fully into
+`projectFieldText` — pick one owner, not both.
+
+### IN-02: Search rows depend on two independently-updating live sources (`peopleById` vs the index)
+
+**File:** `src/features/search/SearchView.tsx:53-58, 79-87`
+
+**Issue:** `results` filters index hits through `peopleById`, a *separate*
+`useLiveQuery(() => db.people.toArray())` from the index's own `db.people` projection. The two refresh
+on independent async schedules, so right after a create/delete a hit may be produced by the index but
+skipped because `peopleById` has not yet updated (or vice-versa). Eventually consistent, and the e2e
+retrying assertions mask it, but a valid row can transiently vanish/appear.
+
+**Fix:** Acceptable as eventual-consistency; if tightened, source the row's Person from a single
+snapshot (e.g. off the index projection) rather than a second live query.
 
 ---
 
-_Reviewed: 2026-08-05T10:57:30Z_
+_Reviewed: 2026-08-05T12:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
