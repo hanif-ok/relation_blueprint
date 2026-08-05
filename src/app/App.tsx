@@ -11,6 +11,7 @@ import { BrowseList } from '@/features/browse/BrowseList';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import { PrivacyNotice } from '@/features/onboarding/PrivacyNotice';
 import { ViewSwitcher, type ViewKey } from '@/features/nav/ViewSwitcher';
+import { SearchView } from '@/features/search/SearchView';
 import { NewEntityMenu } from '@/features/nav/NewEntityMenu';
 import { EntityForm, type EntityFormType } from '@/features/entity-form/EntityForm';
 import { FieldManager } from '@/features/fields/FieldManager';
@@ -22,8 +23,8 @@ import { useSyncEngine } from '@/features/connect/useSyncEngine';
 import { ReconnectBanner } from '@/features/connect/ReconnectBanner';
 import { BackupMenu } from '@/features/backup/BackupMenu';
 
-/** A view key narrowed to the four entity tables (everything except the spatial 'map'/'graph'). */
-type EntityView = Exclude<ViewKey, 'map' | 'graph'>;
+/** A view key narrowed to the four entity tables (everything except 'map'/'graph'/'search'). */
+type EntityView = Exclude<ViewKey, 'map' | 'graph' | 'search'>;
 
 /**
  * Multi-surface app shell (plan 02-03). A left-nav ViewSwitcher swaps the main surface between
@@ -331,6 +332,13 @@ export function App() {
               egoId={profile && (profile.type === 'people' || profile.type === 'groups') ? profile.id : null}
               onSelectNode={(kind, id) => setProfile({ type: kind, id, openedFrom: 'list' })}
             />
+          ) : activeView === 'search' ? (
+            // Field-scoped People search (SRCH-01/D-01). A result-row click opens the profile in
+            // list context (reusing openFromList); "Show on map" reuses the spatial showOnMap.
+            <SearchView
+              onOpen={(id) => openFromList('people', id)}
+              onShowOnMap={(id) => void showOnMap(id)}
+            />
           ) : (
             <BrowseList
               key={activeView}
@@ -392,7 +400,9 @@ export function App() {
         open={fieldsOpen}
         onOpenChange={setFieldsOpen}
         entityType={
-          activeView === 'map' || activeView === 'graph' ? 'people' : (activeView as EntityView)
+          activeView === 'map' || activeView === 'graph' || activeView === 'search'
+            ? 'people'
+            : (activeView as EntityView)
         }
       />
 

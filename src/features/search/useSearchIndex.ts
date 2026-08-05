@@ -6,7 +6,7 @@
 //
 // The index is a local, rebuildable projection — this hook never persists it to the cloud/backup.
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
 import { buildIndex, search, type SearchHit } from './searchIndex';
@@ -28,8 +28,13 @@ export function useSearchIndex(): UseSearchIndex {
   // Rebuild the index whenever the snapshot changes. `undefined` = the query has not resolved yet.
   const index = useMemo(() => (people ? buildIndex(people) : null), [people]);
 
-  return {
-    ready: index !== null,
-    search: (query, fields) => (index ? search(index, query, fields) : []),
-  };
+  // Stable across renders — its identity changes ONLY when the index is rebuilt, so callers can
+  // safely memoize their result set on it.
+  const runSearch = useCallback(
+    (query: string, fields: string[]): SearchHit[] =>
+      index ? search(index, query, fields) : [],
+    [index],
+  );
+
+  return { ready: index !== null, search: runSearch };
 }
