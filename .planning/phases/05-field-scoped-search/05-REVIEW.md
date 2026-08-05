@@ -1,13 +1,12 @@
 ---
 phase: 05-field-scoped-search
-reviewed: 2026-08-05T00:00:00Z
+reviewed: 2026-08-05T10:57:30Z
 depth: standard
-files_reviewed: 18
+files_reviewed: 17
 files_reviewed_list:
   - e2e/search-incremental.spec.ts
   - e2e/search-scope.spec.ts
   - e2e/search.spec.ts
-  - package.json
   - src/app/App.tsx
   - src/features/nav/ViewSwitcher.tsx
   - src/features/search/ScopePanel.tsx
@@ -24,121 +23,108 @@ files_reviewed_list:
   - tests/features/snippet.test.ts
 findings:
   critical: 0
-  warning: 4
-  info: 3
-  total: 7
+  warning: 3
+  info: 2
+  total: 5
 status: issues_found
 ---
 
 # Phase 5: Code Review Report
 
-**Reviewed:** 2026-08-05
+**Reviewed:** 2026-08-05T10:57:30Z
 **Depth:** standard
-**Files Reviewed:** 18
+**Files Reviewed:** 17
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the Field-Scoped Search feature: the MiniSearch index service (`searchIndex.ts`), the
-subscription-driven incremental-index hook (`useSearchIndex.ts`), the persisted subtractive scope
-selection (`useScopeSelection.ts`), the snippet highlighter (`snippet.ts`), and the UI
-(`SearchView.tsx`, `ScopePanel.tsx`, `SearchResultRow.tsx`) plus wiring in `App.tsx`/`ViewSwitcher.tsx`.
+Reviewed the field-scoped People search slice: the MiniSearch index service (`searchIndex.ts`),
+the incremental-freshness hook (`useSearchIndex.ts`), the subtractive scope-selection store
+(`useScopeSelection.ts`), the UI surfaces (`SearchView.tsx`, `ScopePanel.tsx`, `SearchResultRow.tsx`),
+the XSS-safe snippet helper (`snippet.ts`), the nav wiring (`ViewSwitcher.tsx`, `App.tsx`), and the
+associated unit + e2e suites.
 
-**Security is clean.** The XSS boundary the phase was built around holds: user-authored names, the
-echoed query, field labels, and the matched substring all render as genuine React children. There is
-no `dangerouslySetInnerHTML`, no HTML-string assembly, and no `eval`/injection surface. The `<mark>`
-is a real `createElement('mark', …)` node with string children. No hardcoded secrets. The index is
-never serialized to the cloud (threat T-05-NS respected).
+Overall the code is careful and well-tested. The security boundary the phase advertises (T-05-01)
+holds: every snippet fragment — including the highlight — is a genuine React child, never an HTML
+string, and I confirmed there is no `dangerouslySetInnerHTML` or `innerHTML` anywhere in scope. No
+secrets, no injection, no unsafe deserialization. I found **no BLOCKER-class defects**.
 
-I confirmed the core index mechanism against the vendored MiniSearch source: per-call `search`
-options merge over the constructor `searchOptions` (including `processTerm`), so the query genuinely
-keeps `DEFAULT_PROCESS_TERM` and is **not** suffix-expanded, while the index is — the "smith matches
-blacksmith" design is correct. Auto-vacuum is on by default, so the `discard`/`replace` tombstones do
-**not** leak (the leak risk the brief flagged is mitigated by the library default).
-
-The defects that remain concentrate in the **incremental / subscription lifecycle** (correctness of
-the derived index under concurrent or racing writes) and one **windowing** UX bug. All are WARNING —
-the index is a derived, rebuildable projection that self-heals on reload or a field-schema change, so
-none is a data-loss BLOCKER, but each produces user-visible wrong results under realistic sequences.
+The defects that remain are correctness-under-concurrency gaps in the incremental index maintenance
+and one scope/index field-set mismatch (photo custom fields). I verified empirically that the photo
+mismatch does **not** crash MiniSearch (searching an unknown field alongside valid fields returns
+results normally and does not throw), which is why it is a WARNING rather than a BLOCKER. Details
+below.
 
 ## Warnings
 
-### WR-01: Incremental index handlers run concurrently with no sequencing → out-of-order completion leaves a stale/ghost document
+### WR-01: Photo custom fields render a scope checkbox that does nothing and breaks the all-fields-off guard
 
-**File:** `src/features/search/useSearchIndex.ts:76-95` (with `src/features/search/searchIndex.ts:276-306`)
-**Issue:** Every repository change fires a fresh `void (async () => { … await db.people.get() … await applyChange() … setBundle() })()` with no ordering guarantee. `db.people.get()` is captured at emit time, but the two `await`s let handlers interleave and **complete out of order**. Two realistic sequences corrupt the index until the next full rebuild:
-- **Racing updates (bulk sync-pull / import).** Update U1 then U2 commit. Handler-1's `get()` (issued at U1's emit, before U2 committed) reads the old row; Handler-2 reads the new row. If Handler-2's async chain resolves first and Handler-1 finishes last, the index ends on U1's **stale** text. Searching the new value then misses the person.
-- **create→delete reorder.** A `create` handler's `get()` may resolve *after* the `delete` handler has already run `index.discard` (delete has no `await` before discard, create awaits `get`). The create then `index.add`s a **ghost** row that should not exist.
+**File:** `src/features/search/ScopePanel.tsx:55,74-82`, `src/features/search/useScopeSelection.ts:37-42`, `src/features/search/searchIndex.ts:208`
+**Issue:**
+The scope candidate set and the indexed field set disagree on `photo` fields.
 
-This matters because MEMORY notes bulk sync push/pull paths exist; those can emit many change events in quick succession without the caller awaiting each. The hook's comment ("All emits are post-commit, so a fresh read reflects the persisted row") addresses the read but not out-of-order *completion*.
-**Fix:** Serialize applyChange work behind a single promise chain so handlers apply in emit order:
+- `buildIndex` excludes photo fields from the index: `customDefs.filter((def) => !def.deleted && def.type !== 'photo')` (`searchIndex.ts:208`).
+- `ScopePanel` renders a checkbox for **every** non-deleted custom def — `listFieldDefs('people')` does not filter by type (`repository.ts:844-846`), so a `photo` custom field gets a checkbox (`ScopePanel.tsx:74-82`).
+- `resolveActiveFields` includes every non-deleted def id as a candidate — again without the `photo` exclusion (`useScopeSelection.ts:37-42`).
+
+Two user-visible consequences:
+1. A `photo` custom field's checkbox is a **dead control** — toggling it changes `activeFields`, but that field is never in the index, so search behavior is unaffected.
+2. It **defeats the all-fields-off guard (D-11/B9)**. If a DB has a photo custom field and the user unchecks all five built-ins plus every text field but leaves the photo box checked, `activeFields` is non-empty (`[fld_photo]`), so `allFieldsOff` is `false`. The user then sees the generic "No people match" zero-match panel instead of the intended distinct "Nothing to search" guard — even though effectively nothing searchable is selected.
+
+I confirmed MiniSearch does **not** throw on an unknown field in the search `fields` option (valid fields still match), so this is a correctness/UX inconsistency, not a crash.
+
+**Fix:** Apply the same `type !== 'photo'` filter used by `buildIndex` at the two candidate sources so the scope panel and the resolver agree with the index:
 ```ts
-const queue = useRef<Promise<void>>(Promise.resolve());
-// inside onChange:
-queue.current = queue.current.then(async () => {
-  const current = bundleRef.current;
-  if (!current || ev.entityType !== 'people') return;
-  const person = ev.op === 'delete' ? undefined : await db.people.get(ev.entityId);
-  const personById = new Map<string, Person>();
-  if (person) personById.set(person.id, person);
-  await applyChange(current.index, current.fieldTextById, ev, personById, customDefsRef.current);
-  const swapped = { index: current.index, fieldTextById: current.fieldTextById };
-  bundleRef.current = swapped;
-  setBundle(swapped);
-});
-```
+// ScopePanel.tsx
+const customDefs = (useLiveQuery<FieldDef[]>(() => listFieldDefs('people'), []) ?? [])
+  .filter((def) => def.type !== 'photo');
 
-### WR-02: Writes committed during the initial async build are silently dropped
+// useScopeSelection.ts – resolveActiveFields
+const candidates = [
+  ...builtinKeys,
+  ...customDefs.filter((def) => !def.deleted && def.type !== 'photo').map((def) => def.id),
+];
+```
+Consider exporting a shared `isIndexableDef(def)` predicate from `searchIndex.ts` so the three call sites cannot drift apart again.
+
+### WR-02: A person created during the initial async index build is silently dropped from the index
 
 **File:** `src/features/search/useSearchIndex.ts:56-95`
-**Issue:** The build effect snapshots `await db.people.toArray()` then `await buildIndex(...)`. The incremental subscription is installed in a separate effect and becomes active immediately. During the async build window, `bundleRef.current` is `null`, so any change event hits the early return `if (!current) return;` and is skipped — with the comment claiming "the initial build will read the persisted row." But if the write commits **after** `toArray()` snapshotted (and before `buildIndex` finishes), that row is in neither the snapshot nor the incremental path, so it is missing from the index until the next coarse rebuild (a field-schema change) or reload. The same gap applies to the coarse rebuild path on a schema change.
-**Fix:** After the build resolves and `bundleRef` is set, drain any changes missed during the window — simplest is to re-read the affected rows, or capture a "changed during build" set and re-apply. Minimal patch: on build completion, re-run a `db.people.toArray()`-diff, or record `pendingEvents` while `bundleRef.current === null` and flush them right after `setBundle(next)`:
-```ts
-const pending = useRef<ChangeEvent[]>([]);
-// in onChange, when current is null: pending.current.push(ev); return;
-// after setBundle(next) in the build effect: flush pending.current through applyChange.
-```
+**Issue:**
+The one-time build effect is async: it awaits `db.people.toArray()` then `buildIndex(...)` before assigning `bundleRef.current`/`setBundle` (`lines 59-65`). The incremental `onChange` subscription is installed in a separate effect and guards with `if (!current) return; // not built yet` (`line 80`).
 
-### WR-03: `link-to-entity` indexed text goes stale when the TARGET entity is renamed
+If a `people` `create`/`update` commits **after** the build's `toArray()` snapshot but **before** `bundleRef.current` is set, the change event is received while `bundleRef.current` is still `null` and is dropped on the floor — and it was not in the snapshot either. That row stays **unsearchable** until an unrelated field-schema change triggers the coarse rebuild (or the view is remounted). The comment on `line 80` ("the initial build will read the persisted row") is only true when the write precedes the snapshot read, not when it lands in this window.
 
-**File:** `src/features/search/searchIndex.ts:160-165` (`stringifyCustomValue`) with `applyChange` at `:276-306`
-**Issue:** A `link-to-entity` custom field is indexed as the *target's* display name (`target?.name`). The incremental path only re-indexes the entity named in the `ChangeEvent`. When target person B is renamed, the change event is for **B**, so person A (whose link field points at B) is never re-projected and keeps B's **old** name in its indexed text and snippet. Searching B's new name won't surface A through the link field, and A's snippet shows the outdated name, until a full rebuild (schema change) or reload. This is the same one-directional-update class the project already tripped on (MEMORY "sync push/pull gap").
-**Fix:** On an update/delete of any entity, invalidate/refresh the documents whose `link-to-entity` fields reference it. If a reverse index (referrer → referenced ids) is too heavy for this phase, at minimum document the limitation and rebuild on a broader signal, or re-project referrers of the changed id. A pragmatic option: when `ev.entityType === 'people'` and the row is a link target, re-index referrers found via `db.people` scan of link fields (bounded by field count).
+This is narrow (a write racing mount), but the e2e "created while Search is open" test only exercises the post-build path, so the gap is uncovered.
 
-### WR-04: Windowing does not reset `scrollTop` on query/scope change → result list can render blank when it should show matches
+**Fix:** After the build resolves, drain any events missed during the build window, or make the subscription buffer while `bundleRef.current === null` and replay on assignment. Minimal approach — record events received before the bundle exists and replay them once `bundleRef.current` is set; or install the `onChange` subscription and begin buffering **before** the first `toArray()`.
 
-**File:** `src/features/search/SearchView.tsx:94-124` and `:172-204`
-**Issue:** `scrollTop` is React state updated only by `onScroll`. The results scroll container is conditionally mounted (`showList`). Sequence: user scrolls a long result set (state `scrollTop` = e.g. 2000) → narrows the query so a state panel shows (container **unmounts**, `scrollTop` state retained) → types a new query with few matches (container **remounts**, DOM `scrollTop` = 0). Windowing then computes `first = floor(2000/64) - 6 = 25`, `end = min(count, 25+visible)` — with `count = 3`, `start(25) > end(3)` so `results.slice(25, 3)` is `[]` and `padTop = 25*64`. Because the DOM `scrollTop` is a valid 0, **no scroll event fires**, so the stale state never corrects: the user sees an empty list for a query that has matches. (The container-stays-mounted variant self-heals via browser scroll clamping; the unmount/remount-through-a-state-panel variant does not.)
-**Fix:** Reset scroll position when the query or active scope changes:
-```ts
-useEffect(() => {
-  setScrollTop(0);
-  if (scrollRef.current) scrollRef.current.scrollTop = 0;
-}, [debouncedQuery, activeFields]);
-```
+### WR-03: Concurrent `applyChange` calls are not atomic across their internal await and can leave stale index state
+
+**File:** `src/features/search/useSearchIndex.ts:76-93`, `src/features/search/searchIndex.ts:276-306`
+**Issue:**
+Each `onChange` emit spawns an independent `void (async () => { ... })()` (`useSearchIndex.ts:81`) that awaits `db.people.get` then `applyChange`, and `applyChange` itself awaits `projectFieldText` (`searchIndex.ts:300`) — whose latency varies (a `link-to-entity` field resolves a target name via a Dexie read) — **before** the non-atomic `index.has(...)` → `index.replace/add` decision (`searchIndex.ts:304-305`).
+
+Because these IIFEs run concurrently with no per-entity serialization, two rapid updates to the same person can complete in an order that does not match their commit order: the operation that resolves its `projectFieldText` last writes last, so the index can retain the **older** field text. Note the `useScopeSelection.setFieldChecked` writer deliberately serializes its read-modify-write in a Dexie `rw` transaction (`useScopeSelection.ts:82-85`) precisely to avoid this class of bug; the index-maintenance path has no equivalent guard.
+
+**Fix:** Serialize index maintenance — e.g. chain events through a promise queue (`pending = pending.then(() => handle(ev))`) so `applyChange` calls apply strictly in emit order, or make the `index.has`/`replace`/`add` decision immediately after a single fresh read with no interleaving await. A queue also closes the ordering exposure in WR-02.
 
 ## Info
 
-### IN-01: Suffix (infix) indexing multiplies index term count by ~average token length
+### IN-01: Result-count live-region announcement is not pluralized
 
-**File:** `src/features/search/searchIndex.ts:73-88`
-**Issue:** `indexTermWithSuffixes` emits every suffix of each token down to 2 chars, so a token of length *n* yields *n − 1* index terms. For `description`/`notes` free text this can inflate the index several-fold, which bears on the project's explicit "degrade gracefully from dozens to thousands+" constraint (CLAUDE.md). Flagged as INFO because pure performance is out of v1 review scope; noting only because it intersects a stated non-functional requirement.
-**Fix:** Consider capping suffix expansion (e.g. only tokens ≤ N chars, or a max suffixes-per-token), or gating infix indexing to the fields where "blacksmith" semantics matter (name/tags/custom) and leaving long-text fields prefix-only. Benchmark against a few-thousand-person DB before shipping large datasets.
+**File:** `src/features/search/SearchView.tsx:127-133`
+**Issue:** `announce` renders `` `${results.length} people match` `` unconditionally, so a single result is announced to assistive tech as "1 people match".
+**Fix:** `` `${results.length} ${results.length === 1 ? 'person matches' : 'people match'}` ``.
 
-### IN-02: `number`/`date` custom fields are indexed as their raw stringified value
+### IN-02: `snippet.ts` re-derives constants independently of `searchIndex.ts`
 
-**File:** `src/features/search/searchIndex.ts:155-156`
-**Issue:** `case 'number': case 'date': return String(value);`. A `date` stored as an epoch-ms number is indexed/snippeted as e.g. `"1699999999999"`, which is neither human-searchable nor a meaningful snippet. Not incorrect, but effectively dead text in the index.
-**Fix:** Format dates to a searchable string (ISO date, `YYYY-MM-DD`) before indexing; leave numbers as-is or format consistently.
-
-### IN-03: Subscription callback can call `setBundle` after unmount
-
-**File:** `src/features/search/useSearchIndex.ts:76-95`
-**Issue:** The build effect guards its async completion with a `cancelled` flag, but the subscription effect does not: an `applyChange` chain in flight when the component unmounts will still run `setBundle(swapped)`. Harmless under React 19 (no-op on an unmounted component), but inconsistent with the build effect's guarding and worth aligning if the WR-01 queue is introduced.
-**Fix:** Add an `unmounted`/`cancelled` ref checked before `setBundle` in the subscription callback (naturally folds into the WR-01 queue refactor).
+**File:** `src/features/search/snippet.ts:15-19`
+**Issue:** `NAME_KEY`, `NEUTRAL_BOOST`, and `BUILTIN_ORDER` restate constants whose source of truth lives in `searchIndex.ts` (`BUILTIN_FIELD_KEYS[0]` is the name key; custom fields' neutral weight is "absent from the boost map"). If the boost model or built-in ordering changes, these can drift silently.
+**Fix:** Derive `NAME_KEY` from `BUILTIN_FIELD_KEYS[0]` (already imported) and centralize the neutral-boost constant in `searchIndex.ts`, importing it here.
 
 ---
 
-_Reviewed: 2026-08-05_
+_Reviewed: 2026-08-05T10:57:30Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
