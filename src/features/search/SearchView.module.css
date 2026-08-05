@@ -161,6 +161,31 @@
   text-overflow: ellipsis;
 }
 
+/* ---- Matched-field snippet (S3 secondary line, D-09) ----------------------- */
+
+/* The snippet occupies the row's secondary line: a `{label}:` prefix + a single-line context
+ * window. Truncates with an ellipsis so a long value never wraps the 64px row. */
+.snippet {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The matched substring — the ONLY non-focus amber in this view (B1): an amber-tint highlight with
+ * ink text at weight 600 (the "evidence the scoping worked"). The rgba tint is the UI-SPEC-mandated
+ * value (no token exists for it). Targets the real <mark> element the snippet renders. */
+.snippet mark {
+  background: rgba(200, 116, 43, 0.18);
+  color: var(--ink);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
 /* Visually-hidden live region (result-count announcements for AT). */
 .srOnly {
   position: absolute;
