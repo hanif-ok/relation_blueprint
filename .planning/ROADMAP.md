@@ -210,12 +210,12 @@ Plans:
   2. User can toggle per-attribute checkboxes to scope which fields a search matches (e.g. "smith" with the job field off matches names, not blacksmiths)
   3. Search results stay fast as the database grows toward thousands of multi-field records, with the index updating incrementally on entity changes rather than rebuilding every load
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 Plans:
 
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Search spine (SRCH-01): dedicated Search view in the nav rail; MiniSearch index + hook; typing surfaces tolerant fuzzy People matches over built-ins; click→ProfileSidebar + Show-on-map
+- [x] 05-01-PLAN.md — Search spine (SRCH-01): dedicated Search view in the nav rail; MiniSearch index + hook; typing surfaces tolerant fuzzy People matches over built-ins; click→ProfileSidebar + Show-on-map
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -268,6 +268,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Custom Fields & Full Entity Model | 7/7 | Complete   | 2026-06-26 |
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
-| 5. Field-Scoped Search | 0/3 | Not started | - |
+| 5. Field-Scoped Search | 1/3 | In Progress|  |
 | 6. Mega.nz Provider | 0/TBD | Not started | - |
 | 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
