@@ -122,3 +122,18 @@ No gaps. All must-haves across 05-01/05-02/05-03 verified with artifact + wiring
 
 _Verified: 2026-08-05T10:43:40Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## UAT Result (retroactive)
+
+Manual conversational UAT run **2026-08-06** — all 9 tests passed, 0 issues (see `05-UAT.md`). The signature "smith vs blacksmith" field-scoped behavior, matched-field snippet evidence, scope persistence, all-fields-off guard, and live incremental freshness were all confirmed by the curator. One cosmetic wording note (test 3): the "Show on map" action reads as "appears on" + the map name — not a defect, not tracked as a gap.
+
+## Acknowledged Gaps
+
+Phase 05 was marked complete and transitioned to Phase 07 on 2026-08-05 **before** UAT ran, and its two enabled enforcement gates never produced artifacts:
+
+- `security_enforcement: true` → **no `SECURITY.md`** (secure-phase not run for Phase 05).
+- `nyquist_validation: true` → **no `VALIDATION.md`** (validate-phase not run for Phase 05).
+
+On **2026-08-06** the curator reviewed this during verify-work and chose to **accept as-is** — the phase is already complete/transitioned and UAT passed, so the missing security review and nyquist coverage audit are accepted gaps rather than blockers. Re-run `/gsd-secure-phase 05` and/or `/gsd-validate-phase 05` later if you want to close them.
