@@ -51,6 +51,7 @@ created: 2026-08-18
 | Node `grabbable() === true` (flip existing assertion) | drag (POL-02) | POL-02 | — | e2e | `npm run test:e2e` | ✅ update | ⬜ pending |
 | Drag persists + entity rows byte-identical (viewer-only) | drag (POL-02) | POL-02 | T-07 (viewer-only) | e2e | `npm run test:e2e` | ❌ W0 | ⬜ pending |
 | Reset layout clears `graphPositions` row | drag (POL-02) | POL-02 | — | e2e | `npm run test:e2e` | ❌ W0 | ⬜ pending |
+| Sticky partial cache — add entity keeps saved positions byte-identical, only newcomer placed | drag (POL-02) → 07-03 Task 3 | POL-02 | — | e2e | `npm run test:e2e` | ❌ W0 | ⬜ pending |
 | Ego focus transient — exit restores snapshot, cache unchanged | ego (POL-03) | POL-03 | — | e2e | `npm run test:e2e` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -63,7 +64,7 @@ created: 2026-08-18
 - [ ] `tests/features/mapAppearance.test.ts` — `getMapAppearance` default/merge/clear (POL-01)
 - [ ] `tests/features/egoLayout.test.ts` — hop-levels + concentric value derivation (POL-03)
 - [ ] Extend `tests/features/positionCache.test.ts` — `partitionCached` + `clearPositions` cases (POL-02)
-- [ ] Update `e2e/graph.spec.ts` — flip `grabbable` assertion (`false`→`true`); add drag-persist/viewer-only, reset-layout, ego-transient specs; add `data-testid`s `graph-reset-layout`, `graph-exit-focus`, `map-label-color`, `map-connector-color`
+- [ ] Update `e2e/graph.spec.ts` — flip `grabbable` assertion (`false`→`true`); add drag-persist/viewer-only, reset-layout, sticky-partial-cache (add-entity keeps saved positions, only newcomer placed — D-08), ego-transient specs; add `data-testid`s `graph-reset-layout`, `graph-exit-focus`, `map-label-color`, `map-connector-color`
 - [ ] No framework install needed (Vitest + Playwright already present)
 
 ---

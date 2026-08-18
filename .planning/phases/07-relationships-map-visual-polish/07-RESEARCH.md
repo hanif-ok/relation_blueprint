@@ -395,14 +395,16 @@ This phase adds appearance/layout prefs but performs **no rename/refactor/migrat
 
 **All library API claims above are VERIFIED against installed type defs — not assumed.**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Exit-focus vs profile lifecycle** — should the Exit-focus button leave the ProfileSidebar open (drop only the layout overlay) or also close the profile?
    - What we know: closing the sidebar exits focus (IC-4). D-12 lists Exit-focus and sidebar-close as both valid exits.
    - What's unclear: whether Exit-focus should keep the profile open.
    - Recommendation: keep the profile open (introduce local `focusedId` decoupled from `egoId` — see POL-03 step 0). This makes Exit-focus meaningfully distinct from just closing the sidebar.
+   - **RESOLVED:** Plan **07-04** (ego focus) implements a local `focusedId` state in GraphView, seeded from the `egoId` prop and node taps but cleared independently by the Exit-focus button — so Exit-focus drops the concentric overlay while leaving the ProfileSidebar open (profile stays; only the transient layout is exited). `egoId → null` still clears `focusedId`. This closes the question per the recommendation (D-12).
 
 2. **Connector default alpha** (A2) — resolve in planning or defer to UAT.
+   - **RESOLVED:** Plans **07-01 / 07-02** store the solid `#rrggbb` straight from the picker (never bake alpha — Pitfall 5) and render a **user-chosen connector hex at full alpha** (the D-04 casing guarantees legibility), while a `null`/absent stored value falls back to the existing 55%-alpha `CONNECTOR_HAIRLINE` default via `hexToRgba` (D-06 — existing DBs render identically until customised). `getMapAppearance` returns `connectorColor: null` for the default so the render layer selects the hairline; a set hex renders opaque.
 
 ## Environment Availability
 
