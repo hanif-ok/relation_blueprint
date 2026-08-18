@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Map Editor — Spaces & Navigation** - Shapes/zones/layers, portal markers, nested map-groups, and one person on multiple maps (completed 2026-06-27)
 - [x] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph (completed 2026-07-03)
 - [x] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature) (completed 2026-08-05)
-- [ ] **Phase 6: Mega.nz Provider** - Second-class opt-in Mega storage behind the existing provider abstraction
+- [ ] **Phase 6: Mega.nz Provider** — ⏸️ **DEFERRED (2026-08-18)** — opt-in Mega storage shelved on security preference (a Mega login is a full-account credential, unlike Drive's scoped `drive.file`); Google Drive remains the storage provider. RESEARCH + VALIDATION are banked in the phase dir if revived. Second-class opt-in Mega behind the existing provider abstraction
 - [ ] **Phase 7: Relationships & Map Visual Polish** - Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout (folds in the Phase 04 UAT enhancement todos)
 
 ## Phase Details
@@ -230,6 +230,8 @@ Plans:
 
 ### Phase 6: Mega.nz Provider
 
+> ⏸️ **DEFERRED (2026-08-18).** Shelved at the planning stage on the curator's security preference: a Mega login grants **full-account access** via an unofficial community SDK (`megajs`), with no scoped equivalent of Drive's `drive.file`, and the silent-reconnect design (D-06-01) persists the account master key locally. Google Drive (scoped, official, already shipped) remains the sole storage provider. `06-RESEARCH.md` (HIGH-confidence spike, all unknowns resolved) and `06-VALIDATION.md` are committed and banked — revive by re-running `/gsd:plan-phase 6` (optionally with a safer in-memory-only session posture). Nothing depends on this phase.
+
 **Goal**: A user can alternatively connect Mega.nz as their storage provider — plugged in behind the existing provider abstraction Drive already proved — with credentials handled session-only and never persisted.
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -260,7 +262,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 (**Phase 6 Mega.nz deferred 2026-08-18** — optional/opt-in, revisit later)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -269,5 +271,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Map Editor — Spaces & Navigation | 7/7 | Complete    | 2026-06-27 |
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
 | 5. Field-Scoped Search | 3/3 | Complete    | 2026-08-05 |
-| 6. Mega.nz Provider | 0/TBD | Not started | - |
+| 6. Mega.nz Provider | 0/TBD | ⏸️ Deferred (2026-08-18) | - |
 | 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |

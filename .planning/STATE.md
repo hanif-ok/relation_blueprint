@@ -124,7 +124,7 @@ Recent decisions affecting current work:
 [Issues that affect future work]
 
 - ⚠️ [Phase 3] Polygon draw tool is armed in ToolPalette (shortcut P) but its multi-click wiring in MapView was never delivered; the pure `addPolygonVertex`/`closePolygon` helpers exist and are unit-tested. Non-blocking — Rect/Ellipse/Line satisfy MAP-02. Either wire the multi-click path or formally drop the tool. See 03-VERIFICATION.md (non-blocking warning).
-- Phase 6 (Mega megajs) still carries a research flag — spike the browser SDK before planning. (Phase 1 Drive-auth and Phase 3 Konva-at-scale research flags are now resolved.)
+- Phase 6 (Mega megajs) DEFERRED 2026-08-18 on security preference — no longer in the active path. Its research flag was resolved during the pre-defer spike (06-RESEARCH.md, HIGH confidence). If revived, reconsider the persisted-session design (D-06-01) vs a safer in-memory-only posture.
 
 ### Quick Tasks Completed
 
@@ -139,6 +139,7 @@ Recent decisions affecting current work:
 - Phase 3 edited: added success criteria 6-7: resizable/rotatable markers + map image transform handles via Konva Transformer (deferred from Phase 1 UAT)
 - Phase 02.1 inserted after Phase 2: Close gap: DATA-03 — sync fieldDefs through the manifest cloud path (ENTITY_TYPES + reconcile + ManifestSchema) + push/reconcile regression test (URGENT)
 - Phase 7 added: Relationships & Map Visual Polish — folds in the 3 Phase-04 UAT enhancement todos (appearance settings, graph node repositioning, dynamic ego focus); polish extending Phase 3/4, sequenced after Phase 6, non-urgent
+- Phase 6 (Mega.nz) DEFERRED 2026-08-18 at the planning stage — curator declined to entrust data to Mega (full-account credential via unofficial SDK vs Drive's scoped `drive.file`). Research spike completed + validation strategy written before the pause (both committed). Execution order is now 5 → 7; Drive is the sole storage provider. Revivable via `/gsd:plan-phase 6`.
 
 ## Deferred Items
 
@@ -146,7 +147,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| storage | Phase 6 — Mega.nz Provider (opt-in second-class backend) | Deferred on security preference (full-account credential vs Drive's scoped `drive.file`); Drive remains sole provider. 06-RESEARCH.md + 06-VALIDATION.md banked. Revive via `/gsd:plan-phase 6` (consider in-memory-only session). | 2026-08-18 |
 
 ## Session Continuity
 
