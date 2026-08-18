@@ -249,7 +249,7 @@ Plans:
 
 **Goal:** A curator can visually tailor and more fluidly navigate the already-shipped relationship/map/graph features — customize map marker name-label and connector line colors, drag graph nodes to rearrange the layout, and use a dynamic ego focus that re-lays-out the graph around the focused person and follows taps.
 **Depends on:** Phase 3 (map markers/labels), Phase 4 (connectors + graph)
-**Requirements:** TBD — bundles three enhancement todos captured from Phase 04 UAT (`.planning/todos/pending/2026-07-07-*.md`); formalize during `/gsd-plan-phase 7`
+**Requirements:** POL-01, POL-02, POL-03 — customizable map label/connector colors; viewer-only draggable graph nodes; dynamic ego focus (formalized 2026-08-18 from the three Phase-04 UAT todos, `.planning/todos/pending/2026-07-07-*.md`)
 **Success Criteria** (what must be TRUE):
 
   1. User can change the map marker name-label text color and the map relationship connector line color; sensible defaults still read well over light and dark background images, and the choice persists across reloads (Dexie meta) — resolves the white-on-white legibility gap raised in Phase 04 UAT

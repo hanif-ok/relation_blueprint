@@ -62,6 +62,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **EXPT-01**: User can export the whole database as a portable, self-contained backup (JSON shards + media)
 - [x] **EXPT-02**: User can import/restore a previously exported backup, fully reconstituting the database including photos
 
+### Relationships & Map Visual Polish
+
+Polish/enhancement requirements formalized from the Phase 04 UAT todos (Phase 7). They extend the already-shipped map markers/labels (MAP-04), map connectors (REL-03), and relationship graph (REL-04) — strictly viewer-only, no data-model change.
+
+- [ ] **POL-01**: User can customize the map marker name-label text color and the map relationship connector line color — per-map, persisted across reloads (Dexie `meta`); defaults keep today's look and stay legible over light and dark background images via a structural halo/casing
+- [ ] **POL-02**: User can drag relationship-graph nodes to rearrange the layout for readability — strictly viewer-only (never mutates relationship data); manual positions may persist, with a Reset-layout escape hatch back to automatic arrangement
+- [ ] **POL-03**: Ego focus is dynamic — opening/tapping a graph node re-lays-out the whole graph (concentric) around that person, focus follows taps, and an explicit exit restores the saved base layout
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in the current roadmap.
@@ -138,11 +146,14 @@ Which phases cover which requirements. Populated during roadmap creation.
 | BRWS-02 | Phase 2 | Pending |
 | EXPT-01 | Phase 1 | Complete |
 | EXPT-02 | Phase 1 | Complete |
+| POL-01 | Phase 7 | Pending |
+| POL-02 | Phase 7 | Pending |
+| POL-03 | Phase 7 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 31 total
-- Mapped to phases: 31 ✓
+- v1 requirements: 34 total
+- Mapped to phases: 34 ✓
 - Unmapped: 0 ✓
 
 **Phase distribution:**
@@ -153,7 +164,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 - Phase 4 (Relationships & Graph): 4 reqs — REL-01, REL-02, REL-03, REL-04
 - Phase 5 (Field-Scoped Search): 2 reqs — SRCH-01, SRCH-02
 - Phase 6 (Mega.nz Provider): 1 req — STOR-07
+- Phase 7 (Relationships & Map Visual Polish): 3 reqs — POL-01, POL-02, POL-03
 
 ---
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-24 after roadmap creation (traceability mapped)*
+*Last updated: 2026-08-18 — Phase 7 polish requirements formalized (POL-01..03) during /gsd-plan-phase 7*
