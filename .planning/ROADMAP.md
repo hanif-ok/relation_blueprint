@@ -256,7 +256,7 @@ Plans:
   2. User can drag graph nodes to rearrange the layout for readability without ever mutating relationship data (viewer-only); manual positions may optionally persist via the existing graph position cache
   3. Ego focus is dynamic — opening/tapping a node re-lays-out the graph around that person, tapping a different node re-egos onto it (focus follows the tap), and exiting focus restores the saved layout
 
-**Plans:** 4/4 plans complete
+**Plans:** 5 plans (4/4 built; 07-05 gap-closure pending)
 
 Plans:
 
@@ -269,6 +269,10 @@ Plans:
 
 - [x] 07-02-PLAN.md — POL-01 canvas wiring: marker-label luminance halo + connector casing + LayersPanel colour pickers (map-label-color/map-connector-color) + MapView live threading
 - [x] 07-04-PLAN.md — POL-03 ego focus: `computeHopLevels`/`concentricValue` (egoLayout.ts) + transient concentric overlay, base snapshot/restore, Exit-focus control + ego-transient e2e
+
+**Gap Closure** *(from 07-VERIFICATION.md — gaps_found 10/12)*
+
+- [ ] 07-05-PLAN.md — WR-01 fence the newcomer-placement effect (`suspendSaveRef`) + re-place mid-focus newcomer after exit + IN-01 single-persistence collapse + concurrent-mutation regression e2e (POL-03 truth #10); WR-02 custom connector at 0.55 render alpha; WR-03 remove unreachable connector-selection wiring (POL-01)
 
 **Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes. Viewer-only, zero new dependencies (`git diff package.json` stays empty); Dexie meta persistence (no schema migration); graphStyle.ts unchanged.
 
