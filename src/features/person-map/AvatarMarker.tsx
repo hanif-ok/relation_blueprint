@@ -22,6 +22,7 @@ import { Group, Circle, Rect, Image as KonvaImage, Text } from 'react-konva';
 import type Konva from 'konva';
 import { colors, marker as M } from '@/app/tokens';
 import { initialsOf } from '@/features/common/initials';
+import { outlineColorFor } from '@/features/common/color';
 import { upsertMarker } from '@/db/repository';
 import { useMapImage } from './useMapImage';
 import { stageToImage, type Point } from './coords';
@@ -58,6 +59,12 @@ export interface AvatarMarkerProps {
   /** D-20: show the person's name as a Konva Text label below the stem. Default hidden. */
   showLabels?: boolean;
   /**
+   * POL-01 (D-04/D-06): the per-map name-label text colour. Defaults to `colors.paper` so an
+   * un-customised map renders exactly as before. The label paints in this colour over a
+   * luminance-opposite halo (`outlineColorFor`) so any chosen colour reads on light AND dark maps.
+   */
+  labelColor?: string;
+  /**
    * REL-03 (Pitfall 1): report the marker's LIVE stage position during a drag so the connector
    * layer can track it mid-drag WITHOUT a per-frame Dexie write. rAF-throttled internally — the
    * parent stores it as transient state and clears it on drag-end. Persistence still happens only
@@ -77,6 +84,7 @@ export function AvatarMarker({
   onSelect,
   onNodeRef,
   showLabels = false,
+  labelColor = colors.paper,
   onDragMove,
   onDragEnd,
 }: AvatarMarkerProps) {
@@ -262,7 +270,18 @@ export function AvatarMarker({
           text={person.name}
           fontFamily="Inter, system-ui, sans-serif"
           fontSize={12}
-          fill={colors.paper}
+          // POL-01 (D-04): paint in the per-map labelColor over a luminance-opposite halo. The
+          // fill paints AFTER the stroke (fillAfterStrokeEnabled) so the glyph keeps its colour +
+          // weight while the stroke reads as an outline; a black shadow adds depth on busy images.
+          fill={labelColor}
+          stroke={outlineColorFor(labelColor)}
+          strokeWidth={2}
+          fillAfterStrokeEnabled
+          lineJoin="round"
+          shadowColor="#000000"
+          shadowOpacity={0.55}
+          shadowBlur={3}
+          shadowOffsetY={1}
           align="center"
           listening={false}
         />
