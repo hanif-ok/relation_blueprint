@@ -43,7 +43,7 @@ describe('POL-03 — computeHopLevels (breadth-first hop-distance from the ego)'
   });
 
   it('records breadth-first depth (nearest path wins) when a node is reachable by multiple lengths', () => {
-    // d is reachable directly from ego (hop 1) and via a→b→c→d (hop 4); BFS records the nearest, 1.
+    // c is reachable via ego→a→b→c (hop 3) AND via ego→d→c (hop 2); BFS records the nearest, 2.
     const adjacency: Adjacency = {
       ego: ['a', 'd'],
       a: ['ego', 'b'],
@@ -51,7 +51,7 @@ describe('POL-03 — computeHopLevels (breadth-first hop-distance from the ego)'
       c: ['b', 'd'],
       d: ['ego', 'c'],
     };
-    expect(computeHopLevels(adjacency, 'ego')).toEqual({ ego: 0, a: 1, d: 1, b: 2, c: 3 });
+    expect(computeHopLevels(adjacency, 'ego')).toEqual({ ego: 0, a: 1, d: 1, b: 2, c: 2 });
   });
 });
 
