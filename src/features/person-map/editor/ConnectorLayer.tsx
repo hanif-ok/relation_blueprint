@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Group, Arrow, Label, Tag, Text } from 'react-konva';
 import type Konva from 'konva';
 import { colors } from '@/app/tokens';
-import { hexToRgba } from '@/features/common/color';
+import { hexToRgba, outlineColorFor } from '@/features/common/color';
 import type { BackgroundTransform, Marker, RelationshipLink } from '@/domain/types';
 import { buildConnectors, type DragOverride } from '../connectors';
 
@@ -74,6 +74,13 @@ export interface ConnectorLayerProps {
   selectedRelationshipId?: string | null;
   /** D-09: whether connector labels are shown (default OFF, owned by MapView). */
   showConnectorLabels?: boolean;
+  /**
+   * POL-01 (D-04/D-06): the per-map RESTING connector-line colour. `null` (default) keeps the
+   * `CONNECTOR_HAIRLINE` so an un-customised map renders identically. A selected connector still
+   * overrides to `colors.amber` (A8) regardless of this colour; the cased underlay reads on any
+   * background image.
+   */
+  connectorColor?: string | null;
 }
 
 export function ConnectorLayer({
@@ -83,6 +90,7 @@ export function ConnectorLayer({
   dragOverride = null,
   selectedRelationshipId = null,
   showConnectorLabels = false,
+  connectorColor = null,
 }: ConnectorLayerProps) {
   const connectors = buildConnectors(links, markers, transform, {
     selectedRelationshipId,
@@ -92,15 +100,36 @@ export function ConnectorLayer({
   return (
     <>
       {connectors.map(({ id, a, b, directed, selected, label }) => {
-        const color = selected ? colors.amber : CONNECTOR_HAIRLINE;
+        // The visible TOP line: amber when selected (A8), else the per-map connectorColor, else the
+        // D-06 default hairline. The casing luminance is derived from a SOLID hex basis (the default
+        // hairline stroke is an rgba() string that outlineColorFor cannot parse), so we resolve the
+        // opposite-neutral from `lineHex` and keep the rgba hairline only for the actual stroke.
+        const lineHex = selected ? colors.amber : connectorColor ?? colors.hairline;
+        const lineStroke = selected ? colors.amber : connectorColor ?? CONNECTOR_HAIRLINE;
+        const topWidth = selected ? 2.5 : 1.75;
+        // POL-01 (D-04): a luminance-opposite casing at 60% alpha, +2px wider, painted BENEATH the
+        // colored line so any chosen colour (and the amber-selected line) reads on any background.
+        const casing = hexToRgba(outlineColorFor(lineHex), 0.6);
         return (
           <Group key={id} listening={false} name={`connector-group-${id}`}>
+            {/* Casing underlay — same geometry/arrowhead, wider + luminance-opposite (D-04). */}
+            <Arrow
+              name={`connector-casing-${id}`}
+              points={[a.x, a.y, b.x, b.y]}
+              stroke={casing}
+              fill={casing}
+              strokeWidth={topWidth + 2}
+              pointerLength={directed ? 10 : 0}
+              pointerWidth={directed ? 8 : 0}
+              perfectDrawEnabled={false}
+              listening={false}
+            />
             <Arrow
               name={`connector-${id}`}
               points={[a.x, a.y, b.x, b.y]}
-              stroke={color}
-              fill={color}
-              strokeWidth={selected ? 2.5 : 1.75}
+              stroke={lineStroke}
+              fill={lineStroke}
+              strokeWidth={topWidth}
               // Arrowhead ONLY when the link is directed (D-01); mutual links draw a plain line.
               pointerLength={directed ? 10 : 0}
               pointerWidth={directed ? 8 : 0}
