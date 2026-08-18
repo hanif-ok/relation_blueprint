@@ -6,13 +6,20 @@
 // live queries; the token-driven `graphStyle` colors them; node/edge labels render as Cytoscape
 // canvas text (never injected HTML — T-04-01).
 //
-// Layout (D-13): `cose` force-directed on first build; on `layoutstop` the node positions are
-// cached to the Dexie `meta` table, and a reopen whose whole node-set is cached uses `preset` for
-// an instant, physics-free render. A node-set change invalidates the cache (→ fresh `cose`).
+// Layout (D-08, supersedes D-13 full-invalidation): `cose` force-directed on first build; on
+// `layoutstop` the node positions are cached to the Dexie `meta` table. A reopen partitions the
+// node-set via `partitionCached` — a fully-cached set renders instantly with `preset`; a node-set
+// change now KEEPS every saved position and auto-places ONLY the newcomer (lock the cached anchors,
+// run `cose` over the whole graph so just the unlocked newcomer relaxes into place, unlock, save).
+// A `suspendSaveRef` save-guard fences the `layoutstop` auto-save; it stays false here (every layout
+// SHOULD persist) and exists for Plan 04's transient ego overlay to fence itself off.
 //
-// Interaction (viewer-only, locked by PROJECT.md): `autoungrabify` + `boxSelectionEnabled={false}`
-// so no drag mutates data; a node tap opens its ProfileSidebar through the existing selection→AT
-// bridge (R7). Opening the graph with an `egoId` centers + amber-highlights that node (D-12).
+// Interaction (viewer-only, locked by PROJECT.md): nodes are grabbable (POL-02) but drag is
+// LAYOUT-ONLY — `dragfree` sticky-persists the new position to the `graphPositions` meta row and
+// NEVER mutates `db.people`/`db.relationshipLinks`. A node tap (no movement) still opens its
+// ProfileSidebar through the existing selection→AT bridge (R7); `boxSelectionEnabled={false}` keeps
+// marquee-select off. A "Reset layout" button clears the saved positions and re-runs a fresh `cose`.
+// Opening the graph with an `egoId` centers + amber-highlights that node (D-12).
 //
 // Resource safety: person-node avatar object-URLs are resolved in an effect keyed by photo hash
 // and REVOKED on unmount / hash change (Pitfall 2 / T-04-04) — no leak as the graph re-renders.
@@ -26,7 +33,7 @@ import { db } from '@/db/schema';
 import { resolveMediaUrl } from '@/media/mediaManager';
 import { toGraphElements, type GraphPositions } from './graphElements';
 import { graphStyle } from './graphStyle';
-import { hasCachedPositions, loadPositions, savePositions } from './positionCache';
+import { clearPositions, loadPositions, partitionCached, savePositions } from './positionCache';
 import styles from './GraphView.module.css';
 
 export interface GraphViewProps {
@@ -60,6 +67,14 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
 
   const cyRef = useRef<cytoscape.Core | null>(null);
   const attachedRef = useRef<cytoscape.Core | null>(null);
+  // Save-guard seam (POL-02) — the FIRST line of the `layoutstop` handler bails when this is true.
+  // It STAYS FALSE in this plan: every layout here (fresh cose, reset cose, newcomer placement)
+  // SHOULD persist. It exists so Plan 04's transient ego overlay can fence its layout off the
+  // auto-save (a concentric overlay must never clobber the saved base positions — D-12/D-13).
+  const suspendSaveRef = useRef(false);
+  // The newcomer node-set signature already auto-placed — so the partial-cache placement effect
+  // runs exactly once per node-set change (not on every unrelated data tick).
+  const placedMissingRef = useRef('');
   // Keep the latest onSelectNode reachable from the once-attached tap handler.
   const onSelectRef = useRef(onSelectNode);
   useEffect(() => {
@@ -83,8 +98,17 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     [people, groups],
   );
 
-  // Use the preset fast-path only when the cache covers EVERY current node (else a fresh cose).
-  const usePreset = posCache.probed && hasCachedPositions(posCache.positions, nodeIds);
+  // Three-way layout gate (D-08 — supersedes the binary preset/cose): split the current node-set
+  // into cached anchors vs newcomers. allCached → preset fast-path; noneCached → fresh cose;
+  // partial → preset for the anchors, then the placement effect below cose-places only the newcomer.
+  const partition = useMemo(
+    () => partitionCached(posCache.positions, nodeIds),
+    [posCache.positions, nodeIds],
+  );
+  // Feed saved positions to the elements whenever ANY are cached (allCached or partial) so cached
+  // nodes snap to their saved spots; a newcomer simply has no position and is placed imperatively.
+  // noneCached (or not-yet-probed) → undefined, so `cose` lays the whole graph out fresh.
+  const usePresetPositions = posCache.probed && !partition.noneCached;
 
   const elements = useMemo(
     () =>
@@ -92,18 +116,19 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         people ?? [],
         groups ?? [],
         links ?? [],
-        usePreset ? posCache.positions : undefined,
+        usePresetPositions ? posCache.positions : undefined,
       ),
-    [people, groups, links, usePreset, posCache.positions],
+    [people, groups, links, usePresetPositions, posCache.positions],
   );
 
   const edgeCount = useMemo(() => elements.filter((e) => 'source' in e.data).length, [elements]);
 
-  // Stable layout object: preset from cache, else a one-shot cose. Only changes when the
-  // preset/cose decision flips (node-set invalidation) — NOT on every data tick (Pitfall 5).
+  // Stable layout object: preset whenever cached anchors exist (allCached or partial), else a
+  // one-shot cose. Only changes when the preset/cose decision flips — NOT on every data tick
+  // (Pitfall 5). The partial case renders preset here; the placement effect handles the newcomer.
   const layout = useMemo(
-    () => (usePreset ? { name: 'preset' } : { name: 'cose', animate: false }),
-    [usePreset],
+    () => (usePresetPositions ? { name: 'preset' } : { name: 'cose', animate: false }),
+    [usePresetPositions],
   );
 
   // Resolve person-node avatar object-URLs; REVOKE on unmount / when the photo-hash set changes
@@ -183,6 +208,28 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     if (node.nonempty()) cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 300 });
   }, [egoId]);
 
+  // Partial-cache placement (D-08 "place only the newcomer"). When some nodes are cached and ≥1 is
+  // new, the cached anchors already sit at their saved spots (preset render above). Lock those
+  // anchors, run a full-graph `cose` so ONLY the unlocked newcomer relaxes into place around them
+  // (`fit: false` preserves the viewport — WR-01), unlock, then persist so the newcomer is covered
+  // next time (allCached). Guarded by `placedMissingRef` so it runs once per newcomer node-set, not
+  // on every data tick. Writes ONLY the graphPositions meta row — never entity tables (viewer-only).
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (partition.noneCached || partition.missing.length === 0) return; // partial only
+    const sig = [...partition.missing].sort().join('|');
+    if (placedMissingRef.current === sig) return;
+    placedMissingRef.current = sig;
+    const cachedSet = new Set(partition.cached);
+    cy.batch(() => cy.nodes().filter((n) => cachedSet.has(n.id())).lock());
+    cy.layout({ name: 'cose', animate: false, fit: false, randomize: false }).run();
+    cy.nodes().unlock();
+    void savePositions(cy).then(() =>
+      loadPositions().then((positions) => setPosCache({ probed: true, positions })),
+    );
+  }, [partition]);
+
   // Attach tap + layoutstop handlers ONCE per Cytoscape instance (the cy callback fires on every
   // update). The tap handler reads the latest onSelectNode via a ref so it never goes stale.
   const registerCy = useCallback((cy: cytoscape.Core) => {
@@ -193,6 +240,15 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
       const node = e.target;
       onSelectRef.current(node.data('kind') as 'people' | 'groups', node.id());
     });
+    // Sticky-persist a MANUAL drag (POL-02). `dragfree` fires only after a real drag (not a plain
+    // tap-release like `free`), so tap-vs-drag stays native. Runs the SAME save→reload chain as
+    // layoutstop and writes ONLY the graphPositions meta row — never db.people/db.relationshipLinks
+    // (viewer-only contract: dragging rearranges the layout, it never mutates entity data).
+    cy.on('dragfree', 'node', () => {
+      void savePositions(cy).then(() =>
+        loadPositions().then((positions) => setPosCache({ probed: true, positions })),
+      );
+    });
     // Persist positions after EVERY layout, not just the first (WR-03). react-cytoscapejs keeps one
     // `cy` for the component's lifetime, so `cy.one` fired only on the initial `cose` and every later
     // re-run (a node added → cache invalidated → `cose` again) had no listener — the new node's
@@ -200,6 +256,9 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     // `preset` fast-path for any DB that is ever edited. `cy.on` is registered once (guarded above)
     // and re-saves idempotently on each `layoutstop`.
     cy.on('layoutstop', () => {
+      // Save-guard seam (POL-02): a transient layout (Plan 04's ego concentric overlay) sets
+      // suspendSaveRef true so its layoutstop never clobbers the saved base. False in this plan.
+      if (suspendSaveRef.current) return;
       // Persist the fresh layout, THEN refresh the in-memory cache (IN-02). Without the reload the
       // React `posCache` state stayed stale after a node was added: `hasCachedPositions` kept
       // returning false and the D-13 `preset` fast-path stayed disabled for the rest of the session
@@ -250,6 +309,23 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         >
           Relationship labels {showEdgeLabels ? 'on' : 'off'}
         </button>
+        <button
+          type="button"
+          className={styles.toggle}
+          data-testid="graph-reset-layout"
+          onClick={() => {
+            // D-09 / IC-3: clear the saved manual positions, then drop the in-memory cache so the
+            // gate falls to noneCached → a fresh `cose` re-arranges and re-caches via layoutstop.
+            // Reset placedMissingRef so a later add re-triggers newcomer placement. Neutral control
+            // (styles.toggle, no amber A8) — always available, no confirm (regenerable cache).
+            void clearPositions().then(() => {
+              placedMissingRef.current = '';
+              setPosCache({ probed: true, positions: undefined });
+            });
+          }}
+        >
+          Reset layout
+        </button>
         <span className={styles.viewerNote}>Viewer-only — edit relationships from a profile.</span>
       </div>
       <CytoscapeComponent
@@ -259,7 +335,6 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         layout={layout}
         cy={registerCy}
         global={CY_GLOBAL}
-        autoungrabify
         boxSelectionEnabled={false}
       />
     </div>
