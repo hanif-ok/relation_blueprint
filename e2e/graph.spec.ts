@@ -308,3 +308,93 @@ test('adding an entity keeps saved positions and auto-places only the newcomer (
   }, carolId);
   expect(rowHasCarol).toBe(true);
 });
+
+/**
+ * POL-03 "Ego focus is transient" (D-10..D-13) — the Pitfall-1 guard proof. Opening the graph, then
+ * tapping a node, re-lays the whole graph out concentrically around that ego (focus follows the tap)
+ * AND opens its ProfileSidebar (AT bridge preserved). Clicking "Exit focus" restores the EXACT
+ * pre-focus base positions, and — crucially — the persisted `graphPositions` meta row is UNCHANGED
+ * across the enter-focus → exit-focus cycle (the transient concentric overlay is fenced off the
+ * auto-save by suspendSaveRef, so it never clobbers the saved base).
+ */
+test('ego focus is transient: exit restores the base and never overwrites graphPositions', async ({
+  page,
+}) => {
+  const { aliceId, bobId, teamId } = await seedGraph(page);
+
+  await page.getByTestId('view-graph').click();
+  await page.waitForFunction(
+    (id) => {
+      const cy = (window as unknown as { __cyGraph?: { getElementById: (i: string) => { length: number } } })
+        .__cyGraph;
+      return !!cy && cy.getElementById(id).length > 0;
+    },
+    aliceId,
+    { timeout: 15_000 },
+  );
+
+  // Wait until the initial `cose` has settled AND persisted a graphPositions row (layoutstop saved),
+  // so both the node-position snapshot and the meta row below are stable pre-focus baselines.
+  await page.waitForFunction(
+    async () => {
+      const row = await window.__rb!.db.meta.get('graphPositions');
+      return row?.value !== undefined;
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+
+  // Snapshot every node's resting position + the persisted meta row BEFORE entering focus.
+  const beforePositions = await page.evaluate((ids) => {
+    const cy = (window as unknown as {
+      __cyGraph: { getElementById: (i: string) => { position: () => { x: number; y: number } } };
+    }).__cyGraph;
+    const out: Record<string, { x: number; y: number }> = {};
+    for (const id of ids) out[id] = cy.getElementById(id).position();
+    return out;
+  }, [aliceId, bobId, teamId]);
+  const beforeMeta = await page.evaluate(async () => {
+    const row = await window.__rb!.db.meta.get('graphPositions');
+    return JSON.stringify(row?.value ?? null);
+  });
+
+  // Tap Bob (a DIFFERENT node) → enter focus + re-ego onto Bob, and open his ProfileSidebar.
+  await page.evaluate((id) => {
+    const cy = (window as unknown as { __cyGraph: { getElementById: (i: string) => { emit: (e: string) => void } } })
+      .__cyGraph;
+    cy.getElementById(id).emit('tap');
+  }, bobId);
+
+  // AT bridge preserved: tapping Bob during focus still opens his profile.
+  await expect(page.getByTestId('profile-sidebar')).toBeVisible();
+  await expect(page.getByTestId('profile-name')).toHaveText('Bob');
+
+  // Exit focus (rendered only while focused) → restore the base.
+  await page.getByTestId('graph-exit-focus').click();
+
+  // Every node's position is restored to its exact pre-focus base (discarding nothing).
+  await page.waitForFunction(
+    (snapshot) => {
+      const cy = (window as unknown as {
+        __cyGraph: { getElementById: (i: string) => { position: () => { x: number; y: number } } };
+      }).__cyGraph;
+      return Object.entries(snapshot).every(([id, pos]) => {
+        const p = cy.getElementById(id).position();
+        return Math.abs(p.x - pos.x) < 0.5 && Math.abs(p.y - pos.y) < 0.5;
+      });
+    },
+    beforePositions,
+    { timeout: 15_000 },
+  );
+
+  // The Exit-focus control is gone once focus is cleared.
+  await expect(page.getByTestId('graph-exit-focus')).toHaveCount(0);
+
+  // Pitfall-1 guard: the persisted graphPositions row is byte-identical across focus → exit — the
+  // transient concentric overlay never overwrote the saved base.
+  const afterMeta = await page.evaluate(async () => {
+    const row = await window.__rb!.db.meta.get('graphPositions');
+    return JSON.stringify(row?.value ?? null);
+  });
+  expect(afterMeta).toBe(beforeMeta);
+});
