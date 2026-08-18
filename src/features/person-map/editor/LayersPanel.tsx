@@ -22,7 +22,9 @@ import { useState } from 'react';
 import { Eye, EyeOff, Lock, LockOpen, Layers as LayersIcon, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { updateMap } from '@/db/repository';
 import { ConfirmDialog } from '@/features/common/ConfirmDialog';
+import { colors } from '@/app/tokens';
 import type { Layer, MapDoc } from '@/domain/types';
+import type { MapAppearance } from '../mapAppearance';
 import {
   createLayer,
   deleteLayer,
@@ -51,6 +53,16 @@ export interface LayersPanelProps {
   onShowConnectorLabelsChange: (show: boolean) => void;
   /** Per-layer object count (shapes + markers resolved to a layer), keyed by layer id. */
   objectCounts: Record<string, number>;
+  /** POL-01 (D-05): the resolved per-map appearance (label + connector colours) for this map. */
+  appearance: MapAppearance;
+  /** Write the per-map name-label colour (live-updates the canvas halo). */
+  onLabelColorChange: (hex: string) => void;
+  /** Write the per-map connector colour (live-updates the canvas casing). */
+  onConnectorColorChange: (hex: string) => void;
+  /** Clear the per-map name-label colour → back to the D-06 default (colors.paper). */
+  onResetLabelColor: () => void;
+  /** Clear the per-map connector colour → back to the D-06 default hairline. */
+  onResetConnectorColor: () => void;
 }
 
 export function LayersPanel({
@@ -62,6 +74,11 @@ export function LayersPanel({
   showConnectorLabels,
   onShowConnectorLabelsChange,
   objectCounts,
+  appearance,
+  onLabelColorChange,
+  onConnectorColorChange,
+  onResetLabelColor,
+  onResetConnectorColor,
 }: LayersPanelProps) {
   // Collapsed (icon-only) state for narrow viewports.
   const [collapsed, setCollapsed] = useState(false);
@@ -274,6 +291,58 @@ export function LayersPanel({
             />
             <span>Relationship labels</span>
           </label>
+
+          {/* POL-01 (IC-1 / D-02): per-map Appearance colours — two native pickers + per-row Reset.
+              Presentational only; MapView owns the mapAppearance writes. Each row is ≥44px tall
+              (accessibility) and pairs a visible <label> with the native <input type=color>. */}
+          <div className={styles.appearance}>
+            <span className={styles.appearanceHeading}>Appearance</span>
+
+            <div className={styles.colorRow}>
+              <label className={styles.colorLabel} htmlFor="map-label-color">
+                Name label color
+              </label>
+              <input
+                id="map-label-color"
+                type="color"
+                className={styles.colorSwatch}
+                data-testid="map-label-color"
+                value={appearance.labelColor}
+                onChange={(e) => onLabelColorChange(e.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.resetColor}
+                aria-label="Reset to default color"
+                onClick={onResetLabelColor}
+              >
+                Reset
+              </button>
+            </div>
+
+            <div className={styles.colorRow}>
+              <label className={styles.colorLabel} htmlFor="map-connector-color">
+                Connector color
+              </label>
+              <input
+                id="map-connector-color"
+                type="color"
+                className={styles.colorSwatch}
+                data-testid="map-connector-color"
+                // Show the D-06 default hairline swatch when this map has no custom connector colour.
+                value={appearance.connectorColor ?? colors.hairline}
+                onChange={(e) => onConnectorColorChange(e.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.resetColor}
+                aria-label="Reset to default color"
+                onClick={onResetConnectorColor}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
         </>
       )}
 

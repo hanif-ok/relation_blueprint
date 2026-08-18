@@ -26,6 +26,12 @@ import { createMap, updateMap, updateMapFrom, upsertMarker } from '@/db/reposito
 import { storeMedia } from '@/media/mediaManager';
 import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
+import {
+  loadAppearance,
+  getMapAppearance,
+  setMapColor,
+  clearMapColor,
+} from './mapAppearance';
 import { useMapImage, useBlobImage } from './useMapImage';
 import { imageToStage, stageToImage } from './coords';
 import { useViewportCulling, type Rect } from './editor/useViewportCulling';
@@ -207,6 +213,13 @@ export function MapView({
   // rest) — group-involving/endpoint-less/unplaced links draw nothing. Reactive so authoring a new
   // relationship (or moving a marker) recomputes the lines from source.
   const links = useLiveQuery(() => db.relationshipLinks.toArray(), [], []);
+
+  // POL-01 (D-05): per-map label/connector colours — a device-local `meta` preference (NOT synced).
+  // useLiveQuery re-renders on every meta.put, so dragging a native color picker live-updates the
+  // canvas halo/casing (IC-1). getMapAppearance is the pure resolver + trust boundary: an absent or
+  // malformed value coerces to today's D-06 default, so existing maps render identically.
+  const appearanceRecord = useLiveQuery(() => loadAppearance(), []);
+  const appearance = getMapAppearance(appearanceRecord ?? {}, map?.id ?? '');
 
   const bgImage = useMapImage(map?.background.hash);
 
@@ -782,6 +795,11 @@ export function MapView({
           showConnectorLabels={showConnectorLabels}
           onShowConnectorLabelsChange={setShowConnectorLabels}
           objectCounts={objectCounts}
+          appearance={appearance}
+          onLabelColorChange={(hex) => void setMapColor(map.id, 'labelColor', hex)}
+          onConnectorColorChange={(hex) => void setMapColor(map.id, 'connectorColor', hex)}
+          onResetLabelColor={() => void clearMapColor(map.id, 'labelColor')}
+          onResetConnectorColor={() => void clearMapColor(map.id, 'connectorColor')}
         />
       )}
 
@@ -842,6 +860,7 @@ export function MapView({
               transform={transform}
               dragOverride={draggingMarker}
               showConnectorLabels={showConnectorLabels}
+              connectorColor={appearance.connectorColor}
             />
           </Layer>
 
@@ -893,6 +912,7 @@ export function MapView({
                     transform={transform}
                     selected={person.id === selectedPersonId}
                     showLabels={showLabels}
+                    labelColor={appearance.labelColor}
                     onDragMove={handleMarkerDragMove}
                     onDragEnd={handleMarkerDragEnd}
                     onSelect={(personId) => {
