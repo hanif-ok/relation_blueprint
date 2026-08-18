@@ -132,6 +132,12 @@ None — the appearance path is fully wired (picker → mapAppearance meta → g
 - Remaining Phase-7 work (draggable graph nodes IC-2/IC-3, dynamic ego focus IC-4) is independent of these files.
 - Canvas legibility requires MANUAL UAT sign-off (screenshots) — flagged in VALIDATION.md, cannot be asserted headlessly.
 
+## Self-Check: PASSED
+
+- All 5 modified files present on disk.
+- Commits `0ec29c6`, `5d509f2`, `20edd9d` present in worktree history.
+- `npx tsc --noEmit` clean; full unit suite 381/381 green; `package.json` and `graphStyle.ts` untouched.
+
 ---
 *Phase: 07-relationships-map-visual-polish*
 *Completed: 2026-08-18*
