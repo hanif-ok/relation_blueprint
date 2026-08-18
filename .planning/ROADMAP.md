@@ -256,8 +256,21 @@ Plans:
   2. User can drag graph nodes to rearrange the layout for readability without ever mutating relationship data (viewer-only); manual positions may optionally persist via the existing graph position cache
   3. Ego focus is dynamic — opening/tapping a node re-lays-out the graph around that person, tapping a different node re-egos onto it (focus follows the tap), and exiting focus restores the saved layout
 
-**Plans:** 3/3 plans complete
-**Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes.
+**Plans:** 4 plans
+
+Plans:
+
+**Wave 1** *(disjoint files — parallel)*
+
+- [ ] 07-01-PLAN.md — POL-01 pure helpers: `relativeLuminance`/`outlineColorFor` (color.ts) + `mapAppearance.ts` per-map colour persistence over db.meta, unit-tested (no migration)
+- [ ] 07-03-PLAN.md — POL-02 graph drag: `partitionCached`/`clearPositions` (positionCache.ts) + grabbable nodes, dragfree persist, place-newcomer-only, Reset layout, `suspendSaveRef` guard + updated e2e
+
+**Wave 2** *(disjoint files — parallel; 02 depends on 01, 04 depends on 03)*
+
+- [ ] 07-02-PLAN.md — POL-01 canvas wiring: marker-label luminance halo + connector casing + LayersPanel colour pickers (map-label-color/map-connector-color) + MapView live threading
+- [ ] 07-04-PLAN.md — POL-03 ego focus: `computeHopLevels`/`concentricValue` (egoLayout.ts) + transient concentric overlay, base snapshot/restore, Exit-focus control + ego-transient e2e
+
+**Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes. Viewer-only, zero new dependencies (`git diff package.json` stays empty); Dexie meta persistence (no schema migration); graphStyle.ts unchanged.
 
 ## Progress
 
@@ -272,4 +285,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 (**Phase 6 Mega
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
 | 5. Field-Scoped Search | 3/3 | Complete    | 2026-08-05 |
 | 6. Mega.nz Provider | 0/TBD | ⏸️ Deferred (2026-08-18) | - |
-| 7. Relationships & Map Visual Polish | 0/TBD | Not started | - |
+| 7. Relationships & Map Visual Polish | 0/4 | Not started | - |
