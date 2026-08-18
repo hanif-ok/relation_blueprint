@@ -1,13 +1,21 @@
-// positionCache — the graph's D-13 position cache. Node positions are a regenerable local
-// convenience (NOT authored data): run `cose` once, persist the resulting layout on `layoutstop`,
-// and reopen with `layout: 'preset'` for an instant, physics-free render. The whole cache is ONE
-// key/value row (`graphPositions`) in the Dexie `meta` table — cheap to write, trivially skipped
-// on a fresh device (where `cose` simply recomputes).
+// positionCache — the graph's position cache. Node positions are a regenerable local convenience
+// (NOT authored data): they are persisted as ONE key/value row (`graphPositions`) in the Dexie
+// `meta` table — cheap to write, trivially skipped on a fresh device (where `cose` recomputes).
+// Positions are written on `layoutstop` (fresh/reset/newcomer layouts) AND on `dragfree` (POL-02:
+// a manual node drag sticky-persists its new spot). Dragging is viewer-only — it writes ONLY this
+// meta row, never `db.people`/`db.relationshipLinks`.
 //
-// `hasCachedPositions` is the invalidation gate: the cache is only usable when EVERY current node
-// id has a stored position. Adding a person/group (a node-set change) leaves the new node without
-// a cached position → the gate returns false → GraphView falls back to a fresh `cose` run and
-// re-caches. Stale entries for removed nodes are harmless (ignored).
+// D-08 SUPERSEDES the old D-13 full-invalidation rule. Previously any node-set change made the gate
+// return false → a fresh `cose` blew away the whole hand-arranged layout. Now `partitionCached`
+// splits the current node-set into `cached` (saved spots kept) vs `missing` (the newcomer(s)):
+//   - allCached  → `preset` fast-path (instant, physics-free — Phase-4 backward-compat).
+//   - noneCached → fresh `cose` (first build, or after Reset layout clears the row).
+//   - partial    → `preset` for the cached anchors, then GraphView locks them and runs `cose` over
+//     the full graph so ONLY the unlocked newcomer relaxes into place, then re-saves.
+// `hasCachedPositions` is retained (still the simple binary "is the whole set cached" check).
+// `clearPositions` is the Reset-layout escape hatch: it deletes the row so the gate falls to
+// noneCached → a fresh `cose` re-arranges automatically. Stale entries for removed nodes are
+// harmless (ignored by both the gate and the partition).
 
 import type cytoscape from 'cytoscape';
 import { db } from '@/db/schema';
@@ -41,4 +49,37 @@ export function hasCachedPositions(
 ): boolean {
   if (!positions) return false;
   return nodeIds.every((id) => Object.prototype.hasOwnProperty.call(positions, id));
+}
+
+/**
+ * The three-way layout gate (D-08). Partition the current node ids into `cached` (an id with a
+ * stored position) and `missing` (a newcomer with none), using the same own-property check
+ * `hasCachedPositions` uses. `allCached` (⇒ preset) is true when nothing is missing AND a cache
+ * exists; `noneCached` (⇒ fresh cose) is true when nothing is cached. A partial result (some
+ * cached, ≥1 missing) drives the lock-anchors → cose(newcomer) → unlock → save path in GraphView.
+ * Pure: reads only its arguments, mutates nothing.
+ */
+export function partitionCached(
+  positions: GraphPositions | undefined,
+  nodeIds: string[],
+): { cached: string[]; missing: string[]; allCached: boolean; noneCached: boolean } {
+  const cached = nodeIds.filter(
+    (id) => !!positions && Object.prototype.hasOwnProperty.call(positions, id),
+  );
+  const missing = nodeIds.filter((id) => !cached.includes(id));
+  return {
+    cached,
+    missing,
+    allCached: missing.length === 0 && !!positions,
+    noneCached: cached.length === 0,
+  };
+}
+
+/**
+ * Reset layout (D-09) — delete the whole `graphPositions` meta row so the gate falls to
+ * `noneCached` and a fresh `cose` re-arranges the graph automatically. The escape hatch back to an
+ * automatic layout; discards only the regenerable local position cache, never entity data.
+ */
+export async function clearPositions(): Promise<void> {
+  await db.meta.delete(GRAPH_POSITIONS_KEY);
 }
