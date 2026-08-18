@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Relationships & Graph** - Author relationships in entity details, render data-driven map connectors, and view the relationship graph (completed 2026-07-03)
 - [x] **Phase 5: Field-Scoped Search** - Fuzzy search over people with per-attribute checkbox scoping (the signature feature) (completed 2026-08-05)
 - [ ] **Phase 6: Mega.nz Provider** — ⏸️ **DEFERRED (2026-08-18)** — opt-in Mega storage shelved on security preference (a Mega login is a full-account credential, unlike Drive's scoped `drive.file`); Google Drive remains the storage provider. RESEARCH + VALIDATION are banked in the phase dir if revived. Second-class opt-in Mega behind the existing provider abstraction
-- [ ] **Phase 7: Relationships & Map Visual Polish** - Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout (folds in the Phase 04 UAT enhancement todos)
+- [x] **Phase 7: Relationships & Map Visual Polish** - Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout (folds in the Phase 04 UAT enhancement todos) (completed 2026-08-18)
 
 ## Phase Details
 
@@ -256,7 +256,7 @@ Plans:
   2. User can drag graph nodes to rearrange the layout for readability without ever mutating relationship data (viewer-only); manual positions may optionally persist via the existing graph position cache
   3. Ego focus is dynamic — opening/tapping a node re-lays-out the graph around that person, tapping a different node re-egos onto it (focus follows the tap), and exiting focus restores the saved layout
 
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 
@@ -267,8 +267,8 @@ Plans:
 
 **Wave 2** *(disjoint files — parallel; 02 depends on 01, 04 depends on 03)*
 
-- [ ] 07-02-PLAN.md — POL-01 canvas wiring: marker-label luminance halo + connector casing + LayersPanel colour pickers (map-label-color/map-connector-color) + MapView live threading
-- [ ] 07-04-PLAN.md — POL-03 ego focus: `computeHopLevels`/`concentricValue` (egoLayout.ts) + transient concentric overlay, base snapshot/restore, Exit-focus control + ego-transient e2e
+- [x] 07-02-PLAN.md — POL-01 canvas wiring: marker-label luminance halo + connector casing + LayersPanel colour pickers (map-label-color/map-connector-color) + MapView live threading
+- [x] 07-04-PLAN.md — POL-03 ego focus: `computeHopLevels`/`concentricValue` (egoLayout.ts) + transient concentric overlay, base snapshot/restore, Exit-focus control + ego-transient e2e
 
 **Note:** Polish/enhancement phase extending the Phase 3/4 deliverables — not a defect backlog (Phase 4 met its delivered contract). Non-urgent; sequenced after Phase 5 (Search) and Phase 6 (Mega). Source: Phase 04 UAT Out-of-Scope Notes. Viewer-only, zero new dependencies (`git diff package.json` stays empty); Dexie meta persistence (no schema migration); graphStyle.ts unchanged.
 
@@ -285,4 +285,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 (**Phase 6 Mega
 | 4. Relationships & Graph | 4/4 | Complete    | 2026-07-03 |
 | 5. Field-Scoped Search | 3/3 | Complete    | 2026-08-05 |
 | 6. Mega.nz Provider | 0/TBD | ⏸️ Deferred (2026-08-18) | - |
-| 7. Relationships & Map Visual Polish | 2/4 | In Progress|  |
+| 7. Relationships & Map Visual Polish | 4/4 | Complete   | 2026-08-18 |
