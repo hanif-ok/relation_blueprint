@@ -398,3 +398,142 @@ test('ego focus is transient: exit restores the base and never overwrites graphP
   });
   expect(afterMeta).toBe(beforeMeta);
 });
+
+/**
+ * POL-03 / WR-01 — "ego focus + concurrent entity-add: exit keeps the base and places the newcomer".
+ * The ego-transient spec above proves focus→exit alone never touches the saved base. This spec covers
+ * the harder CONCURRENT-MUTATION path (the WR-01 landmine): if an entity is added WHILE a focus
+ * session is active (a background Drive-sync PULL, or the curator adding a person on another surface),
+ * the partial-cache placement effect must NOT persist the transient concentric snapshot over the
+ * durable base. The placement effect is fenced by `suspendSaveRef` during focus, so:
+ *   (a) after exit, the pre-existing nodes' persisted positions still EQUAL the pre-focus base (NOT
+ *       the concentric snapshot), and
+ *   (b) the mid-focus newcomer is still placed (non-origin) once focus exits, via the fence-lifted
+ *       re-trigger.
+ * This spec is RED against the pre-fix code (the unfenced explicit save corrupts the base to the
+ * concentric snapshot) and GREEN after the Task-1 fence.
+ *
+ * The pre-focus base is PRE-SEEDED into the `graphPositions` meta row (mirroring the sticky-partial-
+ * cache spec), NOT harvested from the initial `cose`: the first `cose`'s `layoutstop` fires before the
+ * once-attached handler is registered, so the very first layout does not persist a row (the sibling
+ * ego-transient spec only reads a `null===null` vacuous baseline). Pre-seeding gives a deterministic,
+ * well-separated base whose corruption by the concentric snapshot is unambiguous.
+ */
+test('ego focus + concurrent entity-add: exit keeps the base and places the newcomer (WR-01 fence)', async ({
+  page,
+}) => {
+  const { aliceId, bobId, teamId } = await seedGraph(page);
+
+  // Snap the concentric ego overlay instead of animating it (the overlay honors reduced-motion:
+  // `animate:false`). This removes the 300ms tween so the enter/exit transitions are synchronous and
+  // the base-restore has fully settled before the fence-lifted placement cose locks the anchors — the
+  // fence behavior under test is identical either way, only the timing is made deterministic.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  // Pre-seed a distinctive, well-separated base for the existing node-set (savePositions value shape),
+  // so the graph opens allCached → `preset` and the row already holds the durable base.
+  const base: Record<string, { x: number; y: number }> = {
+    [aliceId]: { x: 100, y: 100 },
+    [bobId]: { x: 600, y: 100 },
+    [teamId]: { x: 350, y: 600 },
+  };
+  await page.evaluate(async (value) => {
+    await window.__rb!.db.meta.put({ key: 'graphPositions', value });
+  }, base);
+
+  await page.getByTestId('view-graph').click();
+  await page.waitForFunction(
+    (id) => {
+      const cy = (window as unknown as { __cyGraph?: { getElementById: (i: string) => { length: number } } })
+        .__cyGraph;
+      return !!cy && cy.getElementById(id).length > 0;
+    },
+    aliceId,
+    { timeout: 15_000 },
+  );
+
+  // Confirm the pre-seeded base is the graph's preset starting point (cy sits on it before focus).
+  await expect
+    .poll(
+      async () => {
+        return await page.evaluate(
+          ({ ids, want }) => {
+            const cy = (window as unknown as {
+              __cyGraph?: { getElementById: (i: string) => { length: number; position: () => { x: number; y: number } } };
+            }).__cyGraph;
+            if (!cy) return false;
+            return ids.every((id) => {
+              const n = cy.getElementById(id);
+              if (n.length === 0) return false;
+              const p = n.position();
+              return Math.abs(p.x - want[id].x) < 0.5 && Math.abs(p.y - want[id].y) < 0.5;
+            });
+          },
+          { ids: [aliceId, bobId, teamId], want: base },
+        );
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+
+  // ENTER focus — tap Bob so `focusedId` is set and the concentric overlay runs (auto-save fenced).
+  await page.evaluate((id) => {
+    const cy = (window as unknown as { __cyGraph: { getElementById: (i: string) => { emit: (e: string) => void } } })
+      .__cyGraph;
+    cy.getElementById(id).emit('tap');
+  }, bobId);
+  // AT bridge preserved: tapping Bob during focus opens his profile.
+  await expect(page.getByTestId('profile-sidebar')).toBeVisible();
+  await expect(page.getByTestId('profile-name')).toHaveText('Bob');
+
+  // CONCURRENT MUTATION mid-focus: add a NEW connected person (Carol) linked to an existing node
+  // (Alice). This changes `partition` mid-session and, pre-fix, triggers the unfenced placement save.
+  const carolId = await page.evaluate(async (anchorId) => {
+    const rb = window.__rb!;
+    const carol = await rb.createPerson({ name: 'Carol' });
+    await rb.createRelationshipLink({
+      name: 'knows',
+      label: 'knows',
+      fromType: 'people',
+      fromId: carol.id,
+      toType: 'people',
+      toId: anchorId,
+    });
+    return carol.id;
+  }, aliceId);
+
+  // EXIT focus.
+  await page.getByTestId('graph-exit-focus').click();
+
+  // Assertion (b) FIRST — poll until the newcomer is placed in the persisted row (proves the
+  // fence-lifted re-trigger ran the placement + its layoutstop save after exit). `expect.poll` awaits
+  // the async reader deterministically.
+  await expect
+    .poll(
+      async () => {
+        return await page.evaluate(async (id) => {
+          const row = await window.__rb!.db.meta.get('graphPositions');
+          const value = row?.value as Record<string, { x: number; y: number }> | undefined;
+          const p = value?.[id];
+          return !!p && Math.abs(p.x) + Math.abs(p.y) > 1;
+        }, carolId);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+
+  // Assertion (a) — base preserved: the pre-existing nodes' persisted positions still equal the
+  // pre-focus base (NOT the transient concentric snapshot the overlay produced during focus).
+  const after = await page.evaluate(async (ids) => {
+    const row = await window.__rb!.db.meta.get('graphPositions');
+    const value = row?.value as Record<string, { x: number; y: number }> | undefined;
+    const out: Record<string, { x: number; y: number }> = {};
+    for (const id of ids) out[id] = value![id];
+    return out;
+  }, [aliceId, bobId, teamId]);
+
+  for (const id of [aliceId, bobId, teamId]) {
+    expect(Math.abs(after[id].x - base[id].x)).toBeLessThan(0.5);
+    expect(Math.abs(after[id].y - base[id].y)).toBeLessThan(0.5);
+  }
+});
