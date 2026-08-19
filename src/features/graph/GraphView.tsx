@@ -88,6 +88,15 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
   const [posCache, setPosCache] = useState<{ probed: boolean; positions?: GraphPositions }>({
     probed: false,
   });
+  // Fence-lifted re-trigger for the newcomer-placement effect (WR-01). The placement effect is fenced
+  // by `suspendSaveRef` while an ego-focus session is active, so a newcomer that arrives mid-focus is
+  // NOT placed then (and NOT recorded in `placedMissingRef`). Bumping this counter in BOTH
+  // concentric-overlay exit paths — right AFTER `suspendSaveRef.current = false` — re-runs the
+  // placement effect once the fence has actually cleared, so the mid-focus newcomer is finally placed
+  // on exit. A counter in the deps (not `focusedId`) is the deterministic trigger; it re-checks
+  // placement AFTER the async restore path clears the fence, which a synchronously-re-running effect
+  // (keyed on `focusedId`) would miss because it would still observe the fence up.
+  const [postFocusPlaceTick, setPostFocusPlaceTick] = useState(0);
 
   const cyRef = useRef<cytoscape.Core | null>(null);
   const attachedRef = useRef<cytoscape.Core | null>(null);
@@ -300,6 +309,10 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         // the restored positions equal what is already persisted, so nothing can clobber the base.
         suspendSaveRef.current = false;
         prevFocusedRef.current = null;
+        // Re-run the (now-unfenced) placement effect so a newcomer added DURING focus is finally
+        // placed (WR-01). The fence is down as of the line above, so this synchronous exit path's
+        // re-trigger observes it cleared.
+        setPostFocusPlaceTick((t) => t + 1);
       } else {
         // No snapshot (focus entered before a base was captured) — fall back to the persisted base.
         void loadPositions().then((positions) => {
@@ -307,6 +320,10 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
           cy.nodes().removeClass('ego');
           suspendSaveRef.current = false;
           prevFocusedRef.current = null;
+          // Bump the re-trigger INSIDE the promise callback — only here has the async restore
+          // actually cleared the fence, so the placement effect now runs unfenced and places any
+          // mid-focus newcomer (WR-01). A synchronous re-run would still see the fence up.
+          setPostFocusPlaceTick((t) => t + 1);
         });
       }
     } else {
@@ -317,12 +334,21 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
   // Partial-cache placement (D-08 "place only the newcomer"). When some nodes are cached and ≥1 is
   // new, the cached anchors already sit at their saved spots (preset render above). Lock those
   // anchors, run a full-graph `cose` so ONLY the unlocked newcomer relaxes into place around them
-  // (`fit: false` preserves the viewport — WR-01), unlock, then persist so the newcomer is covered
-  // next time (allCached). Guarded by `placedMissingRef` so it runs once per newcomer node-set, not
-  // on every data tick. Writes ONLY the graphPositions meta row — never entity tables (viewer-only).
+  // (`fit: false` preserves the viewport — WR-01), then unlock. Persistence flows SOLELY through the
+  // fenced `layoutstop` handler (that cose emits `layoutstop`, which runs the save→reload→setPosCache
+  // chain exactly once — IN-01, no redundant explicit save here).
+  //
+  // FENCED by `suspendSaveRef` (WR-01, mirrors the layoutstop guard): the effect returns BEFORE
+  // recording the newcomer in `placedMissingRef` while an ego-focus session is active, so a newcomer
+  // added mid-focus is neither placed then (its concentric snapshot must never persist over the base)
+  // nor marked placed. The `postFocusPlaceTick` dep re-runs this effect after focus exits — once the
+  // fence has actually cleared in the concentric-overlay exit branch — so the mid-focus newcomer is
+  // finally placed, unfenced, and its single layoutstop persists it. Writes ONLY the graphPositions
+  // meta row — never entity tables (viewer-only).
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+    if (suspendSaveRef.current) return; // fenced during an ego-focus session — re-runs via the tick
     if (partition.noneCached || partition.missing.length === 0) return; // partial only
     const sig = [...partition.missing].sort().join('|');
     if (placedMissingRef.current === sig) return;
@@ -331,10 +357,7 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     cy.batch(() => cy.nodes().filter((n) => cachedSet.has(n.id())).lock());
     cy.layout({ name: 'cose', animate: false, fit: false, randomize: false }).run();
     cy.nodes().unlock();
-    void savePositions(cy).then(() =>
-      loadPositions().then((positions) => setPosCache({ probed: true, positions })),
-    );
-  }, [partition]);
+  }, [partition, postFocusPlaceTick]);
 
   // Attach tap + layoutstop handlers ONCE per Cytoscape instance (the cy callback fires on every
   // update). The tap handler reads the latest onSelectNode via a ref so it never goes stale.

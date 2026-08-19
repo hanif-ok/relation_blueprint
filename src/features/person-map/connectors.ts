@@ -26,8 +26,6 @@ export interface Connector {
   b: Point;
   /** D-01: an arrowhead renders only when the link is directed (normalized `=== true` at read). */
   directed: boolean;
-  /** True when this relationship is the selected one (amber highlight). */
-  selected: boolean;
   /** REL-02 label (empty string when unset); drawn in a pill only when the toggle is ON (D-09). */
   label: string;
 }
@@ -44,8 +42,6 @@ export interface DragOverride {
 }
 
 export interface BuildConnectorsOptions {
-  /** The selected relationship id (turns its connector amber). Never set by clicking the line. */
-  selectedRelationshipId?: string | null;
   /** Live drag position for the dragging marker (live-follow-on-drag). */
   dragOverride?: DragOverride | null;
 }
@@ -63,7 +59,7 @@ export function buildConnectors(
   transform: BackgroundTransform,
   opts: BuildConnectorsOptions = {},
 ): Connector[] {
-  const { selectedRelationshipId = null, dragOverride = null } = opts;
+  const { dragOverride = null } = opts;
 
   // Primary placement per person (B6): chosen DETERMINISTICALLY, not by array order (WR-05). The
   // caller's `markers` come from `db.markers.where('mapId').equals(...)`, which Dexie returns ordered
@@ -108,7 +104,6 @@ export function buildConnectors(
       a,
       b,
       directed: link.directed === true,
-      selected: selectedRelationshipId === link.id,
       label: link.label ?? '',
     });
   }
