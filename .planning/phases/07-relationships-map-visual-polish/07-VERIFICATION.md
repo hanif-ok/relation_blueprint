@@ -1,35 +1,17 @@
 ---
 phase: 07-relationships-map-visual-polish
-verified: 2026-08-18T18:30:00Z
-status: gaps_found
-score: 10/12 must-haves verified
+verified: 2026-08-19T12:00:00Z
+status: human_needed
+score: 13/14 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "Ego focus is a TRANSIENT overlay that never overwrites the persisted base positions (POL-03, D-12, Pitfall 1)"
-    status: failed
-    reason: >
-      The concentric ego-overlay effect itself correctly fences the auto-save with suspendSaveRef,
-      but a SEPARATE effect — the partial-cache "place only the newcomer" effect in GraphView.tsx
-      (lines 323-337) — calls `savePositions(cy)` directly and never checks `suspendSaveRef`. This
-      effect re-runs whenever `partition` (derived from live people/groups/links) changes. If an
-      entity is added while a focus session is active — e.g. a background Drive/Mega sync pull, or
-      the curator adding a person via another open surface — the effect locks the CURRENTLY-DISPLAYED
-      (concentric, not base) positions of the existing nodes, cose-places the newcomer around them,
-      and persists that snapshot to the `graphPositions` meta row. The in-session Exit-focus restore
-      (basePosRef) still looks correct to the user in that session, but the DURABLE saved base is now
-      silently corrupted to the transient concentric layout — so a later reopen shows the wrong
-      layout, breaking the "exiting focus restores the saved layout" guarantee for future sessions.
-      This is a real, reachable code path (confirmed by direct reading of GraphView.tsx, not just the
-      advisory 07-REVIEW.md WR-01 finding), and it is untested: the e2e "ego focus is transient" spec
-      only exercises the no-concurrent-mutation path.
-    artifacts:
-      - path: "src/features/graph/GraphView.tsx"
-        issue: "Partial-cache placement effect (~lines 323-337) omits the `if (suspendSaveRef.current) return;` guard that the layoutstop handler (~line 370) already has, so it can save transient concentric positions as the persisted base during an active ego-focus session."
-    missing:
-      - "Add `if (suspendSaveRef.current) return;` as the first check inside the partial-cache placement effect, mirroring the layoutstop guard (07-REVIEW.md WR-01's suggested fix)."
-      - "Re-run placement for any newcomer added during a focus session once focus exits (e.g. reset `placedMissingRef` on exit, or include focus state in the effect's dependency set) so the newcomer is still placed after the fence lifts."
-      - "Add e2e/unit coverage for the concurrent-mutation case: add an entity while `focusedId` is set, exit focus, then assert `graphPositions` still equals the pre-focus base (not the concentric snapshot)."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 10/12
+  gaps_closed:
+    - "Ego focus is a TRANSIENT overlay that never overwrites the persisted base positions (POL-03, D-12, Pitfall 1) — WR-01"
+  gaps_remaining: []
+  regressions: []
 human_verification:
   - test: "Load a map with a light background image; keep or pick a light marker-label color; confirm the auto dark-slate halo makes the label read clearly."
     expected: "Label text is legible over the light background via the dark halo (closes the Phase-04 UAT white-on-white gap)."
@@ -38,7 +20,7 @@ human_verification:
     expected: "Label text is legible over the dark background via the light halo."
     why_human: "Same as above — rendered-pixel contrast, not headless-assertable."
   - test: "Screenshot the connector casing on both a light and a dark map background, with a custom connector color set."
-    expected: "The cased underlay keeps the connector line visible against both backgrounds."
+    expected: "The cased underlay keeps the connector line visible against both backgrounds; the custom color now also renders at the same 0.55 resting alpha as the default hairline (WR-02)."
     why_human: "Rendered-pixel contrast, not headless-assertable."
   - test: "Enable OS-level prefers-reduced-motion; tap a graph node to enter ego focus, then click Reset layout."
     expected: "Both the ego re-layout and the reset re-layout snap instantly with no animated tween."
@@ -47,102 +29,174 @@ human_verification:
 
 # Phase 7: Relationships & Map Visual Polish Verification Report
 
-**Phase Goal:** A curator can visually tailor and more fluidly navigate the already-shipped relationship/map/graph features — customize map marker name-label and connector line colors, drag graph nodes to rearrange the layout, and use a dynamic ego focus that re-lays-out the graph around the focused person and follows taps.
+**Phase Goal:** Customizable map/graph appearance (label + connector colors), draggable graph node layout, and dynamic ego-focus re-layout — folds in the Phase-04 UAT enhancement todos.
 
-**Verified:** 2026-08-18
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-08-19
+**Status:** human_needed
+**Re-verification:** Yes — after gap closure (07-05 gap-closure plan)
 
 ## Goal Achievement
+
+### Gap-Closure Verification (07-05)
+
+This is a re-verification following gap-closure plan 07-05, which targeted the single blocking gap
+(WR-01) plus two advisory findings (WR-02, WR-03) from the prior 07-VERIFICATION.md / 07-REVIEW.md.
+All three were independently re-confirmed against the actual source and by re-running the tests
+myself (not sourced from SUMMARY.md claims):
+
+**WR-01 (blocking gap, truth #10) — CLOSED.**
+- `src/features/graph/GraphView.tsx:348-360` — the partial-cache newcomer-placement effect's first
+  statement after the `if (!cy) return;` null-check is `if (suspendSaveRef.current) return;`
+  (line 351), placed BEFORE the `partition.noneCached || partition.missing.length === 0`
+  early-return (line 352) and BEFORE `placedMissingRef.current = sig` (line 355) — confirmed by
+  direct read, mirrors the `layoutstop` guard's fence pattern exactly.
+- The effect no longer calls `savePositions(` at all (confirmed: `grep -n savePositions
+  GraphView.tsx` shows it only inside the `dragfree` handler (line 380) and the `layoutstop`
+  handler (line 400) — persistence flows through a single fenced path (IN-01 collapse verified).
+- A `postFocusPlaceTick` `useState` counter (line 99) is in the placement effect's dependency array
+  (`[partition, postFocusPlaceTick]`, line 360) and is bumped in BOTH concentric-overlay exit
+  paths immediately after `suspendSaveRef.current = false`: the synchronous `basePosRef` path
+  (line 310 sets false, line 315 bumps) and inside the async `loadPositions().then(...)` callback
+  of the fallback path (line 321 sets false, line 326 bumps, both inside the same callback).
+- The new concurrent-mutation regression spec (`e2e/graph.spec.ts:422-539`, "ego focus + concurrent
+  entity-add: exit keeps the base and places the newcomer (WR-01 fence)") was RUN LIVE by this
+  verifier: `npx playwright test e2e/graph.spec.ts --reporter=list` → **6/6 passed**, including this
+  spec. It asserts (a) the pre-existing nodes' persisted `graphPositions` equal the pre-focus base
+  after a mid-focus entity-add + exit, and (b) the mid-focus newcomer is placed (non-origin) once
+  focus exits.
+- `git diff --exit-code src/db/schema.ts` and `package.json` — both empty (re-confirmed independently).
+
+**WR-02 — CLOSED.** `src/features/person-map/editor/ConnectorLayer.tsx:103` —
+`const lineStroke = connectorColor ? hexToRgba(connectorColor, 0.55) : CONNECTOR_HAIRLINE;`
+confirmed by direct read: a custom connector color now renders at the same 0.55 resting alpha as
+the default hairline, matching the documented render-time-alpha contract.
+
+**WR-03 — CLOSED.** `rg -n selectedRelationshipId src/features/person-map` (re-run independently) →
+zero matches. `src/features/person-map/connectors.ts` no longer declares `Connector.selected` or
+`BuildConnectorsOptions.selectedRelationshipId`; `ConnectorLayer.tsx` no longer destructures
+`selected` or branches on it — `topWidth` is the constant `1.75` (line 104). `MapView.tsx:857`
+(the sole consumer) passes no selection prop, confirmed by grep.
+
+**07-05 must_haves and prohibitions — all held:**
+- Viewer-only write boundary preserved: `positionCache.ts` (`savePositions`/`loadPositions`/
+  `clearPositions`) touches ONLY `db.meta` under the `graphPositions` key; no `db.people` /
+  `db.groups` / `db.relationshipLinks` reference exists anywhere in `GraphView.tsx` or
+  `positionCache.ts` (confirmed by reading both files in full). The existing e2e drag-persist spec
+  (re-run live) asserts entity tables stay byte-identical.
+- No Dexie schema/version bump, zero new dependencies — `git diff --exit-code src/db/schema.ts` and
+  `package.json` both empty (independently re-run).
+- No unreachable connector-selection code remains — `rg -n selectedRelationshipId` and
+  `rg -n selected src/features/person-map/connectors.ts` both empty (independently re-run).
+
+**Advisory follow-up (non-blocking).** 07-REVIEW.md's WR-01 warning still applies to the delta as
+shipped: the async exit-fallback's `loadPositions().then(...)` callback (GraphView.tsx:318-327) has
+no `.catch` and no `cancelled`/mounted guard — confirmed present in the current source. If
+`loadPositions()` rejects, `suspendSaveRef.current` would stay stuck `true`, permanently disabling
+further layout saves for that session, and a post-unmount resolution could throw against a
+destroyed `cy`. This is a real robustness gap but does not block any must_have (the happy path is
+fully fenced and regression-tested); recorded here as a recommended follow-up, not a phase gap.
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Per-map marker-label and connector colors are customizable and persist across reloads (Dexie `meta`, no migration); defaults keep today's look (POL-01, D-05/D-06) | ✓ VERIFIED | `mapAppearance.ts` persists over the existing `db.meta` row (`git diff --exit-code src/db/schema.ts` empty); `MapView.tsx:221-222` threads `useLiveQuery(loadAppearance)` → `getMapAppearance`; `tests/features/mapAppearance.test.ts` (14 tests, all green) proves default/stored/merge/clear semantics |
-| 2 | Any chosen color stays legible on light AND dark background images (structural halo/casing mechanism) (POL-01, D-04) | ? UNCERTAIN — routed to human verification | `outlineColorFor`/`relativeLuminance` unit-proven (`tests/features/color.test.ts`, 9 green); `AvatarMarker.tsx` wires `fillAfterStrokeEnabled` + `stroke={outlineColorFor(labelColor)}`; `ConnectorLayer.tsx` wires a cased underlay Arrow. Rendered-pixel contrast is NOT headless-assertable (opaque `<canvas>`) — scoped MANUAL UAT per 07-VALIDATION.md |
-| 3 | A tampered/malformed stored hex is coerced to the default rather than painting an undefined color (POL-01, T-07-01) | ✓ VERIFIED | `coerceHex` gate in `mapAppearance.ts` (`HEX6` regex); explicit bad-hex test cases in `mapAppearance.test.ts` (`'red'`, `'#12'`, `'#12ZZ34'`, `'rgba(...)'`) all coerce correctly |
-| 4 | Two native color pickers + per-row Reset live in the LayersPanel Appearance block and live-update the canvas | ✓ VERIFIED | `LayersPanel.tsx:295-345` renders `data-testid="map-label-color"`/`"map-connector-color"` `<input type=color>` with associated `<label>` + Reset buttons; `LayersPanel.module.css:209-274` styles present; `MapView.tsx:799-802` wires `setMapColor`/`clearMapColor` writers |
-| 5 | Graph nodes are grabbable/draggable to rearrange the layout; a tap still opens the ProfileSidebar (viewer-only bridge preserved) (POL-02, D-07) | ✓ VERIFIED | `GraphView.tsx` drops `autoungrabify`; e2e `tapping a graph node opens its ProfileSidebar (viewer-only)` asserts `grabbable() === true` AND the sidebar opens — **ran live, PASSED** |
-| 6 | Dragging a node persists its position on `dragfree` and NEVER mutates relationship/entity data (POL-02, D-07 viewer-only) | ✓ VERIFIED | `GraphView.tsx:356-360` `dragfree` handler calls only `savePositions`/`loadPositions` (the `graphPositions` meta row); e2e `dragging a node persists its position without mutating entity data` asserts `db.people`/`db.relationshipLinks` byte-identical before/after — **ran live, PASSED** |
-| 7 | Adding a person/group keeps everyone's saved positions and auto-places ONLY the newcomer (POL-02, D-08) | ✓ VERIFIED | `positionCache.ts` `partitionCached` three-way gate (12 unit tests green); `GraphView.tsx:317-337` lock→cose→unlock→save wiring; e2e `sticky partial cache` asserts existing nodes byte-identical, newcomer non-origin/non-colliding — **ran live, PASSED** |
-| 8 | A Reset layout control clears saved positions and re-runs a fresh automatic arrangement (POL-02, D-09) | ✓ VERIFIED | `GraphView.tsx:421-437` `data-testid="graph-reset-layout"` → `clearPositions()`; e2e `Reset layout clears the saved manual positions` — **ran live, PASSED** |
-| 9 | Opening/tapping a node re-lays-out the WHOLE graph concentrically around that ego; tapping a different node re-egos onto it (focus follows the tap) (POL-03, D-10/D-11/D-12) | ✓ VERIFIED | `egoLayout.ts` `computeHopLevels`/`concentricValue` (11 unit tests green); `GraphView.tsx:243-315` concentric overlay effect keyed on `focusedId`; tap handler sets `focusedId` (line 350); e2e `ego focus is transient` taps Bob mid-session and asserts his ProfileSidebar opens — **ran live, PASSED** |
-| 10 | Ego focus is a TRANSIENT overlay that NEVER overwrites the persisted base positions (POL-03, D-12, Pitfall 1) | ✗ **FAILED** | See Gaps Summary — WR-01: the partial-cache placement effect (`GraphView.tsx:323-337`) is NOT fenced by `suspendSaveRef` and can persist transient concentric positions over the saved base when an entity is added during an active focus session. Confirmed by direct code read, not merely an untested path. |
-| 11 | Exiting focus (or closing the ProfileSidebar) restores the exact saved base layout, discarding nothing, in the no-concurrent-mutation case (POL-03, D-12/D-13) | ✓ VERIFIED | `GraphView.tsx:288-311` EXIT branch restores via `cy.nodes().positions()` (no layout, no save); e2e `ego focus is transient` asserts positions equal the pre-focus snapshot AND `graphPositions` byte-identical across focus→exit — **ran live, PASSED**. Caveat: this proof does not cover the concurrent-mutation path broken by truth #10. |
-| 12 | Exit focus and Reset layout are distinct and never conflate (POL-03, D-13) | ✓ VERIFIED | `GraphView.tsx:438-451` `graph-exit-focus` button only calls `setFocusedId(null)` (no `clearPositions`); `Reset layout` button only calls `clearPositions()`; e2e proves each independently |
+| 1 | Per-map marker-label and connector colors are customizable and persist across reloads (Dexie `meta`, no migration); defaults keep today's look (POL-01, D-05/D-06) | ✓ VERIFIED | Unaffected by 07-05; `mapAppearance.ts` unchanged, 14 unit tests still green (re-run in full suite: 388/388) |
+| 2 | Any chosen color stays legible on light AND dark background images (structural halo/casing mechanism) (POL-01, D-04) | ? UNCERTAIN — routed to human verification | Unaffected by 07-05; rendered-pixel contrast not headless-assertable, scoped MANUAL UAT |
+| 3 | A tampered/malformed stored hex is coerced to the default rather than painting an undefined color (POL-01, T-07-01) | ✓ VERIFIED | Unaffected by 07-05; `coerceHex` gate unchanged |
+| 4 | Two native color pickers + per-row Reset live in the LayersPanel Appearance block and live-update the canvas | ✓ VERIFIED | Unaffected by 07-05; `LayersPanel.tsx` unchanged |
+| 5 | Graph nodes are grabbable/draggable to rearrange the layout; a tap still opens the ProfileSidebar (viewer-only bridge preserved) (POL-02, D-07) | ✓ VERIFIED | Re-run live: `tapping a graph node opens its ProfileSidebar` e2e spec — PASSED |
+| 6 | Dragging a node persists its position on `dragfree` and NEVER mutates relationship/entity data (POL-02, D-07 viewer-only) | ✓ VERIFIED | Re-run live: `dragging a node persists its position without mutating entity data` e2e spec — PASSED (people/links byte-identical) |
+| 7 | Adding a person/group keeps everyone's saved positions and auto-places ONLY the newcomer (POL-02, D-08) | ✓ VERIFIED | Re-run live: `sticky partial cache` e2e spec — PASSED |
+| 8 | A Reset layout control clears saved positions and re-runs a fresh automatic arrangement (POL-02, D-09) | ✓ VERIFIED | Re-run live: `Reset layout clears the saved manual positions` e2e spec — PASSED |
+| 9 | Opening/tapping a node re-lays-out the WHOLE graph concentrically around that ego; tapping a different node re-egos onto it (focus follows the tap) (POL-03, D-10/D-11/D-12) | ✓ VERIFIED | Re-run live: `ego focus is transient` e2e spec — PASSED |
+| 10 | Ego focus is a TRANSIENT overlay that NEVER overwrites the persisted base positions, including under a CONCURRENT mutation during an active focus session (POL-03, D-12, Pitfall 1, WR-01) | ✓ VERIFIED (gap closed) | Source: `suspendSaveRef` fence is the placement effect's first check (GraphView.tsx:351), before `placedMissingRef` is recorded; single persistence path via fenced `layoutstop` (IN-01, no `savePositions` in the placement effect). Behavioral evidence: NEW concurrent-mutation e2e spec re-run live by this verifier — **PASSED** (base preserved + newcomer placed post-exit) |
+| 11 | Exiting focus (or closing the ProfileSidebar) restores the exact saved base layout, discarding nothing, in the no-concurrent-mutation case (POL-03, D-12/D-13) | ✓ VERIFIED | Re-run live: `ego focus is transient` e2e spec — PASSED |
+| 12 | Exit focus and Reset layout are distinct and never conflate (POL-03, D-13) | ✓ VERIFIED | Unaffected by 07-05; source unchanged (`graph-exit-focus` calls only `setFocusedId(null)`) |
+| 13 | A custom connector line color renders at 0.55 resting alpha, matching the default translucent hairline weight (POL-01, WR-02) | ✓ VERIFIED (gap closed) | Source: `ConnectorLayer.tsx:103` `connectorColor ? hexToRgba(connectorColor, 0.55) : CONNECTOR_HAIRLINE` |
+| 14 | The map connector surface carries no unreachable relationship-selection code after WR-03 removal (POL-01) | ✓ VERIFIED (gap closed) | `rg -n selectedRelationshipId src/features/person-map` — zero matches (re-run independently); `connectors.ts`/`ConnectorLayer.tsx` fully cleaned |
 
-**Score:** 10/12 truths verified (1 uncertain — routed to human/manual UAT; 1 failed — gap)
+**Score:** 13/14 truths verified (1 uncertain — routed to human/manual UAT; 0 failed)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/features/common/color.ts` | `relativeLuminance` + `outlineColorFor` pure helpers | ✓ VERIFIED | Both exported, pure, unit-tested (9 tests green) |
-| `src/features/person-map/mapAppearance.ts` | Per-map colour persistence over `db.meta` | ✓ VERIFIED | `loadAppearance`/`getMapAppearance`/`setMapColor`/`clearMapColor` all present, wired, tested (14 tests green) |
-| `src/features/person-map/AvatarMarker.tsx` | `labelColor` prop + luminance halo | ✓ VERIFIED | `fillAfterStrokeEnabled` + `stroke={outlineColorFor(labelColor)}` present (line 273-284) |
-| `src/features/person-map/editor/ConnectorLayer.tsx` | `connectorColor` prop + cased underlay | ✓ VERIFIED | Casing Arrow + colored Arrow present (lines 107-138) |
-| `src/features/person-map/editor/LayersPanel.tsx` | Appearance block with two pickers + Reset | ✓ VERIFIED | Lines 295-345 |
-| `src/features/person-map/MapView.tsx` | `useLiveQuery(loadAppearance)` threading | ✓ VERIFIED | Lines 221-222, 799-802, 863, 915 |
-| `src/features/graph/positionCache.ts` | `partitionCached` + `clearPositions` | ✓ VERIFIED | Both exported, pure/async respectively, 12 unit tests |
-| `src/features/graph/GraphView.tsx` | Grabbable nodes, dragfree persist, three-way gate, Reset button, `suspendSaveRef` | ✓ VERIFIED (POL-02 parts); ⚠️ **PARTIAL** (POL-03 save-guard is incomplete — WR-01) | `suspendSaveRef` exists and correctly guards the `layoutstop` handler (line 370) and is set/cleared correctly by the concentric overlay effect (lines 273, 301, 308) — but the newcomer-placement effect (line 334) is NOT guarded |
-| `src/features/graph/egoLayout.ts` | `computeHopLevels` + `concentricValue` | ✓ VERIFIED | Both exported, pure, 11 unit tests |
-| `e2e/graph.spec.ts` | grabbable flip, drag-persist, reset, sticky-partial-cache, ego-transient specs | ✓ VERIFIED | All 5 specs present AND executed live in this verification — **5/5 passed** |
+| `src/features/graph/GraphView.tsx` | `suspendSaveRef`-fenced newcomer-placement effect + fence-lifted re-place trigger; IN-01 single-persistence collapse | ✓ VERIFIED | Fence at line 351, tick re-trigger at lines 99/315/326/360, no `savePositions` in the placement effect |
+| `e2e/graph.spec.ts` | Concurrent-mutation regression spec | ✓ VERIFIED | Present at lines 422-539; re-run live, PASSED |
+| `src/features/person-map/editor/ConnectorLayer.tsx` | Custom connector color at 0.55 render-time alpha; selection prop + amber branch removed | ✓ VERIFIED | Line 103 alpha expression; no `selected` reference remains |
+| `src/features/person-map/connectors.ts` | `buildConnectors` with `selectedRelationshipId` option + `Connector.selected` field removed | ✓ VERIFIED | Full-file read confirms both removed |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `mapAppearance.ts` | `db.meta` | `db.meta.get/put` under key `mapAppearance` | ✓ WIRED | Confirmed in source; no `db.version()` bump |
-| `MapView.tsx` | `mapAppearance.ts` | `useLiveQuery(loadAppearance)` → `getMapAppearance` | ✓ WIRED | Lines 221-222 |
-| `MapView.tsx` | `AvatarMarker`/`ConnectorLayer` | `labelColor`/`connectorColor` props | ✓ WIRED | Lines 863, 915 |
-| `LayersPanel.tsx` | `mapAppearance.ts` (via MapView) | `onChange` → `setMapColor`/`clearMapColor` | ✓ WIRED | Lines 799-802 |
-| `GraphView.tsx` | `positionCache.ts` | `dragfree`/`layoutstop` → `savePositions`; Reset → `clearPositions` | ✓ WIRED | Lines 356-360, 367-380, 421-437 |
-| `GraphView.tsx` | `egoLayout.ts` | tap → `focusedId` → adjacency → `computeHopLevels` → concentric layout | ✓ WIRED | Lines 262-286 |
-| `GraphView.tsx` (concentric overlay) | `suspendSaveRef` fence | set true on enter, false on exit | ✓ WIRED | Lines 273, 301, 308 |
-| `GraphView.tsx` (**newcomer-placement effect**) | `suspendSaveRef` fence | expected but **absent** | ✗ **NOT WIRED** | Line 334 calls `savePositions(cy)` with no `suspendSaveRef` check — the WR-01 gap |
+| `GraphView.tsx` (newcomer-placement effect) | `suspendSaveRef` | first-check fence mirrors the `layoutstop` guard | ✓ WIRED (was NOT WIRED — the closed gap) | Line 351 |
+| `GraphView.tsx` (concentric-overlay exit branches) | the placement effect | `postFocusPlaceTick` bumped after `suspendSaveRef.current = false` in both exit paths | ✓ WIRED | Lines 310/315 (sync), 321/326 (async) |
+| `ConnectorLayer.tsx` | `src/features/common/color.ts` | `hexToRgba(connectorColor, 0.55)` at render time | ✓ WIRED | Line 103 |
+| `positionCache.ts` | `db.meta` (key `graphPositions`) ONLY | `savePositions`/`loadPositions`/`clearPositions` | ✓ WIRED (viewer-only boundary intact) | Full-file read confirms no entity-table reference |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|--------------|--------|----------|
-| POL-01 | 07-01, 07-02 | Customizable map label/connector colors, per-map, persisted, legible defaults | ✓ SATISFIED | All artifacts + tests verified; pixel-legibility is scoped manual UAT |
-| POL-02 | 07-03 | Viewer-only draggable graph nodes, sticky positions, Reset escape hatch | ✓ SATISFIED | All artifacts + e2e specs verified live |
-| POL-03 | 07-04 | Dynamic ego focus — re-lays-out around ego, follows taps, exit restores base | ✗ **BLOCKED** | Core dynamic-focus behavior (re-layout, follow-taps, in-session exit-restore) is verified, but the "never overwrites the persisted base" guarantee (D-12, Pitfall 1) has a confirmed unfenced code path (WR-01) |
+| POL-01 | 07-01, 07-02, 07-05 | Customizable map label/connector colors, per-map, persisted, legible defaults; render-time alpha; no dead selection code | ✓ SATISFIED | All artifacts + tests verified; WR-02/WR-03 closed; pixel-legibility remains scoped manual UAT |
+| POL-02 | 07-03, 07-05 | Viewer-only draggable graph nodes, sticky positions, Reset escape hatch | ✓ SATISFIED | All artifacts + e2e specs re-verified live |
+| POL-03 | 07-04, 07-05 | Dynamic ego focus — re-lays-out around ego, follows taps, exit restores base, NEVER corrupts base even under concurrent mutation | ✓ SATISFIED (was BLOCKED) | WR-01 gap closed: fence + single persistence path + passing regression spec, all independently re-verified |
 
-No orphaned requirements — POL-01/02/03 are the only Phase-7 requirements in REQUIREMENTS.md, and all three are claimed across the four plans' frontmatter.
+No orphaned requirements — POL-01/02/03 are the only Phase-7 requirements in REQUIREMENTS.md, and all three are claimed across plans 07-01 through 07-05's frontmatter.
 
 ### Anti-Patterns Found
 
-No `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` markers found in any of the 9 files modified this phase (`color.ts`, `mapAppearance.ts`, `positionCache.ts`, `egoLayout.ts`, `GraphView.tsx`, `AvatarMarker.tsx`, `ConnectorLayer.tsx`, `LayersPanel.tsx`, `MapView.tsx`). No stub/empty-implementation patterns found.
+No `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` markers found in any of the 4 files modified by
+07-05 (`GraphView.tsx`, `e2e/graph.spec.ts`, `ConnectorLayer.tsx`, `connectors.ts`) — re-confirmed
+by direct grep. No stub/empty-implementation patterns found.
 
-The advisory 07-REVIEW.md flagged two additional warnings not treated as phase-goal blockers here:
-- **WR-02** (`ConnectorLayer.tsx:107-108`): a custom connector color renders fully opaque instead of at the documented 55% default alpha. This is a cosmetic/consistency deviation from the mapAppearance.ts doc comment, not a break of success criterion 1 (the connector still reads legibly via the casing mechanism, and the color still persists). Not a gap for this phase's goal, but worth fixing for consistency.
-- **WR-03** (`MapView.tsx`): `selectedRelationshipId` is never passed to `ConnectorLayer` on the map surface, so the amber-selected-connector path is unreachable there. This predates Phase 7 (the prop/wiring gap is on the map's REL-03 selection surface, not on anything POL-01/02/03 introduced) and is orthogonal to this phase's success criteria — not a Phase-7 gap.
+One advisory (non-blocking) robustness finding carried from 07-REVIEW.md, independently re-confirmed
+present in the current source: the async exit-fallback's `loadPositions().then(...)` callback
+(`GraphView.tsx:318-327`) has no `.catch` and no `cancelled`/mounted guard, unlike the sibling
+mount-time effects in the same file. See "Advisory follow-up" above.
 
 ### Behavioral Spot-Checks / Live Test Execution
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Phase-7 unit suite (color/mapAppearance/positionCache/egoLayout) | `npx vitest run tests/features/{color,mapAppearance,positionCache,egoLayout}.test.ts` | 4 files, 42 tests, all passed | ✓ PASS |
 | TypeScript compiles | `npx tsc -p tsconfig.json --noEmit` | Clean, no errors | ✓ PASS |
+| Full unit suite | `npx vitest run` | 60 files, 388 tests, all passed | ✓ PASS |
+| Connectors + positionCache unit suites (isolated) | `npx vitest run tests/features/connectors.test.ts tests/features/positionCache.test.ts` | 19 tests, all passed | ✓ PASS |
+| Full graph e2e suite (incl. NEW concurrent-mutation spec) | `npx playwright test e2e/graph.spec.ts --reporter=list` (real build + preview, e2e mode) | 6/6 specs passed (grabbable-flip, drag-persist, reset-layout, sticky-partial-cache, ego-transient, **concurrent-mutation/WR-01**) | ✓ PASS |
+| Connector + relationship e2e specs | `npx playwright test e2e/connectors.spec.ts e2e/relationships.spec.ts --reporter=list` | 2/2 passed | ✓ PASS |
 | `src/db/schema.ts` unchanged | `git diff --exit-code src/db/schema.ts` | Empty diff | ✓ PASS (no migration) |
 | `package.json` unchanged | `git diff --exit-code package.json` | Empty diff | ✓ PASS (zero new deps) |
-| Full graph e2e suite | `npx playwright test e2e/graph.spec.ts --reporter=list` (real build + preview server, e2e mode) | 5/5 specs passed (grabbable-flip, drag-persist, reset-layout, sticky-partial-cache, ego-transient) | ✓ PASS |
+| No dangling `selectedRelationshipId` | `rg -n selectedRelationshipId src/features/person-map` | No matches | ✓ PASS |
 
-All automated checks were executed directly by this verifier (not sourced from SUMMARY.md claims).
+All checks above were executed directly by this verifier in this session (not sourced from
+SUMMARY.md or 07-REVIEW.md claims).
 
 ### Human Verification Required
 
-See frontmatter `human_verification` — four items, all scoped MANUAL UAT per 07-VALIDATION.md (rendered-pixel legibility on light/dark backgrounds, connector casing, and reduced-motion snap). None of these are assertable headlessly because Konva/Cytoscape render to an opaque `<canvas>`.
+See frontmatter `human_verification` — four items, all scoped MANUAL UAT per 07-VALIDATION.md
+(rendered-pixel legibility on light/dark backgrounds, connector casing at the corrected 0.55 alpha,
+and reduced-motion snap). None of these are assertable headlessly because Konva/Cytoscape render to
+an opaque `<canvas>`. These items are carried forward unchanged from the prior verification — 07-05
+did not touch the code paths they cover, other than the WR-02 alpha value itself (which is now
+source-verified; only the rendered-pixel appearance needs a human look).
 
 ### Gaps Summary
 
-One blocking gap: **WR-01 — the ego-focus save-fence is incomplete.** The phase's headline POL-03 mechanism (concentric overlay, follow-the-tap, in-session snapshot/restore) is fully built, wired, and proven by a live e2e run. However, the specific guarantee the plan calls out as the "single biggest landmine" (07-04-PLAN.md: "Pitfall 1 — the existing global `layoutstop` auto-save would clobber the base the instant the transient concentric ego runs") is only PARTIALLY closed: the `layoutstop` handler is correctly fenced, but a second, independently-triggered effect (the POL-02 "place only the newcomer" partial-cache effect) writes to the same `graphPositions` row without checking the fence. Because this effect re-runs on any live-query change to the node-set (an entity add — including from a background Drive/Mega sync pull, which is this app's core architecture), a focus session that overlaps a data mutation will silently corrupt the durable saved base layout. The in-session UX still looks correct (Exit focus restores from `basePosRef`, an in-memory snapshot), which is why the existing e2e test suite does not catch it — the corruption only becomes visible on a later reopen. This was independently confirmed by reading `GraphView.tsx` directly (not merely trusting 07-REVIEW.md), and the fix is a one-line guard mirroring the existing `layoutstop` pattern, exactly as 07-REVIEW.md WR-01 proposes, plus a re-run-after-exit provision and a regression test for the concurrent-mutation case.
+No gaps remain. The single blocking gap from the prior verification (WR-01 — the ego-focus
+save-fence was incomplete on the newcomer-placement effect) is closed: the effect is now fenced by
+`suspendSaveRef` exactly as the `layoutstop` handler is, persistence flows through one path, a
+fence-lifted re-trigger places any mid-focus newcomer once focus exits (both sync and async restore
+paths), and a new regression spec proves it — RED pre-fix / GREEN post-fix, independently re-run
+GREEN by this verifier. The two advisory findings (WR-02 connector alpha, WR-03 dead selection code)
+are also closed. One non-blocking robustness note (missing `.catch` on the async exit-fallback
+promise) is carried forward as a recommended follow-up, not a gap.
 
-No override is suggested for this gap — it directly contradicts a must-have the plan itself calls "the single biggest landmine," so it should be closed rather than accepted.
+Status is `human_needed` rather than `passed` solely because of the four pre-existing, scoped-manual
+UAT items (rendered-pixel legibility + reduced-motion snap) — none of which were reopened or
+affected by this gap-closure work.
 
 ---
 
-_Verified: 2026-08-18_
+_Verified: 2026-08-19_
 _Verifier: Claude (gsd-verifier)_
