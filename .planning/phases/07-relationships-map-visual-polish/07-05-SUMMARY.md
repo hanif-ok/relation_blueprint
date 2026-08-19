@@ -136,3 +136,8 @@ None — no stubs introduced; the placement effect and connector render are full
 ---
 *Phase: 07-relationships-map-visual-polish*
 *Completed: 2026-08-19*
+
+## Self-Check: PASSED
+- FOUND: .planning/phases/07-relationships-map-visual-polish/07-05-SUMMARY.md
+- FOUND commit fe7d396 (Task 1), b0d447a (Task 2), 6ce65fc (Task 3), 8347e79 (SUMMARY)
+- Working tree clean; no schema.ts / package.json changes.
