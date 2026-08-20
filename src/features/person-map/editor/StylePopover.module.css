@@ -1,19 +1,17 @@
 /* StylePopover — paper dialog surface for the minimal shape-styling controls (UI-SPEC S17).
  * Preset swatches + a fill toggle + a label input; no color picker / sliders (D-03 deferred). */
 
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(27, 34, 48, 0.32);
-  z-index: var(--z-popover);
-}
-
+/* Non-modal styling panel: docked to the BOTTOM-LEFT of the Stage (toolbar is top-left, LayersPanel
+ * top-right, bg hint top-center — the bottom edge is free). It deliberately does NOT cover the canvas
+ * so the Transformer's reshape handles around the selected shape stay visible + reachable. There is no
+ * scrim overlay (the dialog is non-modal). */
 .content {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  bottom: var(--space-lg);
+  left: var(--space-lg);
   width: min(360px, calc(100vw - var(--space-xl)));
+  max-height: calc(100vh - 2 * var(--space-lg));
+  overflow-y: auto;
   background: var(--paper);
   border: var(--border-hairline);
   border-radius: var(--radius-md);
@@ -98,7 +96,27 @@
 
 .actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Destructive action — muted by default, danger-tinted so it reads as "remove" without shouting. */
+.delete {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--danger, #b3261e);
+  background: transparent;
+  border: 1px solid var(--danger, #b3261e);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.delete:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 .done {

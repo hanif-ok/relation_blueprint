@@ -22,7 +22,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
 import type { BackgroundTransform, Layer as MapLayer, Marker, Shape } from '@/domain/types';
-import { createMap, updateMap, updateMapFrom, upsertMarker } from '@/db/repository';
+import { createMap, updateMap, updateMapFrom, updateMapShapes, upsertMarker } from '@/db/repository';
 import { storeMedia } from '@/media/mediaManager';
 import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
@@ -53,6 +53,8 @@ import {
   beginDraw,
   updateDraw,
   commitDraw,
+  addPolygonVertex,
+  closePolygon,
   type DraftShape,
   type DrawState,
 } from './editor/useToolMode';
@@ -111,6 +113,17 @@ function DrawPreview({ draw, transform }: { draw: DrawState; transform: Backgrou
   const b = imageToStage(draw.current, transform);
   if (draw.kind === 'line') {
     return <Line points={[a.x, a.y, b.x, b.y]} stroke={stroke} strokeWidth={2} dash={[6, 4]} listening={false} />;
+  }
+  if (draw.kind === 'polygon') {
+    // Multi-click polygon: draw the placed vertices as an open polyline, then rubber-band the last
+    // segment to the live cursor (draw.current) so the curator sees where the next edge lands.
+    const pts: number[] = [];
+    for (const v of draw.vertices) {
+      const p = imageToStage(v, transform);
+      pts.push(p.x, p.y);
+    }
+    pts.push(b.x, b.y);
+    return <Line points={pts} stroke={stroke} strokeWidth={2} dash={[6, 4]} closed={false} listening={false} />;
   }
   const x = Math.min(a.x, b.x);
   const y = Math.min(a.y, b.y);
@@ -358,6 +371,18 @@ export function MapView({
     setSelectedShapeId(null);
   }, []);
 
+  // Delete one shape from the active map's `shapes` array (via updateMapShapes — never straight to
+  // Dexie) and clear the selection so the just-detached Transformer/StylePopover close cleanly. Shared
+  // by the keyboard Delete/Backspace handler and the StylePopover Delete button.
+  const deleteShape = useCallback(
+    (shapeId: string) => {
+      if (!map) return;
+      void updateMapShapes(map.id, (shapes) => shapes.filter((s) => s.id !== shapeId));
+      clearSelection();
+    },
+    [map, clearSelection],
+  );
+
   // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
   const [showLabels, setShowLabels] = useState(false);
 
@@ -545,7 +570,23 @@ export function MapView({
         }
         return;
       }
-      // Drag-draw only for rect/ellipse/line (polygon is multi-click — deferred to 03-04).
+      // Polygon is MULTI-CLICK (D-19): each pointer-down drops one vertex. The first click seeds the
+      // draft (beginDraw), every later click appends (addPolygonVertex). Closing/cancelling is handled
+      // by dblclick/Enter (handlePolygonClose) and Escape (in the keydown effect) — NOT pointer-up, so
+      // handlePointerUp early-returns for a polygon draft below. Reads/writes the LIVE draft via
+      // drawRef so a fast click sequence never sees a stale render-closure value.
+      if (tool === 'polygon') {
+        const at = pointerToImage(stage);
+        if (!at) return;
+        const active = drawRef.current;
+        setDrawTracked(
+          active && active.kind === 'polygon'
+            ? addPolygonVertex(active, at)
+            : beginDraw('polygon', at),
+        );
+        return;
+      }
+      // Drag-draw for rect/ellipse/line: pointer-down anchors, move previews, up commits.
       if (tool !== 'rect' && tool !== 'ellipse' && tool !== 'line') return;
       const start = pointerToImage(stage);
       if (!start) return;
@@ -570,10 +611,63 @@ export function MapView({
   const handlePointerUp = useCallback(() => {
     const current = drawRef.current;
     if (!current) return;
+    // Polygon commits on dblclick/Enter, never on pointer-up — otherwise the up of the very first
+    // vertex click would run commitDraw (a 0-size box → null) and wipe the in-progress draft.
+    if (current.kind === 'polygon') return;
     const committed = commitDraw(current);
     setDrawTracked(null);
     if (committed) commitShape(committed);
   }, [setDrawTracked, commitShape]);
+
+  // Close + commit an in-progress polygon (dblclick / double-tap, or Enter via the keydown effect).
+  // closePolygon returns null for < 3 vertices (degenerate) — then we just clear the draft.
+  const handlePolygonClose = useCallback(() => {
+    const active = drawRef.current;
+    if (!active || active.kind !== 'polygon') return;
+    const committed = closePolygon(active);
+    setDrawTracked(null);
+    if (committed) commitShape(committed);
+  }, [setDrawTracked, commitShape]);
+
+  // Keyboard interactions on the editor surface:
+  //   • Polygon in progress → Enter closes+commits, Escape cancels (checked first, independent of
+  //     whether a form control has focus).
+  //   • Delete / Backspace → remove the selected SHAPE (marker deletion is out of scope). Suppressed
+  //     while typing in a form control (e.g. the StylePopover zone-label input) so editing text never
+  //     nukes the shape.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const active = drawRef.current;
+      if (active && active.kind === 'polygon') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handlePolygonClose();
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setDrawTracked(null);
+          return;
+        }
+      }
+
+      const t = e.target as HTMLElement | null;
+      const typing =
+        !!t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable);
+      if (typing) return;
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
+        e.preventDefault();
+        deleteShape(selectedShapeId);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handlePolygonClose, setDrawTracked, selectedShapeId, deleteShape]);
 
   // Two-finger touch always pans/pinches (RESEARCH Pattern 6); the second touch landing kills any
   // in-flight single-finger draw so a pinch never leaves a stray preview (Pitfall 4).
@@ -825,11 +919,16 @@ export function MapView({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          // Double-click / double-tap closes an in-progress polygon (the multi-click commit gesture).
+          onDblClick={handlePolygonClose}
+          onDblTap={handlePolygonClose}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          // Click on empty canvas (not a marker/shape) clears selection (D-15).
+          // Click on empty canvas (not a marker/shape) clears selection (D-15) — EXCEPT while placing
+          // polygon vertices, where each vertex is itself an empty-canvas click and must not deselect.
           onClick={(e) => {
             if (e.target === e.target.getStage()) {
+              if (tool === 'polygon' && drawRef.current) return;
               onSelect('');
               clearSelection();
             }
@@ -994,6 +1093,9 @@ export function MapView({
           }}
           map={map}
           shape={selectedShape}
+          onDelete={() => {
+            if (selectedShape) deleteShape(selectedShape.id);
+          }}
         />
       )}
 

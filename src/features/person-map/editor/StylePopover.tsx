@@ -35,9 +35,11 @@ export interface StylePopoverProps {
   map: MapDoc;
   /** The selected shape, or null when nothing is selected. */
   shape: Shape | null;
+  /** Remove the selected shape (also clears the selection/Transformer). */
+  onDelete: () => void;
 }
 
-export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverProps) {
+export function StylePopover({ open, onOpenChange, map, shape, onDelete }: StylePopoverProps) {
   const titleId = useId();
   const labelInputId = useId();
   const layerSelectId = useId();
@@ -57,13 +59,24 @@ export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverPro
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    // Non-modal (modal={false}): the styling surface must NOT make the Stage inert or occlude it —
+    // selecting a shape ALSO attaches the Transformer (reshape handles), and the curator has to reach
+    // those handles on the canvas while this panel is open. A modal Radix Dialog (the previous default)
+    // rendered a full-viewport blocking overlay + a center-screen box that hid the handles entirely —
+    // that was the "clicking a shape opens the panel instead of letting me reshape" bug. There is no
+    // <Dialog.Overlay> for the same reason (no blocking scrim).
+    <Dialog.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <Dialog.Portal>
-        <Dialog.Overlay className={styles.overlay} />
         <Dialog.Content
           className={styles.content}
           aria-labelledby={titleId}
           data-testid="style-popover"
+          // Keep the panel open while the curator manipulates the Transformer on the canvas (a
+          // pointer-down "outside" the panel is exactly a handle grab). It closes only via Done/Delete,
+          // Escape, or MapView's own selection changes — never by touching the canvas.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
         >
           <Dialog.Title id={titleId} className={styles.title}>
             Shape style
@@ -151,6 +164,17 @@ export function StylePopover({ open, onOpenChange, map, shape }: StylePopoverPro
           )}
 
           <div className={styles.actions}>
+            {/* Delete removes THIS shape from the map (and clears the selection/Transformer). The
+                keyboard Delete/Backspace path in MapView does the same — this button is the
+                touch-reachable affordance (no hardware Delete key on a tablet/phone). */}
+            <button
+              type="button"
+              className={styles.delete}
+              data-testid="shape-delete"
+              onClick={onDelete}
+            >
+              Delete
+            </button>
             <Dialog.Close asChild>
               <button type="button" className={styles.done}>
                 Done
