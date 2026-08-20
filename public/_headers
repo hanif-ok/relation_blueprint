@@ -1,0 +1,7 @@
+# Cloudflare Pages reads this file from the build output root (Vite copies public/ -> dist/).
+# Google Identity Services' OAuth token popup needs the app to keep its opener<->popup link;
+# without same-origin-allow-popups the browser severs the popup and GIS Drive auth dies.
+# GitHub Pages could not send this header (why we moved to Cloudflare Pages); _headers is how
+# Cloudflare Pages supplies it in production. Mirrors the vite dev/preview server headers.
+/*
+  Cross-Origin-Opener-Policy: same-origin-allow-popups

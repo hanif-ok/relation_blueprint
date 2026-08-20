@@ -3,10 +3,10 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
-// GitHub Pages project site is served from /relation_blueprint/.
-// `base`, and the PWA `start_url`/`scope`, MUST all use this subpath or deployed assets
-// 404 and the service worker controls the wrong scope (RESEARCH ## Pattern 4 / Pitfall 7).
-const BASE = '/relation_blueprint/';
+// Cloudflare Pages serves this app from the domain root (`/`), not a repo subpath.
+// `base`, and the PWA `start_url`/`scope`, all derive from this const; keeping it at '/'
+// means deployed assets resolve from the root and the service worker controls the root scope.
+const BASE = '/';
 
 // Manifest theme/background mirror the UI-SPEC color tokens:
 //   background = warm paper #F4F1EA (the chrome the splash sits on)
@@ -28,7 +28,7 @@ export default defineConfig({
       // The injected service worker is registered by our own src/app/pwa.ts via the
       // virtual:pwa-register module, so disable the plugin's auto-injected registration.
       injectRegister: false,
-      // GitHub Pages base — the SW scope is derived from this subpath.
+      // Root serving under Cloudflare Pages — the SW scope is derived from this base.
       base: BASE,
       scope: BASE,
       includeAssets: ['favicon.ico', 'manifest-icons/*.png'],
@@ -98,10 +98,9 @@ export default defineConfig({
   // `same-origin-allow-popups`, the browser severs the popup so GIS can't poll window.closed and
   // the flow dies with "Failed to open popup window" (see .planning/debug/resolved/
   // oauth-prompt-every-refresh.md). The header must come from whatever SERVES the app: set here
-  // for `vite dev` (server) and `vite preview` (preview).
-  // ⚠ GitHub Pages cannot send custom response headers, so the PRODUCTION deploy must provide this
-  // COOP header another way (a headers-capable host such as Cloudflare Pages / Netlify `_headers`,
-  // or enabling FedCM) — otherwise Drive OAuth breaks in production exactly as it did in dev.
+  // for `vite dev` (server) and `vite preview` (preview). In PRODUCTION, Cloudflare Pages supplies
+  // the same COOP header via public/_headers (GitHub Pages could not send custom response headers —
+  // the reason for this move), so Drive OAuth works in production exactly as in dev.
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
