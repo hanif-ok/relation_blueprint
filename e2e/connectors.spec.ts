@@ -174,6 +174,22 @@ test('a relationship renders as a connector that follows a marker on drag and pe
     group.fire('dragend', { target: group }, true);
   }, personA);
 
+  // `onDragEnd` persists through an UNAWAITED `void upsertMarker(...)`, so the dragend event
+  // returning does NOT mean the Dexie write has committed. Reloading in that same tick tore the
+  // page down mid-write — the pre-existing flake, where the post-reload read came back with the
+  // pre-drag seed position instead of the dropped one. This poll is a SYNCHRONIZATION GUARD only:
+  // the reload and the assertions below it still carry the full burden of proving persistence.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.markers.get(id);
+          return m ? [m.x, m.y] : null;
+        }, markerAId),
+      { timeout: 15_000 },
+    )
+    .toEqual([300, 220]);
+
   // The move persisted to Dexie (read after a full reload).
   await page.reload();
   await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
