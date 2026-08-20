@@ -189,3 +189,59 @@ test('a relationship renders as a connector that follows a marker on drag and pe
     .poll(() => connectorPoints(page, relId), { timeout: 15_000 })
     .toEqual([300, 220, 400, 300]);
 });
+
+/**
+ * The Layers-panel "Relationship lines" toggle. Proves the toggle by the resulting canvas render
+ * (the e2e/layers.spec.ts precedent) rather than by pixel math: the connector Arrow either is or
+ * is not in the Konva scene graph. Also pins the SESSION-ONLY contract — nothing is persisted, so
+ * a reload returns the toggle to its ON default with the connector drawn again.
+ */
+test('relationship lines can be hidden and shown from the Layers panel (session-only)', async ({
+  page,
+}) => {
+  const { relId } = await seed(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+
+  await expect(page.locator('[data-testid="map-view"] canvas').first()).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const linesToggle = page.locator('[data-testid="show-connector-lines-toggle"]');
+  const labelsToggle = page.locator('[data-testid="show-connector-labels-toggle"]');
+
+  // 1. Default is ON — the connector draws exactly as it did before the toggle existed.
+  await expect
+    .poll(() => connectorPoints(page, relId), { timeout: 15_000 })
+    .toEqual([200, 160, 400, 300]);
+  await expect(linesToggle).toBeChecked();
+
+  // 2. Unchecking removes the connector Arrow from the scene graph entirely (no line, no label,
+  // and no buildConnectors pass — the whole ConnectorLayer is unrendered).
+  await linesToggle.uncheck();
+  await expect.poll(() => connectorPoints(page, relId), { timeout: 15_000 }).toBeNull();
+
+  // 3. Labels are drawn ON the lines, so their toggle is unavailable while lines are hidden.
+  await expect(labelsToggle).toBeDisabled();
+
+  // 4. Re-checking restores the connector at the same image-space-anchored endpoints.
+  await linesToggle.check();
+  await expect
+    .poll(() => connectorPoints(page, relId), { timeout: 15_000 })
+    .toEqual([200, 160, 400, 300]);
+  await expect(labelsToggle).toBeEnabled();
+
+  // 5. Session-only: a reload returns the toggle to ON and the connector is drawn — the hidden
+  // state was never written to mapAppearance, db.meta, or the MapDoc.
+  await linesToggle.uncheck();
+  await expect.poll(() => connectorPoints(page, relId), { timeout: 15_000 }).toBeNull();
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+  await expect(page.locator('[data-testid="map-view"] canvas').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator('[data-testid="show-connector-lines-toggle"]')).toBeChecked();
+  await expect
+    .poll(() => connectorPoints(page, relId), { timeout: 15_000 })
+    .toEqual([200, 160, 400, 300]);
+});

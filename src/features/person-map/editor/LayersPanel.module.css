@@ -205,6 +205,13 @@
   border-top: var(--border-hairline);
 }
 
+/* A toggle row that cannot act right now (the relationship-label row while lines are hidden):
+   muted and non-interactive, without changing its own checked value. */
+.toggleDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* POL-01 Appearance block — two native color-picker rows beneath the toggles. */
 .appearance {
   display: flex;
