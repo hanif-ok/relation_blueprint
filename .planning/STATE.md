@@ -7,8 +7,8 @@ current_phase_name: relationships-map-visual-polish
 status: executing
 stopped_at: Phase 7 UI-SPEC approved
 last_updated: "2026-08-19T03:41:29.544Z"
-last_activity: 2026-08-19
-last_activity_desc: Phase 07 execution started
+last_activity: 2026-08-20
+last_activity_desc: "Completed quick task 260820-idf: reconfigure deploy → Cloudflare Pages"
 progress:
   total_phases: 8
   completed_phases: 6
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 07 (relationships-map-visual-polish) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 07
-Last activity: 2026-08-20 — Completed quick task 260820-ibh: Fix flaky connectors e2e by awaiting marker persist before reload
+Last activity: 2026-08-20 — Completed quick task 260820-idf: Reconfigure deployment from GitHub Pages to Cloudflare Pages (Git integration)
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -134,6 +134,7 @@ Recent decisions affecting current work:
 | 260703-et9 | Add Open-map action to Locations browse list | 2026-07-03 | ce9c4c8 | [260703-et9-add-open-map-action-to-locations-browse-](./quick/260703-et9-add-open-map-action-to-locations-browse-/) |
 | 260820-ceg | Add session-only Relationship lines show/hide toggle to map Layers panel | 2026-08-20 | 48c3a2f | [260820-ceg-add-session-only-relationship-lines-show](./quick/260820-ceg-add-session-only-relationship-lines-show/) |
 | 260820-ibh | Fix flaky connectors e2e by awaiting marker persist before reload | 2026-08-20 | d93f3fc | [260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar](./quick/260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar/) |
+| 260820-idf | Reconfigure deployment from GitHub Pages to Cloudflare Pages (Git integration) | 2026-08-20 | 4d8038f | [260820-idf-reconfigure-deployment-from-github-pages](./quick/260820-idf-reconfigure-deployment-from-github-pages/) |
 
 ### Roadmap Evolution
 
