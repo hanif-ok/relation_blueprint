@@ -47,6 +47,10 @@ export interface LayersPanelProps {
   showLabels: boolean;
   /** Toggle the D-20 name-label visibility. */
   onShowLabelsChange: (show: boolean) => void;
+  /** Whether relationship (connector) LINES draw on the canvas (default ON; session-only). */
+  showConnectorLines: boolean;
+  /** Toggle the connector-line visibility (session-only — never persisted, resets to ON). */
+  onShowConnectorLinesChange: (show: boolean) => void;
   /** D-09/R5: whether relationship (connector) labels show on the canvas (default OFF). */
   showConnectorLabels: boolean;
   /** Toggle the connector-label visibility. */
@@ -71,6 +75,8 @@ export function LayersPanel({
   onActiveLayerChange,
   showLabels,
   onShowLabelsChange,
+  showConnectorLines,
+  onShowConnectorLinesChange,
   showConnectorLabels,
   onShowConnectorLabelsChange,
   objectCounts,
@@ -280,12 +286,37 @@ export function LayersPanel({
             <span>Show name labels</span>
           </label>
 
-          {/* D-09/R5: relationship (connector) label show/hide toggle (default OFF) — mirrors the
-              Names toggle above; keeps the canvas clean at scale until the curator opts in. */}
+          {/* Relationship (connector) LINE show/hide toggle — default ON, since the connector
+              layer has always drawn. Session-only: MapView holds it in useState and nothing is
+              persisted, so a reload returns it to ON by design. */}
           <label className={styles.labelsToggle}>
             <input
               type="checkbox"
+              checked={showConnectorLines}
+              data-testid="show-connector-lines-toggle"
+              onChange={(e) => onShowConnectorLinesChange(e.target.checked)}
+            />
+            <span>Relationship lines</span>
+          </label>
+
+          {/* D-09/R5: relationship (connector) label show/hide toggle (default OFF) — mirrors the
+              Names toggle above; keeps the canvas clean at scale until the curator opts in.
+              Disabled while the lines are hidden (labels are drawn ON the lines), but its checked
+              value is left untouched so the curator's choice survives an off/on round-trip. */}
+          <label
+            className={
+              showConnectorLines ? styles.labelsToggle : `${styles.labelsToggle} ${styles.toggleDisabled}`
+            }
+            title={
+              showConnectorLines
+                ? undefined
+                : 'Relationship labels are drawn on the lines — show the lines to use this.'
+            }
+          >
+            <input
+              type="checkbox"
               checked={showConnectorLabels}
+              disabled={!showConnectorLines}
               data-testid="show-connector-labels-toggle"
               onChange={(e) => onShowConnectorLabelsChange(e.target.checked)}
             />

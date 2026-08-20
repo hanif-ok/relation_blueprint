@@ -365,6 +365,13 @@ export function MapView({
   // default OFF to keep the canvas clean and cheap at scale (mirrors the D-20 Names toggle).
   const [showConnectorLabels, setShowConnectorLabels] = useState(false);
 
+  // Show relationship (connector) LINES on the canvas — the LayersPanel toggle that sits directly
+  // above the labels one. Default TRUE: connectors have always drawn unconditionally, so ON
+  // reproduces today's canvas exactly. This is a SESSION-ONLY view preference and is intentionally
+  // NOT persisted (no mapAppearance / db.meta / MapDoc write) — a reload deliberately returns it
+  // to ON. Do not "fix" this by routing it through mapAppearance.
+  const [showConnectorLines, setShowConnectorLines] = useState(true);
+
   // REL-03 (Pitfall 1): the transient LIVE stage position of the one marker currently being dragged.
   // AvatarMarker.onDragMove (rAF-throttled) pushes it here; the ConnectorLayer overlays it for that
   // marker so connectors follow the drag WITHOUT a per-frame Dexie write. Cleared on drag-end, at
@@ -792,6 +799,8 @@ export function MapView({
           onActiveLayerChange={setActiveLayerId}
           showLabels={showLabels}
           onShowLabelsChange={setShowLabels}
+          showConnectorLines={showConnectorLines}
+          onShowConnectorLinesChange={setShowConnectorLines}
           showConnectorLabels={showConnectorLabels}
           onShowConnectorLabelsChange={setShowConnectorLabels}
           objectCounts={objectCounts}
@@ -853,15 +862,22 @@ export function MapView({
               This is a physical-layer insertion, NOT a user-facing logical (MapDoc.layers) layer.
               Endpoints compose through the SAME background transform as markers (imageToStage) so
               they stay anchored on a background re-fit and follow a marker live during a drag. */}
+          {/* The physical <Layer> stays MOUNTED unconditionally — only its ConnectorLayer child is
+              gated by the session-only showConnectorLines toggle. Unmounting the Layer itself would
+              churn a real <canvas> element and disturb the fixed physical-layer stack described
+              above. Gating the child is enough to skip the geometry work: buildConnectors runs in
+              ConnectorLayer's function body, and an unrendered component never executes it. */}
           <Layer listening={false}>
-            <ConnectorLayer
-              links={links ?? []}
-              markers={markers ?? []}
-              transform={transform}
-              dragOverride={draggingMarker}
-              showConnectorLabels={showConnectorLabels}
-              connectorColor={appearance.connectorColor}
-            />
+            {showConnectorLines && (
+              <ConnectorLayer
+                links={links ?? []}
+                markers={markers ?? []}
+                transform={transform}
+                dragOverride={draggingMarker}
+                showConnectorLabels={showConnectorLabels}
+                connectorColor={appearance.connectorColor}
+              />
+            )}
           </Layer>
 
           {/* L1 — content. ALL objects (shapes + markers) live in this SINGLE physical Konva layer
