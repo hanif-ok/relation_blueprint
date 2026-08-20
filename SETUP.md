@@ -22,7 +22,7 @@ Other scripts:
 
 | Script | Purpose |
 | --- | --- |
-| `npm run build` | Type-check + produce the static `dist/` bundle (GitHub Pages base path) |
+| `npm run build` | Type-check + produce the static `dist/` bundle (root base path, static `dist/` bundle) |
 | `npm run preview` | Serve the built bundle locally |
 | `npm run typecheck` | `tsc --noEmit` under `strict: true` |
 | `npm run lint` | ESLint (flat config) |
@@ -48,8 +48,9 @@ Other scripts:
 
 3. Under **Authorized JavaScript origins**, add **both**:
    - `http://localhost:5173` (Vite dev server)
-   - `https://<your-user>.github.io` (your GitHub Pages origin — replace
-     `<your-user>` with your GitHub username)
+   - `https://<project>.pages.dev` (your Cloudflare Pages origin — replace
+     `<project>` with your Cloudflare Pages project name; see §3 for how this
+     origin is created)
 
    GIS rejects any origin not listed here, so both dev and production origins must be
    present.
@@ -81,13 +82,55 @@ Other scripts:
    the static bundle, which is correct and expected for the GIS token model. **No
    client secret is used** by the token model; do not create or store one.
 
-7. For the deployed GitHub Pages build, set a repository **variable** named
-   `VITE_GOOGLE_CLIENT_ID` (Settings → Secrets and variables → Actions → Variables).
-   The deploy workflow reads it at build time.
+7. For the deployed build, set the environment variable `VITE_GOOGLE_CLIENT_ID`
+   in your **Cloudflare Pages project settings** (Workers & Pages → your project →
+   Settings → Environment variables). Cloudflare injects it at build time. It is the
+   public OAuth Client ID, not a secret — see §3 for the full deploy flow.
 
 ---
 
-## 3. Why `drive.file` and a visible folder
+## 3. Deploy to Cloudflare Pages
+
+Production is hosted on **Cloudflare Pages** using its native **Git integration** —
+Cloudflare watches the GitHub repo and rebuilds on every push. There is no GitHub
+Actions workflow; Cloudflare runs the build itself.
+
+### Step-by-step
+
+1. **Push the repo to GitHub** (Cloudflare connects to the GitHub repository).
+
+2. In the **Cloudflare dashboard**, go to **Workers & Pages → Create → Pages →
+   Connect to Git**, and connect this GitHub repository.
+
+3. Set the build configuration:
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+
+4. Under the project's **Settings → Environment variables**, add:
+
+   ```
+   VITE_GOOGLE_CLIENT_ID = <your-client-id>.apps.googleusercontent.com
+   ```
+
+   This is the **public** OAuth Client ID (not a secret) — the same value you put in
+   your local `.env`. Cloudflare injects it into the static build.
+
+5. After the **first deploy**, Cloudflare assigns a
+   `https://<project>.pages.dev` origin. Add that exact origin to the Google OAuth
+   client's **Authorized JavaScript origins** in Google Cloud Console (see §2, step 3),
+   or GIS will reject the production sign-in.
+
+6. **Why Cloudflare Pages and not GitHub Pages?** Google Identity Services' OAuth token
+   popup requires the app to be served with a
+   `Cross-Origin-Opener-Policy: same-origin-allow-popups` response header, or the
+   browser severs the opener↔popup link and Drive auth fails. **GitHub Pages cannot
+   send custom response headers**, so production Drive OAuth was broken there. Cloudflare
+   Pages supplies the header via `public/_headers` (copied to the build output root as
+   `dist/_headers`), which is why the app moved hosts.
+
+---
+
+## 4. Why `drive.file` and a visible folder
 
 - **`drive.file` only (least privilege):** the app can only touch files it created.
   This keeps the OAuth verification posture light and means a compromised app token
