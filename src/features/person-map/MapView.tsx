@@ -58,6 +58,7 @@ import {
   type DraftShape,
   type DrawState,
 } from './editor/useToolMode';
+import { normalizeBox, marqueeHits } from './editor/marquee';
 import styles from './MapView.module.css';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB cap (UI-SPEC A10)
@@ -73,6 +74,13 @@ const MARKER_HALF_EXTENT = 48;
 
 /** The default preset a freshly-drawn shape carries (the generic "Stone" room; D-03). */
 const DEFAULT_PRESET = 'stone';
+
+/**
+ * The extent (stage-container px) a marquee band must EXCEED in width or height before it counts
+ * as a drag rather than a click. Below it the release changes no selection at all, so an ordinary
+ * empty-canvas click still deselects and a stray click can never build a delete set (T-QT-01).
+ */
+const MARQUEE_MIN_DRAG = 3;
 
 /**
  * Resolve the layer id a new shape attaches to. A map created via `createMap` starts with an
@@ -337,6 +345,7 @@ export function MapView({
     setDraw,
     setTwoFingerActive,
     setMiddlePanning,
+    setMarqueeActive,
   } = toolMode;
 
   // ── Middle-button pan (quick-260821-nac) ────────────────────────────────────────────────────
@@ -381,6 +390,45 @@ export function MapView({
     [setDraw],
   );
 
+  // ── Marquee (rubber-band) selection (quick-260821-nac) ──────────────────────────────────────
+  // The live band, in STAGE-CONTAINER px (what `stage.getPointerPosition()` returns). Mirrored
+  // into a ref for exactly the reason `drawRef` is: a fast press-move-release must never read a
+  // stale render-closure value on the release that finalizes it.
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
+    null,
+  );
+  const marqueeRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const setMarqueeTracked = useCallback(
+    (next: { x0: number; y0: number; x1: number; y1: number } | null) => {
+      marqueeRef.current = next;
+      setMarquee(next);
+      // The band owns the Stage for its duration — no panning underneath it.
+      setMarqueeActive(next !== null);
+    },
+    [setMarqueeActive],
+  );
+
+  // D-4: an ADDITIVE multi-selection that sits ALONGSIDE the strictly single-select
+  // selectedShapeId/selectedMarkerId path (which is NOT refactored). Populated only when a band
+  // catches 2+ objects; a 1-hit band sets the existing single-select state instead, so the
+  // Transformer and StylePopover attach through the path they already use.
+  const [marqueeSelection, setMarqueeSelection] = useState<{
+    shapeIds: string[];
+    markerIds: string[];
+  }>({ shapeIds: [], markerIds: [] });
+  const marqueeShapeIdSet = useMemo(
+    () => new Set(marqueeSelection.shapeIds),
+    [marqueeSelection.shapeIds],
+  );
+  const marqueeMarkerIdSet = useMemo(
+    () => new Set(marqueeSelection.markerIds),
+    [marqueeSelection.markerIds],
+  );
+
+  // Set on the release that ended a real band, and consumed by the Stage onClick handler: Konva
+  // raises a click on that same release, which would otherwise wipe the selection just made.
+  const suppressStageClickRef = useRef(false);
+
   // The currently-selected shape id (opens the StylePopover).
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
 
@@ -407,15 +455,20 @@ export function MapView({
     setSelectedNode(null);
     setSelectedMarkerId(null);
     setSelectedShapeId(null);
+    // The additive marquee selection clears with everything else (D-4).
+    setMarqueeSelection({ shapeIds: [], markerIds: [] });
   }, []);
 
-  // Delete one shape from the active map's `shapes` array (via updateMapShapes — never straight to
-  // Dexie) and clear the selection so the just-detached Transformer/StylePopover close cleanly. Shared
-  // by the keyboard Delete/Backspace handler and the StylePopover Delete button.
-  const deleteShape = useCallback(
-    (shapeId: string) => {
-      if (!map) return;
-      void updateMapShapes(map.id, (shapes) => shapes.filter((s) => s.id !== shapeId));
+  // Delete shapes from the active map's `shapes` array (via updateMapShapes — never straight to
+  // Dexie) and clear the selection so the just-detached Transformer/StylePopover close cleanly.
+  // Shared by the keyboard Delete/Backspace handler and the StylePopover Delete button. Takes a
+  // LIST so a marquee selection is removed in ONE write rather than N racing ones; the filter runs
+  // against the FRESHLY-READ array (the WR-01 rationale) so a concurrent edit isn't clobbered.
+  const deleteShapes = useCallback(
+    (shapeIds: string[]) => {
+      if (!map || shapeIds.length === 0) return;
+      const doomed = new Set(shapeIds);
+      void updateMapShapes(map.id, (shapes) => shapes.filter((s) => !doomed.has(s.id)));
       clearSelection();
     },
     [map, clearSelection],
@@ -476,6 +529,64 @@ export function MapView({
     if (layers.length === 0) return null;
     return layers.slice().sort((a, b) => b.order - a.order)[0].id;
   }, [activeLayerId, layers]);
+
+  // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
+  // markers BEFORE rendering them (so they are never mounted as Konva nodes). Hidden-layer markers
+  // are already excluded by `orderObjectsForRender`; the cull box is the composed stage point ±
+  // MARKER_HALF_EXTENT.
+  //
+  // These two memos sit HERE — above the pointer handlers rather than down with the render set —
+  // because `finishMarquee` reads them as its hit-test candidate list, and a `useCallback`
+  // dependency array is evaluated at render time (a later `const` would be in its temporal dead
+  // zone). Keeping them culled is also the T-QT-02 mitigation: a marquee release costs what is on
+  // screen, never the whole marker table.
+  const visibleMarkers = useMemo(() => {
+    // IN-01: own exactly the PERSON markers here (portals are rendered by visiblePortals). Filtering
+    // up front — mirroring visiblePortals' kind==='portal' filter — avoids composing + culling every
+    // portal only to render null for it in the JSX below (dead work that obscured the render path).
+    const persons = (markers ?? []).filter((m) => m.kind === 'person');
+    const ordered = orderObjectsForRender(persons, layers);
+    return ordered
+      .map((item) => ({
+        mk: item.object,
+        locked: item.locked,
+        opacity: item.opacity,
+        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
+      }))
+      .filter(({ pos }) => {
+        const box: Rect = {
+          x: pos.x - MARKER_HALF_EXTENT,
+          y: pos.y - MARKER_HALF_EXTENT,
+          width: MARKER_HALF_EXTENT * 2,
+          height: MARKER_HALF_EXTENT * 2,
+        };
+        return culling.isVisible(box);
+      });
+  }, [markers, layers, transform, culling]);
+
+  // The same compose+cull pass for PORTAL markers (kind:'portal'). Portals render as PortalGlyph in
+  // the SAME L1 content layer, composed from IMAGE space through the background transform and culled
+  // off-screen. Person markers (visibleMarkers above) skip portals because they have no personId.
+  const visiblePortals = useMemo(() => {
+    const portals = (markers ?? []).filter((m) => m.kind === 'portal');
+    const ordered = orderObjectsForRender(portals, layers);
+    return ordered
+      .map((item) => ({
+        mk: item.object,
+        locked: item.locked,
+        opacity: item.opacity,
+        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
+      }))
+      .filter(({ pos }) => {
+        const box: Rect = {
+          x: pos.x - MARKER_HALF_EXTENT,
+          y: pos.y - MARKER_HALF_EXTENT,
+          width: MARKER_HALF_EXTENT * 2,
+          height: MARKER_HALF_EXTENT * 2,
+        };
+        return culling.isVisible(box);
+      });
+  }, [markers, layers, transform, culling]);
 
   // Convert a Stage pointer position to IMAGE space (undo the Stage pan/zoom, then the bg transform).
   const pointerToImage = useCallback(
@@ -612,6 +723,20 @@ export function MapView({
       }
       // Anything other than the LEFT button (right-click, back/forward) never reaches a tool.
       if (e.evt.button !== 0) return;
+      // Marquee (rubber-band) selection — Select tool, MOUSE only, starting on EMPTY canvas.
+      //   • `e.target === stage` is what keeps a drag that begins on a marker, portal or shape
+      //     flowing to that object's OWN drag handler: the object moves and no band appears.
+      //   • the pointerType test is what preserves single-finger touch panning (D-3) — touch and
+      //     pen keep today's Select-mode `stageDraggable` empty-canvas pan untouched. Mouse
+      //     panning is intentionally replaced by the middle-drag gesture above.
+      if (tool === 'select' && e.evt.pointerType === 'mouse' && e.target === stage) {
+        const pos = stage.getPointerPosition();
+        if (!pos) return;
+        // Kill any Konva drag this press armed, so the Stage can't pan out from under the band.
+        stage.stopDrag();
+        setMarqueeTracked({ x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
+        return;
+      }
       if (tool === 'portal') {
         const at = pointerToImage(stage);
         if (at) void placePortal(at);
@@ -649,13 +774,21 @@ export function MapView({
       if (!start) return;
       setDrawTracked(beginDraw(tool, start));
     },
-    [tool, pointerToImage, setDrawTracked, placePortal, setTool, beginMiddlePan],
+    [tool, pointerToImage, setDrawTracked, placePortal, setTool, beginMiddlePan, setMarqueeTracked],
   );
 
   const handlePointerMove = useCallback(
     (e: Konva.KonvaEventObject<PointerEvent>) => {
       // A middle-button pan owns the pointer: never let it update (or later commit) a draw.
       if (middlePanRef.current) return;
+      // A live band just tracks its second corner — hit-testing waits for the release (T-QT-02).
+      const band = marqueeRef.current;
+      if (band) {
+        const stage = e.target.getStage();
+        const pos = stage?.getPointerPosition();
+        if (pos) setMarqueeTracked({ ...band, x1: pos.x, y1: pos.y });
+        return;
+      }
       const current = drawRef.current;
       if (!current) return;
       const stage = e.target.getStage();
@@ -664,13 +797,79 @@ export function MapView({
       if (!at) return;
       setDrawTracked(updateDraw(current, at));
     },
-    [pointerToImage, setDrawTracked],
+    [pointerToImage, setDrawTracked, setMarqueeTracked],
   );
+
+  // Finalize an in-progress marquee band. Reads and IMMEDIATELY nulls `marqueeRef`, so calling it
+  // twice (Stage pointer-up plus the window safety net below) is harmless.
+  const finishMarquee = useCallback(() => {
+    const band = marqueeRef.current;
+    if (!band) return;
+    setMarqueeTracked(null);
+
+    const dx = Math.abs(band.x1 - band.x0);
+    const dy = Math.abs(band.y1 - band.y0);
+    // At or below the threshold this was a click, not a drag: change nothing and leave
+    // suppressStageClickRef alone so the ordinary empty-canvas deselect still runs.
+    if (dx <= MARQUEE_MIN_DRAG && dy <= MARQUEE_MIN_DRAG) return;
+
+    const box = normalizeBox({ x: band.x0, y: band.y0 }, { x: band.x1, y: band.y1 });
+    // T-QT-02: candidates come from the ALREADY-CULLED memos, so the cost is bounded by what is on
+    // screen, never by the marker table size.
+    const candidates = [...visibleMarkers, ...visiblePortals].map(({ mk, pos }) => ({
+      id: mk.id,
+      pos,
+    }));
+    const hits = marqueeHits(box, map?.shapes ?? [], candidates, transform, MARKER_HALF_EXTENT);
+    const total = hits.shapeIds.length + hits.markerIds.length;
+    // Konva raises a click on this very release; consume it so it can't undo what we just selected.
+    suppressStageClickRef.current = true;
+
+    // D-4 release rule.
+    if (total === 0) {
+      clearSelection();
+      return;
+    }
+    if (total === 1) {
+      // Exactly one hit behaves EXACTLY like a click on that object: the existing single-select
+      // state is set, so the Transformer and StylePopover attach through the existing onNodeRef
+      // path with no special-casing.
+      setMarqueeSelection({ shapeIds: [], markerIds: [] });
+      setEditingBackground(false);
+      if (hits.shapeIds.length === 1) {
+        setSelectedShapeId(hits.shapeIds[0]);
+        setSelectedMarkerId(null);
+      } else {
+        setSelectedMarkerId(hits.markerIds[0]);
+        setSelectedShapeId(null);
+      }
+      return;
+    }
+    // 2+ hits: the additive multi-selection only. Every hit renders its amber selected outline and
+    // Delete removes all selected SHAPES in one write; no Transformer attaches (the L2 overlay is
+    // single-node by construction) and no StylePopover opens.
+    setMarqueeSelection(hits);
+    setSelectedShapeId(null);
+    setSelectedMarkerId(null);
+    setSelectedNode(null);
+  }, [
+    setMarqueeTracked,
+    visibleMarkers,
+    visiblePortals,
+    map?.shapes,
+    transform,
+    clearSelection,
+  ]);
 
   const handlePointerUp = useCallback(() => {
     // A middle-button pan owns the pointer — its release is handled by the window listener below
     // and must never commit a shape.
     if (middlePanRef.current) return;
+    // A band finalizes on release, before any draw-commit path.
+    if (marqueeRef.current) {
+      finishMarquee();
+      return;
+    }
     const current = drawRef.current;
     if (!current) return;
     // Polygon commits on dblclick/Enter, never on pointer-up — otherwise the up of the very first
@@ -679,7 +878,20 @@ export function MapView({
     const committed = commitDraw(current);
     setDrawTracked(null);
     if (committed) commitShape(committed);
-  }, [setDrawTracked, commitShape]);
+  }, [setDrawTracked, commitShape, finishMarquee]);
+
+  // Window-level safety net: releasing OUTSIDE the canvas must still finalize the band (a
+  // Stage-scoped pointerup would never fire and the band would stay stuck to the cursor).
+  useEffect(() => {
+    if (!marquee) return;
+    const onUp = () => finishMarquee();
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [marquee, finishMarquee]);
 
   // Drive the middle-button pan from WINDOW listeners, not Stage ones: that is precisely what makes
   // a release OUTSIDE the canvas still end the pan (a Stage-scoped pointerup would never fire and
@@ -770,14 +982,29 @@ export function MapView({
           t.isContentEditable);
       if (typing) return;
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // A marquee multi-selection deletes every selected SHAPE in one write; otherwise fall back
+        // to the single selected shape. Marker deletion stays out of scope either way.
+        const targets =
+          marqueeSelection.shapeIds.length > 0
+            ? marqueeSelection.shapeIds
+            : selectedShapeId
+              ? [selectedShapeId]
+              : [];
+        if (targets.length === 0) return;
         e.preventDefault();
-        deleteShape(selectedShapeId);
+        deleteShapes(targets);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlePolygonClose, setDrawTracked, selectedShapeId, deleteShape]);
+  }, [
+    handlePolygonClose,
+    setDrawTracked,
+    selectedShapeId,
+    marqueeSelection.shapeIds,
+    deleteShapes,
+  ]);
 
   // Two-finger touch always pans/pinches (RESEARCH Pattern 6); the second touch landing kills any
   // in-flight single-finger draw so a pinch never leaves a stray preview (Pitfall 4).
@@ -838,57 +1065,8 @@ export function MapView({
     [map?.shapes, layers],
   );
 
-  // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
-  // markers BEFORE rendering them (so they are never mounted as Konva nodes). Hidden-layer markers
-  // are already excluded by `orderObjectsForRender`; the cull box is the composed stage point ±
-  // MARKER_HALF_EXTENT.
-  const visibleMarkers = useMemo(() => {
-    // IN-01: own exactly the PERSON markers here (portals are rendered by visiblePortals). Filtering
-    // up front — mirroring visiblePortals' kind==='portal' filter — avoids composing + culling every
-    // portal only to render null for it in the JSX below (dead work that obscured the render path).
-    const persons = (markers ?? []).filter((m) => m.kind === 'person');
-    const ordered = orderObjectsForRender(persons, layers);
-    return ordered
-      .map((item) => ({
-        mk: item.object,
-        locked: item.locked,
-        opacity: item.opacity,
-        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
-      }))
-      .filter(({ pos }) => {
-        const box: Rect = {
-          x: pos.x - MARKER_HALF_EXTENT,
-          y: pos.y - MARKER_HALF_EXTENT,
-          width: MARKER_HALF_EXTENT * 2,
-          height: MARKER_HALF_EXTENT * 2,
-        };
-        return culling.isVisible(box);
-      });
-  }, [markers, layers, transform, culling]);
-
-  // The same compose+cull pass for PORTAL markers (kind:'portal'). Portals render as PortalGlyph in
-  // the SAME L1 content layer, composed from IMAGE space through the background transform and culled
-  // off-screen. Person markers (visibleMarkers above) skip portals because they have no personId.
-  const visiblePortals = useMemo(() => {
-    const portals = (markers ?? []).filter((m) => m.kind === 'portal');
-    const ordered = orderObjectsForRender(portals, layers);
-    return ordered
-      .map((item) => ({
-        mk: item.object,
-        locked: item.locked,
-        opacity: item.opacity,
-        pos: imageToStage({ x: item.object.x, y: item.object.y }, transform),
-      }))
-      .filter(({ pos }) => {
-        const box: Rect = {
-          x: pos.x - MARKER_HALF_EXTENT,
-          y: pos.y - MARKER_HALF_EXTENT,
-          width: MARKER_HALF_EXTENT * 2,
-          height: MARKER_HALF_EXTENT * 2,
-        };
-        return culling.isVisible(box);
-      });
-  }, [markers, layers, transform, culling]);
+  // `visibleMarkers` / `visiblePortals` are declared ABOVE, next to the layer resolution, because
+  // the marquee release (`finishMarquee`) reads them as its candidate list.
 
   // The set of map ids that currently exist (drives the deleted-target affordance + label name). A
   // portal whose `targetMapId` is not in this set shows the muted glyph + the deleted message on
@@ -1040,6 +1218,12 @@ export function MapView({
             // Konva raises a synthetic click on the release of ANY button, so without this guard a
             // middle-button pan (or a right-click) would wipe the curator's selection.
             if (e.evt.button !== 0) return;
+            // Konva also raises a click on the release that ENDED a marquee band. Consume it, or
+            // the empty-canvas deselect below would immediately wipe the selection just made.
+            if (suppressStageClickRef.current) {
+              suppressStageClickRef.current = false;
+              return;
+            }
             if (e.target === e.target.getStage()) {
               if (tool === 'polygon' && drawRef.current) return;
               onSelect('');
@@ -1105,7 +1289,9 @@ export function MapView({
                   map={map!}
                   shape={shape}
                   transform={transform}
-                  selected={shape.id === selectedShapeId}
+                  // Single-select OR part of a marquee multi-selection — the existing `selected`
+                  // prop is simply widened, so ShapeNode itself is untouched (D-4).
+                  selected={shape.id === selectedShapeId || marqueeShapeIdSet.has(shape.id)}
                   onSelect={(id) => {
                     // Selecting a shape is single-select: clear any marker selection, exit bg-edit.
                     setSelectedShapeId(id);
@@ -1138,7 +1324,7 @@ export function MapView({
                     person={person}
                     position={pos}
                     transform={transform}
-                    selected={person.id === selectedPersonId}
+                    selected={person.id === selectedPersonId || marqueeMarkerIdSet.has(mk.id)}
                     showLabels={showLabels}
                     labelColor={appearance.labelColor}
                     onDragMove={handleMarkerDragMove}
@@ -1169,7 +1355,7 @@ export function MapView({
                   marker={mk}
                   position={pos}
                   transform={transform}
-                  selected={mk.id === selectedMarkerId}
+                  selected={mk.id === selectedMarkerId || marqueeMarkerIdSet.has(mk.id)}
                   targetExists={!!mk.targetMapId && mapsById.has(mk.targetMapId)}
                   showLabels={showLabels}
                   targetName={mk.targetMapId ? mapsById.get(mk.targetMapId) : undefined}
@@ -1197,6 +1383,23 @@ export function MapView({
         </Stage>
       )}
 
+      {/* The marquee band — a DOM overlay sibling, NOT a Konva node. `stage.getPointerPosition()`
+          already returns STAGE-CONTAINER pixels, which is the same box this root div occupies, so
+          the band needs no transform composition and stays a constant-weight 1px outline at any
+          zoom (a Konva rect would scale with the Stage). */}
+      {marquee && (
+        <div
+          className={styles.marquee}
+          data-testid="marquee-rect"
+          style={{
+            left: Math.min(marquee.x0, marquee.x1),
+            top: Math.min(marquee.y0, marquee.y1),
+            width: Math.abs(marquee.x1 - marquee.x0),
+            height: Math.abs(marquee.y1 - marquee.y0),
+          }}
+        />
+      )}
+
       {/* Style popover — opens when a shape is selected; closing it clears the selection. */}
       {map && (
         <StylePopover
@@ -1207,7 +1410,7 @@ export function MapView({
           map={map}
           shape={selectedShape}
           onDelete={() => {
-            if (selectedShape) deleteShape(selectedShape.id);
+            if (selectedShape) deleteShapes([selectedShape.id]);
           }}
         />
       )}

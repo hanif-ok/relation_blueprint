@@ -105,3 +105,68 @@ test('a middle-button drag pans the Stage even with a draw tool armed, and commi
   }, mapId);
   expect(shapeCount).toBe(0);
 });
+
+test('a Select-tool left drag on empty canvas marquee-selects, and Delete removes every hit shape', async ({
+  page,
+}) => {
+  const mapId = await seedMap(page);
+
+  // Seed two well-separated rects on one layer so a single band can span BOTH of them. At the
+  // identity background transform image space IS stage space (and, with the Stage unpanned at
+  // scale 1, stage space is canvas-relative px) — so these occupy 200,300 → 280,360 and
+  // 400,420 → 480,480.
+  await page.evaluate(async (id) => {
+    const rb = window.__rb!;
+    const layer = { id: 'layer-0', name: 'Markers', visible: true, locked: false, order: 0 };
+    const mk = (sid: string, x: number, y: number) => ({
+      id: sid,
+      layerId: layer.id,
+      kind: 'rect' as const,
+      x,
+      y,
+      width: 80,
+      height: 60,
+      rotation: 0,
+      preset: 'stone',
+      fill: true,
+    });
+    await rb.updateMap(id, {
+      shapes: [mk('shape-a', 200, 300), mk('shape-b', 400, 420)],
+      layers: [layer],
+    });
+  }, mapId);
+
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+  const canvas = page.locator('[data-testid="map-view"] canvas').first();
+  await expect(canvas).toBeVisible({ timeout: 15_000 });
+
+  // Start on EMPTY canvas above-left of both shapes and drag past the far corner of both. The
+  // default tool is Select, so this is the marquee gesture.
+  //
+  // The start point must clear the floating DOM chrome: the editor toolbar column (map switcher +
+  // breadcrumb + tool palette) overlays the TOP-LEFT of the canvas out to roughly y=135, and the
+  // LayersPanel docks 248px down the RIGHT edge. A press landing on either goes to that DOM node,
+  // never to the Stage, and no gesture starts at all.
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + 150, box.y + 260);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 380, { steps: 5 });
+  // The band is a DOM overlay, visible for the duration of the drag.
+  await expect(page.locator('[data-testid="marquee-rect"]')).toBeVisible({ timeout: 5_000 });
+  await page.mouse.move(box.x + 560, box.y + 520, { steps: 5 });
+  await page.mouse.up();
+  // …and gone once the band is released.
+  await expect(page.locator('[data-testid="marquee-rect"]')).toHaveCount(0);
+
+  // Both shapes are now marquee-selected; one Delete removes them in a single write.
+  await page.keyboard.press('Delete');
+  await page.waitForFunction(
+    async (id) => {
+      const m = await window.__rb!.db.maps.get(id);
+      return (m?.shapes.length ?? 0) === 0;
+    },
+    mapId,
+    { timeout: 15_000 },
+  );
+});
