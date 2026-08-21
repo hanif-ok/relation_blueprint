@@ -708,7 +708,11 @@ export function MapView({
       // Middle button (1) starts a pan whatever the armed tool is; the in-progress draw state is
       // deliberately left untouched (D-2) — panning mid-polygon to reach an off-screen vertex is a
       // legitimate workflow, and the rubber band simply freezes while the button is held.
-      if (e.evt.button === 1) {
+      //
+      // `e.evt` is typed non-optional but is genuinely absent on a PROGRAMMATICALLY fired event
+      // (`stage.fire('pointerdown', …)`), so every read below is guarded; an event with no native
+      // counterpart is treated as a plain left press.
+      if (e.evt?.button === 1) {
         e.evt.preventDefault();
         // Kill any Konva drag this same press may have armed (the Pitfall-4 treatment the
         // two-finger touch handler already uses) so nothing pans underneath the manual gesture.
@@ -722,14 +726,14 @@ export function MapView({
         return;
       }
       // Anything other than the LEFT button (right-click, back/forward) never reaches a tool.
-      if (e.evt.button !== 0) return;
+      if (e.evt && e.evt.button !== 0) return;
       // Marquee (rubber-band) selection — Select tool, MOUSE only, starting on EMPTY canvas.
       //   • `e.target === stage` is what keeps a drag that begins on a marker, portal or shape
       //     flowing to that object's OWN drag handler: the object moves and no band appears.
       //   • the pointerType test is what preserves single-finger touch panning (D-3) — touch and
       //     pen keep today's Select-mode `stageDraggable` empty-canvas pan untouched. Mouse
       //     panning is intentionally replaced by the middle-drag gesture above.
-      if (tool === 'select' && e.evt.pointerType === 'mouse' && e.target === stage) {
+      if (tool === 'select' && e.evt?.pointerType === 'mouse' && e.target === stage) {
         const pos = stage.getPointerPosition();
         if (!pos) return;
         // Kill any Konva drag this press armed, so the Stage can't pan out from under the band.
@@ -1235,7 +1239,12 @@ export function MapView({
           onClick={(e) => {
             // Konva raises a synthetic click on the release of ANY button, so without this guard a
             // middle-button pan (or a right-click) would wipe the curator's selection.
-            if (e.evt.button !== 0) return;
+            //
+            // `e.evt` is typed non-optional but is genuinely absent when a click is raised
+            // PROGRAMMATICALLY (`node.fire('click', { target: node }, true)`) rather than by the
+            // browser — reading `.button` off it then throws and kills the whole handler chain.
+            // Treat a synthetic click as a left click, which is what it stands in for.
+            if (e.evt && e.evt.button !== 0) return;
             // Konva also raises a click on the release that ENDED a marquee band. Consume it, or
             // the empty-canvas deselect below would immediately wipe the selection just made.
             if (suppressStageClickRef.current) {
