@@ -877,8 +877,21 @@ export function MapView({
     if (current.kind === 'polygon') return;
     const committed = commitDraw(current);
     setDrawTracked(null);
-    if (committed) commitShape(committed);
-  }, [setDrawTracked, commitShape, finishMarquee]);
+    if (committed) {
+      commitShape(committed);
+      // One-shot draw: a COMMITTED shape re-arms Select, mirroring what placePortal and the Person
+      // tool already do. Only on a non-null commit (D-6) — a degenerate/stray drag deliberately
+      // keeps the drawing tool armed rather than silently disarming the curator.
+      //
+      // Order matters: setDrawTracked(null) above already cleared the mirrored ref, so setTool's
+      // own internal setDraw(null) is a harmless no-op. Reversed, setTool would discard the draft
+      // from state while drawRef still held it.
+      //
+      // commitShape has already run setSelectedShapeId, so the curator lands on Select with the
+      // shape they just drew selected and its StylePopover open — the intended end state.
+      setTool('select');
+    }
+  }, [setDrawTracked, commitShape, finishMarquee, setTool]);
 
   // Window-level safety net: releasing OUTSIDE the canvas must still finalize the band (a
   // Stage-scoped pointerup would never fire and the band would stay stuck to the cursor).
@@ -948,8 +961,13 @@ export function MapView({
     if (!active || active.kind !== 'polygon') return;
     const committed = closePolygon(active);
     setDrawTracked(null);
-    if (committed) commitShape(committed);
-  }, [setDrawTracked, commitShape]);
+    if (committed) {
+      commitShape(committed);
+      // Same one-shot rule as the drag-draw path above: a CLOSED polygon re-arms Select, while an
+      // Escape-cancelled or under-three-vertex polygon leaves the Polygon tool armed (D-6).
+      setTool('select');
+    }
+  }, [setDrawTracked, commitShape, setTool]);
 
   // Keyboard interactions on the editor surface:
   //   • Polygon in progress → Enter closes+commits, Escape cancels (checked first, independent of

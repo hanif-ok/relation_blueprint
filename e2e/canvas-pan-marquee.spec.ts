@@ -47,6 +47,38 @@ async function suppressPrivacyNotice(page: import('@playwright/test').Page) {
   });
 }
 
+/**
+ * Fire ONE Konva pointer event on the Stage at canvas-relative (x,y) — the `draw-shapes.spec.ts`
+ * mechanism, used for the DRAW gesture because it is deterministic regardless of devicePixelRatio.
+ * Each call is its own `page.evaluate`, which yields a microtask boundary so React flushes the
+ * `setDraw` state between pointerdown → move → up (otherwise the synchronous fires would read a
+ * stale `draw === null` closure on pointerup).
+ */
+async function firePointer(
+  page: import('@playwright/test').Page,
+  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  x: number,
+  y: number,
+) {
+  await page.evaluate(
+    ({ type, x, y }) => {
+      const Konva = (window as unknown as { Konva?: { stages: unknown[] } }).Konva;
+      if (!Konva) throw new Error('Konva global missing');
+      type Stage = {
+        content: HTMLElement;
+        setPointersPositions(evt: unknown): void;
+        fire(evt: string, payload?: unknown, bubble?: boolean): void;
+      };
+      const stage = (Konva.stages as unknown as Stage[])[0];
+      const r = stage.content.getBoundingClientRect();
+      const evt = { clientX: r.left + x, clientY: r.top + y, button: 0, type, preventDefault() {} };
+      stage.setPointersPositions(evt);
+      stage.fire(type, { evt, target: stage }, true);
+    },
+    { type, x, y },
+  );
+}
+
 /** Read the live Stage position through the Konva global (what a pan actually moves). */
 async function stagePosition(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
@@ -169,4 +201,34 @@ test('a Select-tool left drag on empty canvas marquee-selects, and Delete remove
     mapId,
     { timeout: 15_000 },
   );
+});
+
+test('committing a rect draw re-arms the Select tool', async ({ page }) => {
+  const mapId = await seedMap(page);
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rb, undefined, { timeout: 15_000 });
+  await expect(page.locator('[data-testid="map-view"] canvas').first()).toBeVisible({
+    timeout: 15_000,
+  });
+
+  await page.locator('[data-testid="tool-rect"]').click();
+  await expect(page.locator('[data-testid="tool-rect"]')).toHaveAttribute('aria-pressed', 'true');
+
+  // A suprathreshold drag → the shape commits.
+  await firePointer(page, 'pointerdown', 120, 100);
+  await firePointer(page, 'pointermove', 280, 220);
+  await firePointer(page, 'pointerup', 280, 220);
+
+  await page.waitForFunction(
+    async (id) => {
+      const m = await window.__rb!.db.maps.get(id);
+      return (m?.shapes.length ?? 0) >= 1;
+    },
+    mapId,
+    { timeout: 15_000 },
+  );
+
+  // …and the palette is back on Select — the one-shot behaviour Portal/Person already have.
+  await expect(page.locator('[data-testid="tool-select"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-testid="tool-rect"]')).toHaveAttribute('aria-pressed', 'false');
 });
