@@ -124,6 +124,17 @@
   outline-offset: 2px;
 }
 
+/* The marquee (rubber-band) selection rectangle — a DOM overlay positioned in stage-container
+ * pixels, so it stays a constant-weight 1px outline at any zoom (a Konva rect would scale with the
+ * Stage). Non-interactive: it must never swallow the pointer events still driving the drag. */
+.marquee {
+  position: absolute;
+  z-index: var(--z-chrome);
+  pointer-events: none;
+  border: 1px dashed var(--amber);
+  background-color: rgba(200, 116, 43, 0.12); /* --amber (#c8742b) at low alpha */
+}
+
 /* The "markers stay anchored" reassurance chip shown while transforming the background. */
 .bgHint {
   position: absolute;

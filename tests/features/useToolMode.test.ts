@@ -12,7 +12,10 @@
 //   (3) a two-finger gesture forces stageDraggable true even in a draw mode (RESEARCH Pattern 6),
 //   (4) a rect draw (down → move → up) ABOVE the size threshold commits a shape with image-space
 //       geometry; a below-threshold drag commits nothing (degenerate-draw guard, T-03-11),
-//   (5) polygon vertex accumulation + close produces a closed polygon descriptor.
+//   (5) polygon vertex accumulation + close produces a closed polygon descriptor,
+//   (6) an explicit hand-rolled gesture (middle-button pan / marquee band) forces stageDraggable
+//       false ahead of every other rule — including the two-finger override — so Konva's own
+//       drag-and-drop never double-pans alongside it (quick-260821-nac).
 
 import { describe, expect, it } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -74,6 +77,54 @@ describe('useToolMode — tool selection + draggable derivation', () => {
     expect(result.current.stageDraggable).toBe(true);
     act(() => result.current.setTwoFingerActive(false));
     expect(result.current.stageDraggable).toBe(false);
+  });
+
+  it('an explicit hand-rolled gesture (middle pan / marquee) suppresses Konva drag-and-drop', () => {
+    // A hand-rolled gesture OWNS the Stage: the consumer repositions it directly from window
+    // pointer events, so Konva's own drag-and-drop must never run alongside and double-pan.
+    expect(
+      deriveStageDraggable('select', {
+        objectDragging: false,
+        twoFingerActive: false,
+        middlePanning: true,
+      }),
+    ).toBe(false);
+    // …and it OUTRANKS the two-finger always-pans override (an explicit middle pan wins).
+    expect(
+      deriveStageDraggable('rect', {
+        objectDragging: false,
+        twoFingerActive: true,
+        middlePanning: true,
+      }),
+    ).toBe(false);
+    // The marquee band suppresses the Select-mode empty-canvas pan the same way.
+    expect(
+      deriveStageDraggable('select', {
+        objectDragging: false,
+        twoFingerActive: false,
+        marqueeActive: true,
+      }),
+    ).toBe(false);
+    // Both flags are OPTIONAL and default to false, so every pre-existing caller is unchanged.
+    expect(deriveStageDraggable('select', { objectDragging: false, twoFingerActive: false })).toBe(
+      true,
+    );
+  });
+
+  it('the hook reflects middle-pan and marquee activation in stageDraggable', () => {
+    const { result } = renderHook(() => useToolMode());
+    // Select mode normally pans on an empty-canvas drag…
+    expect(result.current.stageDraggable).toBe(true);
+    // …but a middle-button pan takes the Stage over.
+    act(() => result.current.setMiddlePanning(true));
+    expect(result.current.stageDraggable).toBe(false);
+    act(() => result.current.setMiddlePanning(false));
+    expect(result.current.stageDraggable).toBe(true);
+    // The marquee band does the same for its duration.
+    act(() => result.current.setMarqueeActive(true));
+    expect(result.current.stageDraggable).toBe(false);
+    act(() => result.current.setMarqueeActive(false));
+    expect(result.current.stageDraggable).toBe(true);
   });
 });
 
