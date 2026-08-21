@@ -18,6 +18,12 @@
 // `stage.stopDrag()` to kill any in-flight single-finger drag (RESEARCH Pitfall 4). We expose that
 // as a flag/callback seam rather than reaching into Konva so the core stays pure + testable.
 //
+// Two further transient gestures ride the SAME seam (quick-260821-nac): a middle-button pan
+// (`setMiddlePanning`) and a marquee rubber-band selection (`setMarqueeActive`). Both are
+// hand-rolled by the consumer — it repositions the Stage / tracks the band itself — so each forces
+// `stageDraggable` false for its duration, ahead of every other rule including the two-finger
+// override, and Konva's own drag-and-drop never runs alongside them.
+//
 // The geometry helpers (beginDraw/updateDraw/commitDraw/addPolygonVertex/closePolygon) and the
 // `deriveStageDraggable`/`isDrawMode` derivations are PURE and exported so the state machine is
 // unit-tested without a DOM (tests/features/useToolMode.test.ts).
@@ -69,16 +75,29 @@ export function isDrawMode(tool: Tool): boolean {
 /**
  * Derive whether the Konva Stage should be `draggable` from the active tool + transient gesture
  * state. The single most important interaction rule of MAP-02:
+ *   - a HAND-ROLLED gesture (middle-button pan, marquee band) owns the Stage OUTRIGHT — the
+ *     consumer repositions the Stage itself from window pointer events, so Konva's own
+ *     drag-and-drop must not run alongside it and double-pan. Checked FIRST, ahead of everything
+ *     else, so an explicit middle pan even outranks the two-finger override;
  *   - a two-finger gesture ALWAYS pans/pinches (Stage draggable), regardless of tool (Pattern 6);
  *   - otherwise, in a DRAW mode the Stage is NOT draggable so a single-pointer drag DRAWS (Pitfall
  *     3);
  *   - in Select mode the Stage pans on empty-canvas drag, UNLESS an object is mid-drag (then the
  *     object moves, not the Stage).
+ *
+ * `middlePanning`/`marqueeActive` are OPTIONAL and default to false, so every pre-existing caller
+ * keeps its exact behaviour.
  */
 export function deriveStageDraggable(
   tool: Tool,
-  gesture: { objectDragging: boolean; twoFingerActive: boolean },
+  gesture: {
+    objectDragging: boolean;
+    twoFingerActive: boolean;
+    middlePanning?: boolean;
+    marqueeActive?: boolean;
+  },
 ): boolean {
+  if (gesture.middlePanning || gesture.marqueeActive) return false;
   if (gesture.twoFingerActive) return true;
   if (isDrawMode(tool)) return false;
   // select / portal / person: pan on empty canvas, but never while an object is being dragged.
@@ -158,6 +177,17 @@ export interface UseToolMode {
   setTwoFingerActive: (active: boolean) => void;
   /** True while a two-finger gesture is active (the consumer should `stage.stopDrag()` on entry). */
   twoFingerActive: boolean;
+  /**
+   * The consumer toggles this while a HAND-ROLLED middle-button pan is in flight. It forces
+   * `stageDraggable` false so Konva's own drag-and-drop never double-pans alongside the manual
+   * `stage.position()` writes. Modelled on the `setTwoFingerActive` transient-gesture seam.
+   */
+  setMiddlePanning: (active: boolean) => void;
+  /**
+   * The consumer toggles this while a marquee (rubber-band) selection is being dragged. Same
+   * contract as `setMiddlePanning`: the band owns the Stage, so it must not pan underneath.
+   */
+  setMarqueeActive: (active: boolean) => void;
   /** The live in-progress draw state (null when idle). */
   draw: DrawState | null;
   setDraw: (draw: DrawState | null) => void;
@@ -172,6 +202,10 @@ export function useToolMode(): UseToolMode {
   const [tool, setToolState] = useState<Tool>('select');
   const [objectDragging, setObjectDragging] = useState(false);
   const [twoFingerActive, setTwoFingerActive] = useState(false);
+  // Hand-rolled gesture flags — each one takes the Stage over for its duration (see
+  // deriveStageDraggable). Transient only; never persisted.
+  const [middlePanning, setMiddlePanning] = useState(false);
+  const [marqueeActive, setMarqueeActive] = useState(false);
   const [draw, setDraw] = useState<DrawState | null>(null);
 
   // Changing tool always cancels any in-progress draw (e.g. switching mid-polygon).
@@ -181,8 +215,8 @@ export function useToolMode(): UseToolMode {
   }, []);
 
   const stageDraggable = useMemo(
-    () => deriveStageDraggable(tool, { objectDragging, twoFingerActive }),
-    [tool, objectDragging, twoFingerActive],
+    () => deriveStageDraggable(tool, { objectDragging, twoFingerActive, middlePanning, marqueeActive }),
+    [tool, objectDragging, twoFingerActive, middlePanning, marqueeActive],
   );
 
   return {
@@ -193,6 +227,8 @@ export function useToolMode(): UseToolMode {
     setObjectDragging,
     setTwoFingerActive,
     twoFingerActive,
+    setMiddlePanning,
+    setMarqueeActive,
     draw,
     setDraw,
   };

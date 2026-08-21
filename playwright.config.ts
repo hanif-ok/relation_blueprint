@@ -2,10 +2,15 @@ import { defineConfig } from '@playwright/test';
 
 // E2E config. `webServer` builds-and-serves the static app via `vite preview` so the
 // tests exercise the real production bundle (correct base path, real SW once Plan 08
-// lands). The Vite preview port for this project is 4173 (Vite default) under the
-// /relation_blueprint/ base path.
+// lands). The Vite preview port for this project is 4173 (Vite default).
+//
+// BASE_PATH MUST track `vite.config.ts`'s `BASE` const. That moved from the GitHub Pages
+// repo subpath `/relation_blueprint/` to the Cloudflare Pages domain root `/` (commit d2e7d9b);
+// leaving this at the old subpath makes `vite preview` 404 every navigation, so no e2e in this
+// repo can load the app at all.
 const PREVIEW_PORT = 4173;
-const BASE_URL = `http://localhost:${PREVIEW_PORT}/relation_blueprint/`;
+const BASE_PATH = '/';
+const BASE_URL = `http://localhost:${PREVIEW_PORT}${BASE_PATH}`;
 
 export default defineConfig({
   testDir: 'e2e',

@@ -329,7 +329,45 @@ export function MapView({
   // draw vs. pan/select. `stageDraggable` toggles Stage.draggable so a single-pointer drag DRAWS
   // in a draw mode (D-19) but PANS in Select. A two-finger touch always pans/pinches.
   const toolMode = useToolMode();
-  const { tool, setTool, stageDraggable, draw, setDraw, setTwoFingerActive } = toolMode;
+  const {
+    tool,
+    setTool,
+    stageDraggable,
+    draw,
+    setDraw,
+    setTwoFingerActive,
+    setMiddlePanning,
+  } = toolMode;
+
+  // ── Middle-button pan (quick-260821-nac) ────────────────────────────────────────────────────
+  // Hand-rolled rather than left to Konva's drag-and-drop: Konva's default `dragButtons` include
+  // the middle button, so relying on `Stage.draggable` would pan only in Select mode (draw modes
+  // set stageDraggable=false) and would DOUBLE-pan in Select mode. Instead the gesture begins on
+  // the Konva pointerdown and is driven from WINDOW listeners, with `middlePanning` forcing
+  // `stageDraggable` false for its duration.
+  //
+  // Holds the press origin in CLIENT px plus the Stage position at press time, so each move is an
+  // absolute reposition (start + delta) and can never accumulate drift.
+  const middlePanRef = useRef<{
+    clientX: number;
+    clientY: number;
+    stageX: number;
+    stageY: number;
+  } | null>(null);
+  const [middlePanning, setMiddlePanningState] = useState(false);
+  const beginMiddlePan = useCallback(
+    (origin: { clientX: number; clientY: number; stageX: number; stageY: number }) => {
+      middlePanRef.current = origin;
+      setMiddlePanningState(true);
+      setMiddlePanning(true);
+    },
+    [setMiddlePanning],
+  );
+  const endMiddlePan = useCallback(() => {
+    middlePanRef.current = null;
+    setMiddlePanningState(false);
+    setMiddlePanning(false);
+  }, [setMiddlePanning]);
 
   // Mirror the in-progress draw into a ref so the pointer-move/up handlers always read the LIVE
   // draft, never a stale render-closure value. Without this, a fast down→move→up sequence (or a
@@ -555,6 +593,25 @@ export function MapView({
     (e: Konva.KonvaEventObject<PointerEvent>) => {
       const stage = e.target.getStage();
       if (!stage) return;
+      // Button routing runs FIRST, before any tool branch, so no tool ever sees a non-left press.
+      // Middle button (1) starts a pan whatever the armed tool is; the in-progress draw state is
+      // deliberately left untouched (D-2) — panning mid-polygon to reach an off-screen vertex is a
+      // legitimate workflow, and the rubber band simply freezes while the button is held.
+      if (e.evt.button === 1) {
+        e.evt.preventDefault();
+        // Kill any Konva drag this same press may have armed (the Pitfall-4 treatment the
+        // two-finger touch handler already uses) so nothing pans underneath the manual gesture.
+        stage.stopDrag();
+        beginMiddlePan({
+          clientX: e.evt.clientX,
+          clientY: e.evt.clientY,
+          stageX: stage.x(),
+          stageY: stage.y(),
+        });
+        return;
+      }
+      // Anything other than the LEFT button (right-click, back/forward) never reaches a tool.
+      if (e.evt.button !== 0) return;
       if (tool === 'portal') {
         const at = pointerToImage(stage);
         if (at) void placePortal(at);
@@ -592,11 +649,13 @@ export function MapView({
       if (!start) return;
       setDrawTracked(beginDraw(tool, start));
     },
-    [tool, pointerToImage, setDrawTracked, placePortal, setTool],
+    [tool, pointerToImage, setDrawTracked, placePortal, setTool, beginMiddlePan],
   );
 
   const handlePointerMove = useCallback(
     (e: Konva.KonvaEventObject<PointerEvent>) => {
+      // A middle-button pan owns the pointer: never let it update (or later commit) a draw.
+      if (middlePanRef.current) return;
       const current = drawRef.current;
       if (!current) return;
       const stage = e.target.getStage();
@@ -609,6 +668,9 @@ export function MapView({
   );
 
   const handlePointerUp = useCallback(() => {
+    // A middle-button pan owns the pointer — its release is handled by the window listener below
+    // and must never commit a shape.
+    if (middlePanRef.current) return;
     const current = drawRef.current;
     if (!current) return;
     // Polygon commits on dblclick/Enter, never on pointer-up — otherwise the up of the very first
@@ -618,6 +680,54 @@ export function MapView({
     setDrawTracked(null);
     if (committed) commitShape(committed);
   }, [setDrawTracked, commitShape]);
+
+  // Drive the middle-button pan from WINDOW listeners, not Stage ones: that is precisely what makes
+  // a release OUTSIDE the canvas still end the pan (a Stage-scoped pointerup would never fire and
+  // the Stage would stay stuck to the cursor). Mounted only while the gesture is live.
+  useEffect(() => {
+    if (!middlePanning) return;
+    const onMove = (ev: PointerEvent) => {
+      const origin = middlePanRef.current;
+      const stage = stageRef.current;
+      if (!origin || !stage) return;
+      // Absolute reposition from the press origin — start + total delta, never incremental.
+      stage.position({
+        x: origin.stageX + (ev.clientX - origin.clientX),
+        y: origin.stageY + (ev.clientY - origin.clientY),
+      });
+      stage.batchDraw();
+    };
+    const onEnd = () => {
+      endMiddlePan();
+      // The viewport moved — refresh the cull rect exactly as handleWheel/handleDragEnd do.
+      if (stageRef.current) culling.recompute(stageRef.current);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+    };
+  }, [middlePanning, endMiddlePan, culling]);
+
+  // Suppress the platform autoscroll widget (the four-way scroll cursor) on a middle press over the
+  // canvas. This MUST be a native `mousedown`/`auxclick` listener: preventing the default on the
+  // POINTER event does not suppress the compatibility mouse event the widget is triggered from.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const suppress = (ev: MouseEvent) => {
+      if (ev.button === 1) ev.preventDefault();
+    };
+    el.addEventListener('mousedown', suppress);
+    el.addEventListener('auxclick', suppress);
+    return () => {
+      el.removeEventListener('mousedown', suppress);
+      el.removeEventListener('auxclick', suppress);
+    };
+  }, []);
 
   // Close + commit an in-progress polygon (dblclick / double-tap, or Enter via the keydown effect).
   // closePolygon returns null for < 3 vertices (degenerate) — then we just clear the draft.
@@ -927,6 +1037,9 @@ export function MapView({
           // Click on empty canvas (not a marker/shape) clears selection (D-15) — EXCEPT while placing
           // polygon vertices, where each vertex is itself an empty-canvas click and must not deselect.
           onClick={(e) => {
+            // Konva raises a synthetic click on the release of ANY button, so without this guard a
+            // middle-button pan (or a right-click) would wipe the curator's selection.
+            if (e.evt.button !== 0) return;
             if (e.target === e.target.getStage()) {
               if (tool === 'polygon' && drawRef.current) return;
               onSelect('');
