@@ -22,7 +22,15 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { MapPin } from 'lucide-react';
 import { db } from '@/db/schema';
 import type { BackgroundTransform, Layer as MapLayer, Marker, Shape } from '@/domain/types';
-import { createMap, updateMap, updateMapFrom, updateMapShapes, upsertMarker } from '@/db/repository';
+import {
+  createMap,
+  deleteMarker,
+  updateMap,
+  updateMapFrom,
+  updateMapShapes,
+  upsertMarker,
+} from '@/db/repository';
+import { ConfirmDialog } from '@/features/common/ConfirmDialog';
 import { storeMedia } from '@/media/mediaManager';
 import { colors, zonePresets } from '@/app/tokens';
 import { AvatarMarker } from './AvatarMarker';
@@ -59,6 +67,8 @@ import {
   type DrawState,
 } from './editor/useToolMode';
 import { normalizeBox, marqueeHits } from './editor/marquee';
+import { deleteTargets, selectionCount } from './editor/multiSelect';
+import { MultiSelectBar } from './editor/MultiSelectBar';
 import styles from './MapView.module.css';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB cap (UI-SPEC A10)
@@ -425,6 +435,15 @@ export function MapView({
     [marqueeSelection.markerIds],
   );
 
+  // D-1: the delete set a 2+ marquee selection has proposed, held while the blocking ConfirmDialog
+  // is open. Non-null == the dialog is showing. There is no undo in this app, so a bulk delete —
+  // the first gesture that can remove MARKERS en masse — is never allowed to run un-confirmed
+  // (T-NFS-01). The single-selected-shape delete does NOT come through here.
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<{
+    shapeIds: string[];
+    markerIds: string[];
+  } | null>(null);
+
   // Set on the release that ended a real band, and consumed by the Stage onClick handler: Konva
   // raises a click on that same release, which would otherwise wipe the selection just made.
   const suppressStageClickRef = useRef(false);
@@ -474,6 +493,21 @@ export function MapView({
     [map, clearSelection],
   );
 
+  // Remove MARKER rows (person placements and portals) — the marker half of a bulk marquee delete.
+  //
+  // `deleteMarker` removes ONLY the `db.markers` row. The referenced PERSON (or a portal's target
+  // map) survives untouched in the database and on every other map: this is the delete-vs-remove
+  // distinction `e2e/delete-vs-remove.spec.ts` guards — deleting a person destroys the person
+  // everywhere, removing a placement drops just this pin. Do not "simplify" this into a person
+  // delete.
+  //
+  // One `deleteMarker` per id rather than a bulk `bulkDelete`, because each call is the repository's
+  // validate→emit path that keeps the sync journal correct (the same reason every other write in
+  // this file routes through the repository rather than straight to Dexie).
+  const deleteMarkers = useCallback((markerIds: string[]) => {
+    for (const id of markerIds) void deleteMarker(id);
+  }, []);
+
   // D-20: show person-name labels on the canvas — driven by the LayersPanel toggle (default hidden).
   const [showLabels, setShowLabels] = useState(false);
 
@@ -519,7 +553,14 @@ export function MapView({
   );
 
   // D-04: the layers the content render is organized by (always at least the default layer).
-  const layers = map?.layers ?? [];
+  //
+  // MEMOIZED because six hooks below take `layers` as a dependency: as a bare `??` expression it
+  // produced a FRESH `[]` on every render whenever `map` was still loading, invalidating all of
+  // them each pass (react-hooks/exhaustive-deps flags exactly this). Memoizing on `map?.layers`
+  // makes the empty case referentially stable; when a map is loaded the identity already tracks the
+  // stored array. Behaviour is unchanged — this is purely the referential stability those hooks
+  // already assumed.
+  const layers = useMemo(() => map?.layers ?? [], [map?.layers]);
 
   // D-04: the ACTIVE layer — new shapes/markers land on it. Resolves to the topmost layer when unset
   // or stale (the selected layer was deleted). The panel sets this when a row is selected/created.
@@ -529,6 +570,48 @@ export function MapView({
     if (layers.length === 0) return null;
     return layers.slice().sort((a, b) => b.order - a.order)[0].id;
   }, [activeLayerId, layers]);
+
+  // The ids of every object (shape or marker/portal) whose resolved layer is LOCKED.
+  //
+  // A locked object renders `listening={false}`, so it cannot be clicked or dragged — but the
+  // marquee hit-test is DATA-driven (`marquee.ts`), running over `map.shapes` and the composed
+  // marker positions rather than over the Konva scene graph. A band therefore CAN catch a
+  // locked-layer object, and without this set a group Delete / group move / bulk re-layer would
+  // mutate objects the curator explicitly locked — silently defeating the lock. Every group action
+  // below filters against this set, so "locked" means the same thing for a bulk gesture as it does
+  // for a click. `resolveLayer` is the same resolver the render path uses, so a dangling layerId
+  // resolves identically here (T-03-14).
+  const lockedObjectIdSet = useMemo(() => {
+    const locked = new Set<string>();
+    if (layers.length === 0) return locked;
+    for (const s of map?.shapes ?? []) {
+      if (resolveLayer({ id: s.id, layerId: s.layerId }, layers)?.locked) locked.add(s.id);
+    }
+    for (const mk of markers ?? []) {
+      if (resolveLayer({ id: mk.id, layerId: mk.layerId }, layers)?.locked) locked.add(mk.id);
+    }
+    return locked;
+  }, [layers, map?.shapes, markers]);
+
+  /**
+   * The ONE delete entry point shared by the Delete/Backspace key and the MultiSelectBar button, so
+   * the two can never drift apart. `deleteTargets` (pure, unit-tested) decides what dies and whether
+   * a confirm is required; locked-layer objects are stripped from the set first (they are
+   * `listening={false}` on the canvas but the band's hit-test is data-driven, so it can still reach
+   * them). A 2+ selection opens the ConfirmDialog; anything else takes today's immediate path.
+   */
+  const requestDelete = useCallback(() => {
+    const targets = deleteTargets(marqueeSelection, selectedShapeId);
+    const shapeIds = targets.shapeIds.filter((id) => !lockedObjectIdSet.has(id));
+    const markerIds = targets.markerIds.filter((id) => !lockedObjectIdSet.has(id));
+    if (shapeIds.length === 0 && markerIds.length === 0) return false;
+    if (targets.requiresConfirm) {
+      setPendingBulkDelete({ shapeIds, markerIds });
+      return true;
+    }
+    deleteShapes(shapeIds);
+    return true;
+  }, [marqueeSelection, selectedShapeId, lockedObjectIdSet, deleteShapes]);
 
   // Compose each marker's IMAGE-space coord onto the background transform, then cull off-screen
   // markers BEFORE rendering them (so they are never mounted as Konva nodes). Hidden-layer markers
@@ -976,9 +1059,12 @@ export function MapView({
   // Keyboard interactions on the editor surface:
   //   • Polygon in progress → Enter closes+commits, Escape cancels (checked first, independent of
   //     whether a form control has focus).
-  //   • Delete / Backspace → remove the selected SHAPE (marker deletion is out of scope). Suppressed
-  //     while typing in a form control (e.g. the StylePopover zone-label input) so editing text never
-  //     nukes the shape.
+  //   • Delete / Backspace → remove the current delete set, as resolved by the pure `deleteTargets`:
+  //     a 2+ marquee selection removes every banded SHAPE and MARKER/PORTAL behind one blocking
+  //     confirm (D-1), while a single selected shape still deletes instantly with no confirm. A lone
+  //     selected MARKER is deliberately NOT deletable from the keyboard (D-2) — removing one
+  //     placement stays the explicit "Remove from this map" action. Suppressed while typing in a
+  //     form control (e.g. the StylePopover zone-label input) so editing text never nukes the shape.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const active = drawRef.current;
@@ -1005,28 +1091,15 @@ export function MapView({
       if (typing) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // A marquee multi-selection deletes every selected SHAPE in one write; otherwise fall back
-        // to the single selected shape. Marker deletion stays out of scope either way.
-        const targets =
-          marqueeSelection.shapeIds.length > 0
-            ? marqueeSelection.shapeIds
-            : selectedShapeId
-              ? [selectedShapeId]
-              : [];
-        if (targets.length === 0) return;
-        e.preventDefault();
-        deleteShapes(targets);
+        // `requestDelete` is the single shared path (key + MultiSelectBar button): it resolves the
+        // set, drops locked-layer objects, and either opens the confirm or deletes immediately. It
+        // returns false when there is nothing to delete, in which case the key is left alone.
+        if (requestDelete()) e.preventDefault();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    handlePolygonClose,
-    setDrawTracked,
-    selectedShapeId,
-    marqueeSelection.shapeIds,
-    deleteShapes,
-  ]);
+  }, [handlePolygonClose, setDrawTracked, requestDelete]);
 
   // Two-finger touch always pans/pinches (RESEARCH Pattern 6); the second touch landing kills any
   // in-flight single-finger draw so a pinch never leaves a stray preview (Pitfall 4).
@@ -1426,6 +1499,43 @@ export function MapView({
           }}
         />
       )}
+
+      {/* Multi-selection action bar (D-6) — mounts ONLY while a band holds 2+ objects. Its Delete
+          runs the SAME `requestDelete` path as the Delete key, so the button and the key can never
+          diverge; it is the touch-reachable affordance for a bulk delete (no hardware Delete key on
+          a tablet), mirroring why StylePopover carries a Delete button of its own. */}
+      {hasMap && (
+        <MultiSelectBar
+          count={selectionCount(marqueeSelection)}
+          onDelete={() => void requestDelete()}
+        />
+      )}
+
+      {/* T-NFS-01 / D-1: the blocking confirm for a bulk delete. Used exactly as ProfileSidebar uses
+          it (safe Cancel takes initial focus). The body spells out the delete-vs-remove distinction
+          so a curator can never mistake "remove these pins" for "delete these people". */}
+      <ConfirmDialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingBulkDelete(null);
+        }}
+        title={`Delete ${
+          (pendingBulkDelete?.shapeIds.length ?? 0) + (pendingBulkDelete?.markerIds.length ?? 0)
+        } selected objects?`}
+        body="Shapes are removed from this map. Placed people and portals are removed from THIS map only — the people, groups and maps they point to stay in your database. This can't be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          const targets = pendingBulkDelete;
+          setPendingBulkDelete(null);
+          if (!targets) return;
+          // Shapes go in ONE updateMapShapes write (the existing fresh-read WR-01 filter); markers
+          // go one deleteMarker per row — the referenced people/groups survive (see deleteMarkers).
+          deleteShapes(targets.shapeIds);
+          deleteMarkers(targets.markerIds);
+          clearSelection();
+        }}
+      />
 
       {/* Style popover — opens when a shape is selected; closing it clears the selection. */}
       {map && (

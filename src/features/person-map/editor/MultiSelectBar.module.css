@@ -1,0 +1,77 @@
+/* MultiSelectBar — the bulk-action chip for a marquee multi-selection.
+ *
+ * Visual language mirrors `.bgHint` in MapView.module.css: a dark, amber-outlined pill floating on
+ * the slate canvas, so the two pieces of Stage chrome read as one family. The single deliberate
+ * difference is that this bar is INTERACTIVE, so it must NOT set `pointer-events: none` — that is
+ * the one property `.bgHint` sets which would break this component entirely.
+ *
+ * Bottom-centre is the only free edge of the Stage (the toolbar column owns top-left, the
+ * LayersPanel the right edge, `.bgHint` top-centre). Colours come from tokens only — never a
+ * literal hex — with the destructive button reusing the --brick language of ConfirmDialog. */
+
+.bar {
+  position: absolute;
+  bottom: var(--space-md);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-chrome);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-family: var(--font-body);
+  background-color: rgba(27, 34, 48, 0.92); /* --slate at chip alpha, matching .bgHint */
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-md);
+  box-shadow: var(--elevation-2);
+}
+
+.count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+  white-space: nowrap;
+}
+
+.layerField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.layerLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+}
+
+.select {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+  background-color: var(--paper);
+  border: var(--border-hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+}
+
+/* Destructive action — the --brick language ConfirmDialog's confirm button uses, since this button
+ * opens exactly that dialog. */
+.delete {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+  background-color: var(--brick);
+  border: 1px solid var(--brick);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+}
+
+.select:focus-visible,
+.delete:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
