@@ -16,9 +16,18 @@
 //
 // Interaction (viewer-only, locked by PROJECT.md): nodes are grabbable (POL-02) but drag is
 // LAYOUT-ONLY — `dragfree` sticky-persists the new position to the `graphPositions` meta row and
-// NEVER mutates `db.people`/`db.relationshipLinks`. A node tap (no movement) still opens its
-// ProfileSidebar through the existing selection→AT bridge (R7); `boxSelectionEnabled={false}` keeps
-// marquee-select off. A "Reset layout" button clears the saved positions and re-runs a fresh `cose`.
+// NEVER mutates `db.people`/`db.groups`/`db.relationshipLinks`. That meta row remains the ONLY
+// thing this whole view writes, and there is no delete or edit affordance anywhere on it.
+//
+// MOUSE GESTURES (quick-260902-nfs, D-7/D-8): a plain left-drag on empty background RUBBER-BAND
+// box-selects (`boxSelectionEnabled` is on, and `userPanningEnabled` is flipped off for the
+// duration of that one mouse gesture — never as a prop, so touch never sees it). Panning moved to
+// MIDDLE-drag and ALT+left-drag, mirroring the Konva map canvas. Single-finger TOUCH panning is
+// unchanged. Dragging any node of a multi-selection moves the whole selection natively, and the
+// per-element `dragfree` is coalesced into exactly ONE position save per gesture. A modifier-click
+// extends the selection WITHOUT opening a profile or re-egoing (D-10). A node tap with no modifier
+// still opens its ProfileSidebar through the existing selection→AT bridge (R7). A "Reset layout"
+// button clears the saved positions and re-runs a fresh `cose`.
 //
 // Ego focus (POL-03, D-10..D-13): opening the graph from a profile — or tapping any node — re-lays
 // the WHOLE graph out concentrically around that ego (ego at centre, nodes ringed by hop-distance
@@ -44,6 +53,12 @@ import { toGraphElements, type GraphPositions } from './graphElements';
 import { graphStyle } from './graphStyle';
 import { clearPositions, loadPositions, partitionCached, savePositions } from './positionCache';
 import { computeHopLevels, concentricValue, type Adjacency } from './egoLayout';
+import {
+  isPanButton,
+  shouldReEgo,
+  shouldSuspendPanning,
+  type GestureEvent,
+} from './graphGesture';
 import styles from './GraphView.module.css';
 
 export interface GraphViewProps {
@@ -116,11 +131,37 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
   // The newcomer node-set signature already auto-placed — so the partial-cache placement effect
   // runs exactly once per node-set change (not on every unrelated data tick).
   const placedMissingRef = useRef('');
+  // ── Mouse-gesture bookkeeping (quick-260902-nfs) ────────────────────────────────────────────
+  // T-NFS-06: window listeners mount only while a gesture is live and tear themselves down on
+  // release/cancel — but an UNMOUNT mid-gesture would strand them, so the live teardowns are also
+  // remembered here and invoked by the cleanup effect below.
+  /** Restores `userPanningEnabled` after a suspended left-drag (null when no gesture is live). */
+  const restorePanRef = useRef<(() => void) | null>(null);
+  /** Ends an in-flight middle-button pan (null when none is live). */
+  const endPanRef = useRef<(() => void) | null>(null);
+  /** Removes the container-level gesture listeners attached in `registerCy`. */
+  const containerCleanupRef = useRef<(() => void) | null>(null);
+  /** D-9: true while a coalesced `dragfree` save is already queued for this gesture. */
+  const dragfreeSaveRef = useRef(false);
   // Keep the latest onSelectNode reachable from the once-attached tap handler.
   const onSelectRef = useRef(onSelectNode);
   useEffect(() => {
     onSelectRef.current = onSelectNode;
   }, [onSelectNode]);
+
+  // T-NFS-06: tear down every gesture listener on unmount, including any still-live window
+  // listeners from a gesture that was in flight when the view closed.
+  useEffect(
+    () => () => {
+      restorePanRef.current?.();
+      restorePanRef.current = null;
+      endPanRef.current?.();
+      endPanRef.current = null;
+      containerCleanupRef.current?.();
+      containerCleanupRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -367,20 +408,109 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     attachedRef.current = cy;
     cy.on('tap', 'node', (e) => {
       const node = e.target;
+      // D-10: a MODIFIER-click is a selection gesture, not a navigation — it must neither open the
+      // profile nor re-lay the graph out around the clicked node. Guarding on the modifier (not on
+      // the selection count) is what keeps an ordinary plain click working: cytoscape emits `tap`
+      // BEFORE its own "Single selection" collapse, so a count read here would misclassify it.
+      // D-11: `originalEvent` is absent for a programmatic `.emit('tap')` (which `e2e/graph.spec.ts`
+      // uses) — `shouldReEgo` treats that as "no modifiers", i.e. today's behaviour exactly.
+      if (!shouldReEgo(e.originalEvent as GestureEvent | undefined)) return;
       // Tap = open the profile AND re-ego onto the tapped node (focus follows the tap, POL-03/D-10).
       // `setFocusedId` is a stable state setter, safe to call from this once-attached handler.
       onSelectRef.current(node.data('kind') as 'people' | 'groups', node.id());
       setFocusedId(node.id());
+    });
+
+    // ── D-8: suspend user panning for ONE left-drag on empty background, so it box-selects ──────
+    // Cytoscape enters box mode only when panning is unavailable (cytoscape.cjs.js:26234). Flipping
+    // the flag at RUNTIME rather than passing `userPanningEnabled={false}` is what preserves
+    // single-finger TOUCH panning, which reads the same flag — see the graphGesture header.
+    //
+    // `cy.on('mousedown')` fires with `e.target === cy` only when nothing is under the pointer, so
+    // this is cytoscape's own hit-test rather than a hand-rolled DOM one; it also fires only for
+    // the left button, which is exactly the gesture being arbitrated.
+    cy.on('mousedown', (e) => {
+      if (e.target !== cy) return; // a node/edge — that press drags, it does not band
+      if (!shouldSuspendPanning(e.originalEvent as GestureEvent | undefined)) return;
+      cy.userPanningEnabled(false);
+      // Restoration is UNCONDITIONAL and self-tearing-down: a stray release (or a cancelled
+      // pointer) must never leave the graph permanently unpannable.
+      const restore = () => {
+        cy.userPanningEnabled(true);
+        window.removeEventListener('mouseup', restore);
+        window.removeEventListener('pointercancel', restore);
+        restorePanRef.current = null;
+      };
+      restorePanRef.current = restore;
+      window.addEventListener('mouseup', restore);
+      window.addEventListener('pointercancel', restore);
     });
     // Sticky-persist a MANUAL drag (POL-02). `dragfree` fires only after a real drag (not a plain
     // tap-release like `free`), so tap-vs-drag stays native. Runs the SAME save→reload chain as
     // layoutstop and writes ONLY the graphPositions meta row — never db.people/db.relationshipLinks
     // (viewer-only contract: dragging rearranges the layout, it never mutates entity data).
     cy.on('dragfree', 'node', () => {
-      void savePositions(cy).then(() =>
-        loadPositions().then((positions) => setPosCache({ probed: true, positions })),
-      );
+      // D-9 / T-NFS-04: COALESCE. Cytoscape emits `dragfree` on the whole dragged COLLECTION
+      // (`draggedElements.emit('dragfree')`, cytoscape.cjs.js:26282), so this handler fires ONCE
+      // PER DRAGGED NODE. Dragging a 12-node selection would otherwise run twelve redundant
+      // savePositions → loadPositions → setPosCache chains against the same meta row. All N
+      // emissions are synchronous, so a flag set on the first and cleared in a microtask collapses
+      // the whole gesture to exactly ONE save.
+      if (dragfreeSaveRef.current) return;
+      dragfreeSaveRef.current = true;
+      queueMicrotask(() => {
+        dragfreeSaveRef.current = false;
+        void savePositions(cy).then(() =>
+          loadPositions().then((positions) => setPosCache({ probed: true, positions })),
+        );
+      });
     });
+
+    // ── Middle-drag pan (the primary replacement for the left-drag pan D-7 gave up) ─────────────
+    // Hand-rolled from native listeners on the container, exactly like MapView's middle-pan:
+    // cytoscape's own mousedown path handles only buttons 1 and 3, so the middle button never
+    // reaches it. Driven from WINDOW listeners so a release OUTSIDE the graph still ends the pan.
+    const container = cy.container();
+    if (container) {
+      const onPointerDown = (ev: PointerEvent) => {
+        if (!isPanButton(ev)) return;
+        ev.preventDefault();
+        let lastX = ev.clientX;
+        let lastY = ev.clientY;
+        const onMove = (m: PointerEvent) => {
+          // Pan by the delta since the PREVIOUS move; `panBy` is itself relative.
+          cy.panBy({ x: m.clientX - lastX, y: m.clientY - lastY });
+          lastX = m.clientX;
+          lastY = m.clientY;
+        };
+        const end = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', end);
+          window.removeEventListener('pointercancel', end);
+          endPanRef.current = null;
+        };
+        // T-NFS-06: remembered so an unmount MID-GESTURE still tears these down.
+        endPanRef.current = end;
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', end);
+        window.addEventListener('pointercancel', end);
+      };
+      // Suppress the platform middle-click autoscroll widget. quick-260821-nac recorded that this
+      // MUST be the NATIVE mouse event: preventing the default on a POINTER event does not suppress
+      // the compatibility mouse event the widget is triggered from.
+      const suppressAutoscroll = (ev: MouseEvent) => {
+        if (ev.button === 1) ev.preventDefault();
+      };
+      container.addEventListener('pointerdown', onPointerDown);
+      container.addEventListener('mousedown', suppressAutoscroll);
+      container.addEventListener('auxclick', suppressAutoscroll);
+      // T-NFS-06: every listener added here is removed on unmount by the effect below.
+      containerCleanupRef.current = () => {
+        container.removeEventListener('pointerdown', onPointerDown);
+        container.removeEventListener('mousedown', suppressAutoscroll);
+        container.removeEventListener('auxclick', suppressAutoscroll);
+      };
+    }
     // Persist positions after EVERY layout, not just the first (WR-03). react-cytoscapejs keeps one
     // `cy` for the component's lifetime, so `cy.one` fired only on the initial `cose` and every later
     // re-run (a node added → cache invalidated → `cose` again) had no listener — the new node's
@@ -472,6 +602,11 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
             Exit focus
           </button>
         )}
+        {/* Discoverability for the gestures D-7 moved off the plain left button. Muted, not a
+            control — the viewer-only note keeps its place as the last element. */}
+        <span className={styles.gestureHint} data-testid="graph-gesture-hint">
+          Drag to select · Middle-drag or Alt-drag to pan
+        </span>
         <span className={styles.viewerNote}>Viewer-only — edit relationships from a profile.</span>
       </div>
       <CytoscapeComponent
@@ -481,7 +616,10 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         layout={layout}
         cy={registerCy}
         global={CY_GLOBAL}
-        boxSelectionEnabled={false}
+        // B1: rubber-band box selection. Note there is deliberately NO `userPanningEnabled` prop —
+        // it is toggled at runtime for the duration of one mouse gesture instead (D-8), which is
+        // what keeps single-finger touch panning working. Adding the prop back would break that.
+        boxSelectionEnabled={true}
       />
     </div>
   );
