@@ -128,3 +128,76 @@ describe('buildConnectors — pure map-projection geometry (REL-03, D-07)', () =
     expect(out[0].b).toEqual(imageToStage({ x: 40, y: 60 }, identity));
   });
 });
+
+// ── D-5: the PLURAL drag-override (quick-260902-nfs) ─────────────────────────────────────────
+// A GROUP drag moves several markers at once, so the singular `dragOverride` cannot express the
+// live-follow state on its own. `dragOverrides` is added ALONGSIDE it (never replacing it), so
+// ConnectorLayer's existing prop and every assertion above keep working untouched.
+describe('buildConnectors — dragOverrides (plural, group drag)', () => {
+  it('overlays live positions for TWO different markers simultaneously', () => {
+    const mA = marker('A', 10, 20, { id: 'mA' });
+    const mB = marker('B', 40, 60, { id: 'mB' });
+    const rel = link({ id: 'r1', fromId: 'A', toId: 'B' });
+
+    const out = buildConnectors([rel], [mA, mB], identity, {
+      dragOverrides: [
+        { markerId: 'mA', x: 111, y: 222 },
+        { markerId: 'mB', x: 333, y: 444 },
+      ],
+    });
+
+    expect(out[0].a).toEqual({ x: 111, y: 222 });
+    expect(out[0].b).toEqual({ x: 333, y: 444 });
+  });
+
+  it('leaves a marker with no override composing from its stored position', () => {
+    const mA = marker('A', 10, 20, { id: 'mA' });
+    const mB = marker('B', 40, 60, { id: 'mB' });
+    const rel = link({ id: 'r1', fromId: 'A', toId: 'B' });
+
+    const out = buildConnectors([rel], [mA, mB], identity, {
+      dragOverrides: [{ markerId: 'mA', x: 111, y: 222 }],
+    });
+
+    expect(out[0].a).toEqual({ x: 111, y: 222 });
+    expect(out[0].b).toEqual(imageToStage({ x: 40, y: 60 }, identity));
+  });
+
+  it('still honours the SINGULAR dragOverride when no plural list is given (no regression)', () => {
+    const mA = marker('A', 10, 20, { id: 'mA' });
+    const mB = marker('B', 40, 60, { id: 'mB' });
+    const rel = link({ id: 'r1', fromId: 'A', toId: 'B' });
+
+    const out = buildConnectors([rel], [mA, mB], identity, {
+      dragOverride: { markerId: 'mA', x: 999, y: 888 },
+    });
+
+    expect(out[0].a).toEqual({ x: 999, y: 888 });
+  });
+
+  it('merges the singular and plural forms — the grabbed marker plus the rest of the selection', () => {
+    // This is the exact production shape: MapView passes the GRABBED marker through the singular
+    // `dragOverride` (fed by AvatarMarker's own rAF drag-move) and every other selected marker
+    // through `dragOverrides`.
+    const mA = marker('A', 10, 20, { id: 'mA' });
+    const mB = marker('B', 40, 60, { id: 'mB' });
+    const rel = link({ id: 'r1', fromId: 'A', toId: 'B' });
+
+    const out = buildConnectors([rel], [mA, mB], identity, {
+      dragOverride: { markerId: 'mA', x: 999, y: 888 },
+      dragOverrides: [{ markerId: 'mB', x: 333, y: 444 }],
+    });
+
+    expect(out[0].a).toEqual({ x: 999, y: 888 });
+    expect(out[0].b).toEqual({ x: 333, y: 444 });
+  });
+
+  it('ignores an empty plural list', () => {
+    const mA = marker('A', 10, 20, { id: 'mA' });
+    const mB = marker('B', 40, 60, { id: 'mB' });
+    const rel = link({ id: 'r1', fromId: 'A', toId: 'B' });
+
+    const out = buildConnectors([rel], [mA, mB], identity, { dragOverrides: [] });
+    expect(out[0].a).toEqual(imageToStage({ x: 10, y: 20 }, identity));
+  });
+});

@@ -42,10 +42,22 @@
   background: var(--color-paper-shade, #e7e2d6);
 }
 
+/* Two muted end-of-toolbar notes: the gesture hint (quick-260902-nfs) and the viewer-only note.
+ * The `margin-left: auto` that pushes the pair to the far end now lives on the FIRST of them —
+ * .gestureHint — because only the leading element of the group may claim the free space. The
+ * viewer note keeps a plain gap from it. */
+.gestureHint,
 .viewerNote {
-  margin-left: auto;
   color: var(--color-ink-muted, #6b6358);
   font: 400 13px/1.35 'Inter', system-ui, sans-serif;
+}
+
+.gestureHint {
+  margin-left: auto;
+}
+
+.viewerNote {
+  margin-left: var(--space-md, 16px);
 }
 
 /* The Cytoscape mount — fills the remaining space below the toolbar. */

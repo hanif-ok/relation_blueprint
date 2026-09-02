@@ -71,6 +71,12 @@ export interface ConnectorLayerProps {
   transform: BackgroundTransform;
   /** Transient live drag position for the one dragging marker (live-follow-on-drag). */
   dragOverride?: DragOverride | null;
+  /**
+   * D-5: transient live drag positions for the REST of a marquee group drag — every selected
+   * marker that is not the one Konva is physically dragging. Merged with `dragOverride` inside
+   * `buildConnectors`, so connectors follow a whole banded selection with no per-frame Dexie write.
+   */
+  dragOverrides?: DragOverride[] | null;
   /** D-09: whether connector labels are shown (default OFF, owned by MapView). */
   showConnectorLabels?: boolean;
   /**
@@ -87,10 +93,11 @@ export function ConnectorLayer({
   markers,
   transform,
   dragOverride = null,
+  dragOverrides = null,
   showConnectorLabels = false,
   connectorColor = null,
 }: ConnectorLayerProps) {
-  const connectors = buildConnectors(links, markers, transform, { dragOverride });
+  const connectors = buildConnectors(links, markers, transform, { dragOverride, dragOverrides });
 
   return (
     <>

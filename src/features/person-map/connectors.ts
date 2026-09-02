@@ -44,6 +44,16 @@ export interface DragOverride {
 export interface BuildConnectorsOptions {
   /** Live drag position for the dragging marker (live-follow-on-drag). */
   dragOverride?: DragOverride | null;
+  /**
+   * D-5: live drag positions for SEVERAL markers at once — a marquee GROUP drag moves the whole
+   * selection, which the singular `dragOverride` above cannot express.
+   *
+   * Added ALONGSIDE the singular form rather than replacing it, because `ConnectorLayer` already
+   * threads `dragOverride` for the one marker Konva is dragging and MapView keeps using it for the
+   * GRABBED object (whose live position comes from AvatarMarker's own rAF drag-move). Both are
+   * merged into a single lookup below, so callers can pass either, both, or neither.
+   */
+  dragOverrides?: DragOverride[] | null;
 }
 
 /**
@@ -59,7 +69,14 @@ export function buildConnectors(
   transform: BackgroundTransform,
   opts: BuildConnectorsOptions = {},
 ): Connector[] {
-  const { dragOverride = null } = opts;
+  const { dragOverride = null, dragOverrides = null } = opts;
+
+  // One lookup for both override forms (D-5). The plural list is applied first and the singular
+  // one last, so the GRABBED marker — the object Konva is physically dragging, and therefore the
+  // most authoritative live position — wins any collision.
+  const overrideByMarker = new Map<string, Point>();
+  for (const o of dragOverrides ?? []) overrideByMarker.set(o.markerId, { x: o.x, y: o.y });
+  if (dragOverride) overrideByMarker.set(dragOverride.markerId, { x: dragOverride.x, y: dragOverride.y });
 
   // Primary placement per person (B6): chosen DETERMINISTICALLY, not by array order (WR-05). The
   // caller's `markers` come from `db.markers.where('mapId').equals(...)`, which Dexie returns ordered
@@ -83,9 +100,8 @@ export function buildConnectors(
   const endpointFor = (personId: string): Point | null => {
     const mk = primaryByPerson.get(personId);
     if (!mk) return null;
-    if (dragOverride && dragOverride.markerId === mk.id) {
-      return { x: dragOverride.x, y: dragOverride.y };
-    }
+    const live = overrideByMarker.get(mk.id);
+    if (live) return { x: live.x, y: live.y };
     return imageToStage({ x: mk.x, y: mk.y }, transform);
   };
 
