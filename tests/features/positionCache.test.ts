@@ -15,6 +15,7 @@ import {
   loadPositions,
   partitionCached,
   savePositions,
+  shouldPersistInitialLayout,
 } from '@/features/graph/positionCache';
 
 /** A minimal fake Cytoscape core exposing only what savePositions reads (nodes().forEach → id/position). */
@@ -120,6 +121,49 @@ describe('POL-02 — partitionCached (three-way gate, D-08 place-newcomer-only)'
       allCached: true,
       noneCached: false,
     });
+  });
+});
+
+describe('F5X-DEF-1 — shouldPersistInitialLayout (the one-shot recovery gate, quick-260903-nyu)', () => {
+  /** The four gate inputs, defaulted to the ONLY combination that permits the recovery save. */
+  const permit = {
+    probed: true,
+    noneCached: true,
+    layoutStopSeen: false,
+    saveSuspended: false,
+  };
+
+  it('probed + noneCached + no layoutstop seen + not suspended → true (the only true row)', () => {
+    expect(shouldPersistInitialLayout({ ...permit })).toBe(true);
+  });
+
+  it('probe still in flight (probed:false) → false — persisting here would clobber a saved layout', () => {
+    expect(shouldPersistInitialLayout({ ...permit, probed: false })).toBe(false);
+  });
+
+  it('not noneCached (allCached / partial) → false — those paths are not this defect', () => {
+    expect(shouldPersistInitialLayout({ ...permit, noneCached: false })).toBe(false);
+  });
+
+  it('a layoutstop has already been heard → false — the handler is live and owns persistence', () => {
+    expect(shouldPersistInitialLayout({ ...permit, layoutStopSeen: true })).toBe(false);
+  });
+
+  it('the ego-focus fence is up (saveSuspended) → false — same fence the layoutstop handler reads', () => {
+    expect(shouldPersistInitialLayout({ ...permit, saveSuspended: true })).toBe(false);
+  });
+
+  it('is pure: same input → same answer twice, and it never touches the meta table', async () => {
+    await db.meta.clear();
+    const gate = { ...permit };
+    const first = shouldPersistInitialLayout(gate);
+    const second = shouldPersistInitialLayout(gate);
+    expect(second).toBe(first);
+    // The argument is not mutated…
+    expect(gate).toEqual(permit);
+    // …and no Dexie write happened as a side effect.
+    expect(await db.meta.get('graphPositions')).toBeUndefined();
+    expect(await db.meta.toArray()).toEqual([]);
   });
 });
 

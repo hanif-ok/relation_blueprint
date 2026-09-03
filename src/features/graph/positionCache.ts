@@ -1,9 +1,12 @@
 // positionCache — the graph's position cache. Node positions are a regenerable local convenience
 // (NOT authored data): they are persisted as ONE key/value row (`graphPositions`) in the Dexie
 // `meta` table — cheap to write, trivially skipped on a fresh device (where `cose` recomputes).
-// Positions are written on `layoutstop` (fresh/reset/newcomer layouts) AND on `dragfree` (POL-02:
-// a manual node drag sticky-persists its new spot). Dragging is viewer-only — it writes ONLY this
-// meta row, never `db.people`/`db.relationshipLinks`.
+// Positions are written on `layoutstop` (reset/newcomer layouts, i.e. every layout from the SECOND
+// one onward) AND on `dragfree` (POL-02: a manual node drag sticky-persists its new spot). The
+// FIRST layout of a core is persisted instead by GraphView's one-shot recovery layout-effect, gated
+// by `shouldPersistInitialLayout` below — its `layoutstop` is raised before our listener exists
+// (F5X-DEF-1; see the LAYOUT PERSISTENCE section of the GraphView header). Dragging is viewer-only —
+// it writes ONLY this meta row, never `db.people`/`db.relationshipLinks`.
 //
 // D-08 SUPERSEDES the old D-13 full-invalidation rule. Previously any node-set change made the gate
 // return false → a fresh `cose` blew away the whole hand-arranged layout. Now `partitionCached`
@@ -73,6 +76,38 @@ export function partitionCached(
     allCached: missing.length === 0 && !!positions,
     noneCached: cached.length === 0,
   };
+}
+
+/**
+ * The initial-layout recovery gate (quick-260903-nyu / F5X-DEF-1). react-cytoscapejs runs the mount
+ * layout inside `patch()` and only afterwards invokes the `cy` prop callback that attaches our
+ * `layoutstop` listener (`react-cytoscapejs component.js:46-88` → `patch.js:57-70`), and `cose` with
+ * `animate:false` emits `layoutstop` SYNCHRONOUSLY inside that run — so the first layout's event is
+ * raised into a void and no row is ever written. GraphView recovers by persisting from a one-shot
+ * `useLayoutEffect` (by then the nodes already sit at their final `cose` spots), but ONLY when all
+ * four inputs below agree. Each one prevents a distinct failure mode:
+ *
+ *  - `probed` — `posCache.probed` can still be false when `CytoscapeComponent` mounts, because the
+ *    `loadPositions()` probe races three `useLiveQuery` reads. Recovering then would persist a fresh
+ *    `cose` OVER the curator's saved hand-arranged layout. This is the data-loss guard; never drop it.
+ *  - `noneCached` — restricts recovery to the only case where the missed event was load-bearing.
+ *    `allCached`'s missed `preset` `layoutstop` would have been an identical no-op re-save; `partial`'s
+ *    newcomer IS persisted by the placement effect's own (heard) `cose` `layoutstop`, and recovering
+ *    there would race a newcomers-at-origin snapshot against it.
+ *  - `!layoutStopSeen` — once ANY `layoutstop` has reached the handler, the handler owns persistence
+ *    for that core forever. This is what stops Reset layout (a heard `cose`) from double-saving.
+ *  - `!saveSuspended` — the ego-focus fence, read from the SAME `suspendSaveRef` the `layoutstop`
+ *    handler reads. One fence, two readers.
+ *
+ * Pure: reads only its argument, mutates nothing (exactly like `partitionCached` above).
+ */
+export function shouldPersistInitialLayout(gate: {
+  probed: boolean;
+  noneCached: boolean;
+  layoutStopSeen: boolean;
+  saveSuspended: boolean;
+}): boolean {
+  return gate.probed && gate.noneCached && !gate.layoutStopSeen && !gate.saveSuspended;
 }
 
 /**
