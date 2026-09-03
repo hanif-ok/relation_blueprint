@@ -53,6 +53,52 @@ export function normalizeBox(a: Point, b: Point): Box {
 }
 
 /**
+ * The Konva Stage's own pan offset and uniform scale — the ONLY view state the screen→world
+ * conversion needs.
+ *
+ * Deliberately declared here rather than imported from `useViewportCulling.StageView`: that type
+ * carries the Stage's pixel `width`/`height` (which the band does not need) and lives in a module
+ * that pulls in React and Konva, which would cost this module its DOM-free, unit-testable-without-
+ * a-browser property.
+ */
+export interface StageViewport {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+/**
+ * Move a band from SCREEN space (stage-container px — what `stage.getPointerPosition()` returns)
+ * into WORLD space (the space `imageToStage` composes into, which every box in this module is
+ * hit-tested in), by undoing the Stage's pan and uniform zoom:
+ *
+ *   x = (box.x − view.x) / scale,  y = (box.y − view.y) / scale,
+ *   width = box.width / scale,     height = box.height / scale
+ *
+ * This is the exact inverse of what `useViewportCulling.getVisibleRect` does to derive the visible
+ * WORLD rect from the same Stage transform, and the same arithmetic `MapView.pointerToImage`
+ * already applies to a single pointer position. The explicit form is used in preference to
+ * `stage.getAbsoluteTransform().invert()` so this module stays free of Konva.
+ *
+ * Threat T-D77-01: a zero or non-finite `view.scale` would divide-by-zero and emit a NaN/∞ band
+ * that poisons every later comparison, so it is treated as scale 1 — the same guard, in the same
+ * form, as `getVisibleRect` and `coords.stageToImage`.
+ *
+ * Threat T-D77-02: a non-finite `view.x`/`view.y` is deliberately NOT guarded. It propagates into
+ * the box, where {@link marqueeHits}'s existing finite check (T-QT-03) degrades it to an EMPTY
+ * selection — the house rule that corrupt input yields an empty result, never a corrupt one.
+ */
+export function screenBoxToWorld(box: Box, view: StageViewport): Box {
+  const scale = view.scale !== 0 && Number.isFinite(view.scale) ? view.scale : 1;
+  return {
+    x: (box.x - view.x) / scale,
+    y: (box.y - view.y) / scale,
+    width: box.width / scale,
+    height: box.height / scale,
+  };
+}
+
+/**
  * Standard axis-aligned overlap test.
  *
  * Threat T-QT-03: returns **false** whenever either box carries a non-finite coordinate or extent.

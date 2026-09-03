@@ -23,6 +23,7 @@ import {
   shapeStageBox,
   markerStageBox,
   marqueeHits,
+  screenBoxToWorld,
   type Box,
 } from '@/features/person-map/editor/marquee';
 import type { BackgroundTransform, Shape } from '@/domain/types';
@@ -174,5 +175,14 @@ describe('marquee — marqueeHits', () => {
     const corrupt: BackgroundTransform = { offsetX: NaN, offsetY: 0, scale: 1, rotation: 0 };
     const hits = marqueeHits({ x: 0, y: 0, width: 1000, height: 1000 }, shapes, [], corrupt, 48);
     expect(hits.shapeIds).toEqual([]);
+  });
+});
+
+describe('marquee — screenBoxToWorld', () => {
+  it('undoes a pure Stage PAN, moving the band into world space', () => {
+    // Stage panned +200/+100 with no zoom: a band drawn at screen (240,230) sits at world (40,130).
+    expect(
+      screenBoxToWorld({ x: 240, y: 230, width: 120, height: 110 }, { x: 200, y: 100, scale: 1 }),
+    ).toEqual({ x: 40, y: 130, width: 120, height: 110 });
   });
 });
