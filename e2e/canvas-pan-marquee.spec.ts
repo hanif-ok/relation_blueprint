@@ -236,16 +236,26 @@ test('a Select-tool left drag on empty canvas marquee-selects, and Delete remove
   // …and gone once the band is released.
   await expect(page.locator('[data-testid="marquee-rect"]')).toHaveCount(0);
 
-  // Both shapes are now marquee-selected; one Delete removes them in a single write.
+  // Both shapes are now marquee-selected; one Delete removes them in a single write — but a 2+
+  // selection routes through `requestDelete`'s BLOCKING confirm (T-NFS-01, quick-260902-nfs), so
+  // nothing is written until the curator clicks Delete in the dialog (D77-DEF-2).
   await page.keyboard.press('Delete');
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      return (m?.shapes.length ?? 0) === 0;
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  const confirm = page.getByRole('dialog');
+  await expect(confirm).toBeVisible({ timeout: 5_000 });
+  await expect(confirm).toContainText('Delete 2 selected objects?');
+  await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          return (m?.shapes ?? []).map((s) => s.id);
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toEqual([]);
 });
 
 test('committing a rect draw re-arms the Select tool', async ({ page }) => {
@@ -264,14 +274,17 @@ test('committing a rect draw re-arms the Select tool', async ({ page }) => {
   await firePointer(page, 'pointermove', 280, 220);
   await firePointer(page, 'pointerup', 280, 220);
 
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      return (m?.shapes.length ?? 0) >= 1;
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          return m?.shapes.length ?? 0;
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThanOrEqual(1);
 
   // …and the palette is back on Select — the one-shot behaviour Portal/Person already have.
   await expect(page.locator('[data-testid="tool-select"]')).toHaveAttribute('aria-pressed', 'true');

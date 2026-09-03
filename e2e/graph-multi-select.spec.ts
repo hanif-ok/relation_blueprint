@@ -209,16 +209,18 @@ test('dragging one node of a multi-selection moves them all, writes ONE graphPos
   expect(moved.bob.y - 160).toBeCloseTo(DY, -1);
 
   // The graphPositions meta row reflects the new positions (the ONLY write this gesture makes).
-  await page.waitForFunction(
-    async ({ n, dx }) => {
+  // expect(async …).toPass, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  // toPass rather than expect.poll because this assertion carries a numeric TOLERANCE (±12) that
+  // toEqual cannot express without silently tightening it.
+  await expect(async () => {
+    const a = await page.evaluate(async (n) => {
       const row = await window.__rb!.db.meta.get('graphPositions');
       const positions = row?.value as Record<string, { x: number; y: number }> | undefined;
-      const a = positions?.[n.aliceId];
-      return !!a && Math.abs(a.x - (160 + dx)) <= 12;
-    },
-    { n: ids, dx: DX },
-    { timeout: 15_000 },
-  );
+      return positions?.[n.aliceId] ?? null;
+    }, ids);
+    expect(a).not.toBeNull();
+    expect(Math.abs(a!.x - (160 + DX))).toBeLessThanOrEqual(12);
+  }).toPass({ timeout: 15_000 });
 
   // T-NFS-05: every entity table is byte-identical.
   const after = await page.evaluate(async () => {

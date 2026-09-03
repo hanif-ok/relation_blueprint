@@ -105,14 +105,17 @@ test('drawing a rectangle with the Rect tool persists a shape on the map', async
   await firePointer(page, 'pointerup', 280, 220);
 
   // Wait until the committed shape lands in Dexie before reloading (avoid racing the IDB commit).
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      return (m?.shapes.length ?? 0) >= 1;
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          return m?.shapes.length ?? 0;
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThanOrEqual(1);
 
   // The shape persisted to MapDoc.shapes (read back through the bridge after a reload).
   await page.reload();
@@ -173,14 +176,17 @@ test('picking a preset in the style popover persists it', async ({ page }) => {
 
   // Wait until the preset write lands in Dexie (the updateMap is fire-and-forget) BEFORE reloading,
   // so the reload can't race the IndexedDB commit.
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      return m?.shapes[0]?.preset === 'sage';
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          return m?.shapes[0]?.preset;
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toBe('sage');
 
   // It round-trips to Dexie across a full reload (durability).
   await page.reload();

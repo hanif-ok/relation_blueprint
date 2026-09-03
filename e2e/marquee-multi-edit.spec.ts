@@ -143,16 +143,25 @@ test('a band over 2 shapes + 1 person marker deletes all three after one confirm
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
   // Every banded shape is gone (one write) and the marker row is gone…
-  await page.waitForFunction(
-    async ({ id, mk }) => {
-      const rb = window.__rb!;
-      const m = await rb.db.maps.get(id);
-      const marker = await rb.db.markers.get(mk);
-      return (m?.shapes.length ?? 0) === 0 && marker === undefined;
-    },
-    { id: mapId, mk: markerId },
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async ({ id, mk }) => {
+            const rb = window.__rb!;
+            const m = await rb.db.maps.get(id);
+            const marker = await rb.db.markers.get(mk);
+            return {
+              shapeIds: (m?.shapes ?? []).map((s) => s.id),
+              markerExists: marker !== undefined,
+            };
+          },
+          { id: mapId, mk: markerId },
+        ),
+      { timeout: 15_000 },
+    )
+    .toEqual({ shapeIds: [], markerExists: false });
 
   // …but the PERSON survives. Removing a placement is not deleting a person (delete-vs-remove).
   const personStillThere = await page.evaluate(
@@ -254,32 +263,47 @@ test('a group drag moves every banded object by the same delta', async ({ page }
   await page.mouse.move(box.x + 240 + DX, box.y + 330 + DY, { steps: 5 });
   await page.mouse.up();
 
-  await page.waitForFunction(
-    async ({ id, mk, dx, dy }) => {
-      const rb = window.__rb!;
-      const m = await rb.db.maps.get(id);
-      const marker = await rb.db.markers.get(mk);
-      if (!m || !marker) return false;
-      const a = m.shapes.find((s) => s.id === 'shape-a');
-      const b = m.shapes.find((s) => s.id === 'shape-b');
-      if (!a || !b) return false;
-      const near = (v: number | undefined, want: number) =>
-        v !== undefined && Math.abs(v - want) <= 2;
-      return (
-        m.shapes.length === 2 &&
-        near(a.x, 200 + dx) &&
-        near(a.y, 300 + dy) &&
-        near(b.x, 400 + dx) &&
-        near(b.y, 420 + dy) &&
-        near(marker.x, 320 + dx) &&
-        near(marker.y, 250 + dy) &&
-        // T-NFS-02: the moved marker keeps the layer it was on.
-        marker.layerId === 'layer-0'
-      );
-    },
-    { id: mapId, mk: markerId, dx: DX, dy: DY },
-    { timeout: 15_000 },
-  );
+  // expect(async …).toPass, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  // toPass rather than expect.poll because each coordinate carries a numeric TOLERANCE (±2) that
+  // toEqual cannot express without silently tightening it.
+  await expect(async () => {
+    const state = await page.evaluate(
+      async ({ id, mk }) => {
+        const rb = window.__rb!;
+        const m = await rb.db.maps.get(id);
+        const marker = await rb.db.markers.get(mk);
+        if (!m || !marker) return null;
+        const a = m.shapes.find((s) => s.id === 'shape-a');
+        const b = m.shapes.find((s) => s.id === 'shape-b');
+        if (!a || !b) return null;
+        return {
+          count: m.shapes.length,
+          a: { x: a.x, y: a.y },
+          b: { x: b.x, y: b.y },
+          marker: { x: marker.x, y: marker.y, layerId: marker.layerId },
+        };
+      },
+      { id: mapId, mk: markerId },
+    );
+    // Throwing (rather than expect(...).not.toBeNull()) both narrows the type for TS and lets
+    // toPass retry while the map/marker/shapes are still settling.
+    if (!state) throw new Error('map, marker, or one of the banded shapes was missing');
+    // Mirrors the original predicate's `near(v: number | undefined, want)`: an undefined coordinate
+    // fails, exactly as `v !== undefined && Math.abs(v - want) <= 2` did.
+    const near = (v: number | undefined, want: number, label: string) => {
+      if (v === undefined) throw new Error(`${label} was undefined`);
+      expect(Math.abs(v - want)).toBeLessThanOrEqual(2);
+    };
+    expect(state.count).toBe(2);
+    near(state.a.x, 200 + DX, 'shape-a.x');
+    near(state.a.y, 300 + DY, 'shape-a.y');
+    near(state.b.x, 400 + DX, 'shape-b.x');
+    near(state.b.y, 420 + DY, 'shape-b.y');
+    near(state.marker.x, 320 + DX, 'marker.x');
+    near(state.marker.y, 250 + DY, 'marker.y');
+    // T-NFS-02: the moved marker keeps the layer it was on.
+    expect(state.marker.layerId).toBe('layer-0');
+  }).toPass({ timeout: 15_000 });
 });
 
 test('the bar re-layers a banded shape AND portal at once, and the portal keeps its targetMapId', async ({
@@ -352,19 +376,32 @@ test('the bar re-layers a banded shape AND portal at once, and the portal keeps 
   // One dropdown choice re-layers BOTH objects.
   await page.locator('[data-testid="multi-select-layer"]').selectOption('layer-1');
 
-  await page.waitForFunction(
-    async ({ id, pid, tid }) => {
-      const rb = window.__rb!;
-      const m = await rb.db.maps.get(id);
-      const portal = await rb.db.markers.get(pid);
-      if (!m || !portal) return false;
-      const a = m.shapes.find((s) => s.id === 'shape-a');
-      // T-NFS-02: upsertMarker does a FULL put — the portal's targetMapId must survive the re-layer.
-      return a?.layerId === 'layer-1' && portal.layerId === 'layer-1' && portal.targetMapId === tid;
-    },
-    { id: mapId, pid: portalId, tid: targetId },
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  // T-NFS-02: upsertMarker does a FULL put — the portal's targetMapId must survive the re-layer.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async ({ id, pid }) => {
+            const rb = window.__rb!;
+            const m = await rb.db.maps.get(id);
+            const portal = await rb.db.markers.get(pid);
+            const a = m?.shapes.find((s) => s.id === 'shape-a');
+            return {
+              shapeLayerId: a?.layerId,
+              portalLayerId: portal?.layerId,
+              portalTargetMapId: portal?.targetMapId,
+            };
+          },
+          { id: mapId, pid: portalId },
+        ),
+      { timeout: 15_000 },
+    )
+    .toEqual({
+      shapeLayerId: 'layer-1',
+      portalLayerId: 'layer-1',
+      portalTargetMapId: targetId,
+    });
 });
 
 test('a locked-layer object is never moved or deleted by a group action', async ({ page }) => {
@@ -412,14 +449,20 @@ test('a locked-layer object is never moved or deleted by a group action', async 
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
   // The two unlocked shapes are gone; the LOCKED one survives, untouched at its original position.
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      if (!m) return false;
-      const locked = m.shapes.find((s) => s.id === 'shape-locked');
-      return m.shapes.length === 1 && locked?.x === 400 && locked?.y === 420;
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there
+  // (D77-DEF-1). A single surviving shape whose 'shape-locked' lookup resolves IS the locked one.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          const locked = m?.shapes.find((s) => s.id === 'shape-locked');
+          return {
+            ids: (m?.shapes ?? []).map((s) => s.id),
+            lockedPos: locked ? { x: locked.x, y: locked.y } : null,
+          };
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toEqual({ ids: ['shape-locked'], lockedPos: { x: 400, y: 420 } });
 });
