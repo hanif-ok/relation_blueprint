@@ -274,14 +274,17 @@ test('committing a rect draw re-arms the Select tool', async ({ page }) => {
   await firePointer(page, 'pointermove', 280, 220);
   await firePointer(page, 'pointerup', 280, 220);
 
-  await page.waitForFunction(
-    async (id) => {
-      const m = await window.__rb!.db.maps.get(id);
-      return (m?.shapes.length ?? 0) >= 1;
-    },
-    mapId,
-    { timeout: 15_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there (D77-DEF-1).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (id) => {
+          const m = await window.__rb!.db.maps.get(id);
+          return m?.shapes.length ?? 0;
+        }, mapId),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThanOrEqual(1);
 
   // …and the palette is back on Select — the one-shot behaviour Portal/Person already have.
   await expect(page.locator('[data-testid="tool-select"]')).toHaveAttribute('aria-pressed', 'true');

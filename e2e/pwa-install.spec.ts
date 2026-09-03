@@ -46,15 +46,20 @@ test('registers a service worker and precaches the shell for offline open', asyn
   // Wait for the service worker to reach the ACTIVE state (precache ready). In prompt mode
   // the SW does not call clients.claim(), so it does not control THIS page until the next
   // navigation — we wait for `active`, not for `controller`.
-  await page.waitForFunction(
-    async () => {
-      if (!('serviceWorker' in navigator)) return false;
-      const reg = await navigator.serviceWorker.ready.catch(() => null);
-      return !!reg && !!reg.active;
-    },
-    undefined,
-    { timeout: 30_000 },
-  );
+  // expect.poll over page.evaluate, NOT waitForFunction — an async predicate is vacuous there
+  // (D77-DEF-1). Polling a status STRING names the actual SW state on failure.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          if (!('serviceWorker' in navigator)) return 'no-serviceworker-api';
+          const reg = await navigator.serviceWorker.ready.catch(() => null);
+          if (!reg) return 'no-registration';
+          return reg.active ? 'active' : 'registered-no-active';
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe('active');
 
   // Reload once (online) so the active SW takes control of the page.
   await page.reload();
