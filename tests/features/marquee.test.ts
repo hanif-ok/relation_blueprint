@@ -23,6 +23,7 @@ import {
   shapeStageBox,
   markerStageBox,
   marqueeHits,
+  screenBoxToWorld,
   type Box,
 } from '@/features/person-map/editor/marquee';
 import type { BackgroundTransform, Shape } from '@/domain/types';
@@ -174,5 +175,87 @@ describe('marquee — marqueeHits', () => {
     const corrupt: BackgroundTransform = { offsetX: NaN, offsetY: 0, scale: 1, rotation: 0 };
     const hits = marqueeHits({ x: 0, y: 0, width: 1000, height: 1000 }, shapes, [], corrupt, 48);
     expect(hits.shapeIds).toEqual([]);
+  });
+});
+
+describe('marquee — screenBoxToWorld', () => {
+  // The band arrives in SCREEN px; every box it is tested against is WORLD space. These cases are
+  // the regression net for quick-260903-d77: the defect shipped twice because the ONLY view under
+  // test was the identity one, where the two spaces happen to coincide.
+  const BAND: Box = { x: 100, y: 100, width: 200, height: 100 };
+  /** The pan-only expectation, reused as the expected result of every scale-GUARD case. */
+  const PAN_ONLY: Box = { x: 60, y: 130, width: 200, height: 100 };
+
+  it('undoes a pure Stage PAN, moving the band into world space', () => {
+    // Stage panned +200/+100 with no zoom: a band drawn at screen (240,230) sits at world (40,130).
+    expect(
+      screenBoxToWorld({ x: 240, y: 230, width: 120, height: 110 }, { x: 200, y: 100, scale: 1 }),
+    ).toEqual({ x: 40, y: 130, width: 120, height: 110 });
+  });
+
+  it('returns the band UNCHANGED at the identity view (today’s behaviour is byte-identical)', () => {
+    expect(screenBoxToWorld(BAND, { x: 0, y: 0, scale: 1 })).toEqual(BAND);
+  });
+
+  it('undoes a pure ZOOM: origin and extents both divide by the scale', () => {
+    expect(screenBoxToWorld(BAND, { x: 0, y: 0, scale: 2 })).toEqual({
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 50,
+    });
+  });
+
+  it('undoes a pure PAN: the origin shifts, the extents do not', () => {
+    expect(screenBoxToWorld(BAND, { x: 40, y: -30, scale: 1 })).toEqual(PAN_ONLY);
+  });
+
+  it('undoes pan AND zoom together (pan subtracted first, then the scale divided out)', () => {
+    expect(screenBoxToWorld(BAND, { x: 40, y: -30, scale: 2 })).toEqual({
+      x: 30,
+      y: 65,
+      width: 100,
+      height: 50,
+    });
+  });
+
+  it('treats a ZERO scale as 1 rather than dividing by zero (T-D77-01)', () => {
+    expect(screenBoxToWorld(BAND, { x: 40, y: -30, scale: 0 })).toEqual(PAN_ONLY);
+  });
+
+  it('treats a NON-FINITE scale as 1, mirroring getVisibleRect’s guard (T-D77-01)', () => {
+    expect(screenBoxToWorld(BAND, { x: 40, y: -30, scale: NaN })).toEqual(PAN_ONLY);
+    expect(screenBoxToWorld(BAND, { x: 40, y: -30, scale: Infinity })).toEqual(PAN_ONLY);
+  });
+
+  it('lets a non-finite PAN degrade to an EMPTY selection, not a corrupt one (T-D77-02)', () => {
+    const poisoned = screenBoxToWorld(BAND, { x: NaN, y: 0, scale: 1 });
+    expect(Number.isFinite(poisoned.x)).toBe(false);
+    // …and marqueeHits' existing finite check (T-QT-03) is what absorbs it.
+    const shape = rect('shape-a', 100, 100, 80, 60);
+    expect(marqueeHits(poisoned, [shape], [], IDENTITY, 48)).toEqual({
+      shapeIds: [],
+      markerIds: [],
+    });
+  });
+});
+
+describe('marquee — the screen/world regression (quick-260903-d77)', () => {
+  // The paired assertion that documents the defect: the SAME band, at the SAME panned view,
+  // selects the marker only once it has been converted. The second half is the pre-fix behaviour.
+  const marker = { id: 'mk', pos: { x: 300, y: 400 } };
+  const view = { x: 200, y: 100, scale: 1 };
+  // Screen (450,450)→(560,560) is world (250,350)→(360,460), which contains the marker's
+  // 48px half-extent square (252,352)→(348,448).
+  const band: Box = { x: 450, y: 450, width: 110, height: 110 };
+
+  it('selects a banded marker at a NON-IDENTITY stage view once the band is converted', () => {
+    const hits = marqueeHits(screenBoxToWorld(band, view), [], [marker], IDENTITY, 48);
+    expect(hits.markerIds).toEqual(['mk']);
+  });
+
+  it('selects NOTHING when the raw screen band is hit-tested directly — the shipped defect', () => {
+    const hits = marqueeHits(band, [], [marker], IDENTITY, 48);
+    expect(hits.markerIds).toEqual([]);
   });
 });

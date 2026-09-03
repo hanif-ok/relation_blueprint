@@ -66,7 +66,7 @@ import {
   type DraftShape,
   type DrawState,
 } from './editor/useToolMode';
-import { normalizeBox, marqueeHits } from './editor/marquee';
+import { normalizeBox, marqueeHits, screenBoxToWorld } from './editor/marquee';
 import { deleteTargets, selectionCount } from './editor/multiSelect';
 import { computeGroupMove } from './editor/groupMove';
 import { MultiSelectBar } from './editor/MultiSelectBar';
@@ -438,9 +438,13 @@ export function MapView({
   );
 
   // ── Marquee (rubber-band) selection (quick-260821-nac) ──────────────────────────────────────
-  // The live band, in STAGE-CONTAINER px (what `stage.getPointerPosition()` returns). Mirrored
-  // into a ref for exactly the reason `drawRef` is: a fast press-move-release must never read a
-  // stale render-closure value on the release that finalizes it.
+  // The live band, in SCREEN px (stage-container px — what `stage.getPointerPosition()` returns).
+  // It STAYS in screen px for its whole lifetime: that is the space the DOM overlay is positioned
+  // in and the space `MARQUEE_MIN_DRAG` measures physical mouse travel in. `finishMarquee`
+  // converts it to WORLD space (via `screenBoxToWorld`) at RELEASE, only for the hit-test, because
+  // the object boxes it is compared against never see the Stage's own pan/zoom. Mirrored into a
+  // ref for exactly the reason `drawRef` is: a fast press-move-release must never read a stale
+  // render-closure value on the release that finalizes it.
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
     null,
   );
@@ -1131,7 +1135,20 @@ export function MapView({
     // suppressStageClickRef alone so the ordinary empty-canvas deselect still runs.
     if (dx <= MARQUEE_MIN_DRAG && dy <= MARQUEE_MIN_DRAG) return;
 
-    const box = normalizeBox({ x: band.x0, y: band.y0 }, { x: band.x1, y: band.y1 });
+    const screenBox = normalizeBox({ x: band.x0, y: band.y0 }, { x: band.x1, y: band.y1 });
+    // The band was captured in SCREEN px but every candidate box below is composed into WORLD space
+    // by `imageToStage` (which never sees the Stage's own pan/zoom), so the two only agree at the
+    // untouched initial view — hence the "finicky selection" once the curator pans or zooms. Undo
+    // the Stage transform here, AFTER the screen-px click-vs-drag gate above.
+    //
+    // The transform is read at RELEASE time on purpose: that is what makes the hit-test agree with
+    // what is visually inside the band at the moment the curator lets go, even if they wheel-zoomed
+    // mid-band. `stageRef` is a ref, so this adds no dependency to the callback below.
+    const stage = stageRef.current;
+    const view = stage
+      ? { x: stage.x(), y: stage.y(), scale: stage.scaleX() }
+      : { x: 0, y: 0, scale: 1 };
+    const box = screenBoxToWorld(screenBox, view);
     // T-QT-02: candidates come from the ALREADY-CULLED memos, so the cost is bounded by what is on
     // screen, never by the marker table size.
     const candidates = [...visibleMarkers, ...visiblePortals].map(({ mk, pos }) => ({
