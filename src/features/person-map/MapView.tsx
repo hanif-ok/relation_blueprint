@@ -438,9 +438,13 @@ export function MapView({
   );
 
   // ── Marquee (rubber-band) selection (quick-260821-nac) ──────────────────────────────────────
-  // The live band, in STAGE-CONTAINER px (what `stage.getPointerPosition()` returns). Mirrored
-  // into a ref for exactly the reason `drawRef` is: a fast press-move-release must never read a
-  // stale render-closure value on the release that finalizes it.
+  // The live band, in SCREEN px (stage-container px — what `stage.getPointerPosition()` returns).
+  // It STAYS in screen px for its whole lifetime: that is the space the DOM overlay is positioned
+  // in and the space `MARQUEE_MIN_DRAG` measures physical mouse travel in. `finishMarquee`
+  // converts it to WORLD space (via `screenBoxToWorld`) at RELEASE, only for the hit-test, because
+  // the object boxes it is compared against never see the Stage's own pan/zoom. Mirrored into a
+  // ref for exactly the reason `drawRef` is: a fast press-move-release must never read a stale
+  // render-closure value on the release that finalizes it.
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
     null,
   );

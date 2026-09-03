@@ -1,10 +1,25 @@
 // marquee — the PURE hit-test behind the Select-tool rubber-band (marquee) selection.
 //
-// COORDINATE SPACE. Everything in this module lives in STAGE-CONTAINER pixels — the space
-// `stage.getPointerPosition()` returns and the space the DOM band overlay is positioned in. The
-// band therefore needs no transform composition of its own; only the OBJECTS have to be brought
-// into that space, which this module does with the exact same `imageToStage` math the renderer
-// uses (`ShapeNode`: origin via `imageToStage`, extents multiplied by `transform.scale`).
+// COORDINATE SPACE — TWO of them, and conflating them is exactly the bug quick-260903-d77 fixed.
+//
+//   SCREEN space: stage-container pixels. What `stage.getPointerPosition()` returns, what the
+//     rubber band is captured in, and what the DOM band overlay in `MapView` is positioned in.
+//     It moves with the Stage's own pan and zoom.
+//   WORLD space: what `imageToStage` composes stored image-space geometry into. It is INDEPENDENT
+//     of the Stage's pan/zoom — `imageToStage` only ever applies the background transform
+//     (rotate → scale → offset). Corroborated by `useViewportCulling.getVisibleRect`, which has to
+//     UNDO the Stage transform (`x = -stage.x()/scale`, `width = stage.width()/scale`) precisely
+//     because the boxes it compares against are world-space.
+//
+// THIS MODULE HIT-TESTS IN WORLD SPACE. Every box it builds — `shapeStageBox`, `markerStageBox` —
+// is composed with the same `imageToStage` math the renderer uses (`ShapeNode`: origin via
+// `imageToStage`, extents multiplied by `transform.scale`), so it is world-space by construction.
+// The band, by contrast, arrives in SCREEN space and MUST be put through `screenBoxToWorld` before
+// it reaches `marqueeHits`. `MapView.finishMarquee` is the one place that conversion happens, and
+// it happens AFTER the `MARQUEE_MIN_DRAG` click-vs-drag gate — that gate is a physical-mouse-travel
+// threshold and stays in screen px, or a zoomed-out view would read real drags as stray clicks.
+// The two spaces coincide only at the untouched initial view (position 0,0 / scale 1), which is
+// why banding used to work at first touch and go "finicky" the moment the curator panned or zoomed.
 //
 // WHY DATA-DRIVEN, NOT KONVA-NODE-DRIVEN (D-5). Hit-testing could in principle walk the Konva
 // scene graph, but `AvatarMarker`'s node `name` is keyed by PERSON id — which collides whenever a
@@ -21,7 +36,11 @@
 import type { BackgroundTransform, Shape } from '@/domain/types';
 import { imageToStage, type Point } from '../coords';
 
-/** An axis-aligned box in STAGE-CONTAINER pixels, with a positive origin and extents. */
+/**
+ * An axis-aligned box with a positive origin and extents. Space-AGNOSTIC: a `Box` is in whatever
+ * space its producer works in (`normalizeBox` yields the band's SCREEN space, `screenBoxToWorld`
+ * converts to WORLD, `shapeStageBox`/`markerStageBox` yield WORLD). See the module header.
+ */
 export interface Box {
   x: number;
   y: number;
@@ -115,7 +134,7 @@ export function boxesIntersect(a: Box, b: Box): boolean {
 }
 
 /**
- * The stage-space bounding box of a stored {@link Shape}, composed exactly as `ShapeNode` renders
+ * The WORLD-space bounding box of a stored {@link Shape}, composed exactly as `ShapeNode` renders
  * it: a points-bearing shape (line/polygon) becomes the bounding box of its composed vertices;
  * a rect/ellipse becomes its composed origin with extents scaled by the uniform `transform.scale`.
  *
@@ -146,8 +165,9 @@ export function shapeStageBox(shape: Shape, transform: BackgroundTransform): Box
 }
 
 /**
- * The square of `2 · halfExtent` centred on an ALREADY-COMPOSED stage position — the same box the
- * viewport-culling pass uses for a marker, so what can be banded is exactly what is drawn.
+ * The square of `2 · halfExtent` centred on an ALREADY-COMPOSED WORLD-space position (a marker's
+ * `imageToStage` output) — the same box the viewport-culling pass uses for a marker, so what can be
+ * banded is exactly what is drawn. `halfExtent` is therefore a WORLD-space half-extent too.
  */
 export function markerStageBox(pos: Point, halfExtent: number): Box {
   return {
@@ -159,7 +179,11 @@ export function markerStageBox(pos: Point, halfExtent: number): Box {
 }
 
 /**
- * Every shape and marker whose stage-space box intersects `band`.
+ * Every shape and marker whose WORLD-space box intersects `band`.
+ *
+ * `band` MUST already be in world space — callers holding a screen-space band (which is every
+ * caller, since the gesture is captured from `getPointerPosition()`) put it through
+ * {@link screenBoxToWorld} first. See the module header.
  *
  * A band with no extent in EITHER axis selects nothing: a click is not a drag, and a stray click
  * must never be able to build a delete set (T-QT-01).
