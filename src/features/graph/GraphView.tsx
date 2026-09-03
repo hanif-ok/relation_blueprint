@@ -41,8 +41,70 @@
 //
 // Resource safety: person-node avatar object-URLs are resolved in an effect keyed by photo hash
 // and REVOKED on unmount / hash change (Pitfall 2 / T-04-04) — no leak as the graph re-renders.
+//
+// ── LAYOUT PERSISTENCE (quick-260903-nyu / F5X-DEF-1) ───────────────────────────────────────────
+// ROOT CAUSE. The FIRST layout of a Cytoscape core never persisted a `graphPositions` row, so every
+// reopen of a never-hand-arranged graph paid a full physics layout and node positions were not
+// stable across sessions. react-cytoscapejs's `componentDidMount` builds the core and calls
+// `updateCytoscape(null, this.props)`, which runs `patch(cy, …)` FIRST and only THEN calls
+// `newProps.cy(cy)` — our `registerCy`, where the `layoutstop` listener is attached
+// (`react-cytoscapejs/src/component.js:46-88`). `patch` ends in `patchLayout` → `cy.layout(opts).run()`
+// (`react-cytoscapejs/src/patch.js:57-70`; on first mount `json1` is null so the layout always runs),
+// and `cose` with `animate:false` runs its whole simulation SYNCHRONOUSLY and emits `layoutstop`
+// inside that call. The event is raised before any listener exists and is lost. It never recovers:
+// the `layout` memo only changes when `usePresetPositions` flips, and with no saved positions
+// `posCache.probed && !partition.noneCached` stays false forever. (`dragfree` looked healthy because
+// it is a later user gesture, long after `registerCy` ran — exactly the asymmetry the field report saw.)
+//
+// MECHANISM. A one-shot recovery save in a parent `useLayoutEffect` (see below, just before
+// `registerCy`), gated by the pure `shouldPersistInitialLayout` in positionCache.ts. Because the
+// mount `cose` completes synchronously inside `patch`, the nodes already sit at their final `cose`
+// positions by the time any parent effect runs — so persisting them reproduces EXACTLY what the
+// missed `layoutstop` would have persisted. `useLayoutEffect`, not `useEffect`, for two ordering
+// guarantees: (1) React commits children before parents, so `componentDidMount` (patch → layout →
+// `registerCy`) has finished and `cyRef.current` is set; (2) layout effects run before passive
+// effects, so the recovery runs strictly BEFORE the concentric ego-overlay `useEffect` can raise the
+// fence — its snapshot is unconditionally the pre-focus base. A plain `useEffect` would depend on
+// hook declaration order, which is fragile.
+//
+// FOUR GATE INPUTS, each guarding a different failure mode (full rationale on the helper):
+//   probed          — `posCache.probed` can still be false at mount (the `loadPositions()` probe
+//                     races three `useLiveQuery` reads); recovering then would persist a fresh
+//                     `cose` OVER a curator's saved hand-arranged layout. The data-loss guard.
+//   noneCached      — the only case where the missed event was load-bearing. allCached's missed
+//                     `preset` stop would have been a no-op re-save; partial's newcomer IS persisted
+//                     by the placement effect's own heard `cose` stop, and recovering there would
+//                     race a newcomers-at-origin snapshot against it.
+//   !layoutStopSeen — once ANY `layoutstop` reaches the handler, the handler owns persistence for
+//                     that core; this is what stops Reset layout (a heard `cose`) double-saving.
+//   !saveSuspended  — the ego-focus fence, read from the SAME `suspendSaveRef` the handler reads.
+// The placement effect (`!partition.noneCached && missing.length > 0`) is the exact complement of
+// the recovery's `noneCached` gate, so the two can never both fire in one commit — no ordering
+// hazard between them, and `placedMissingRef` is untouched by this mechanism.
+//
+// REJECTED (a) — run the initial layout ourselves inside `registerCy`, after attaching listeners.
+// react-cytoscapejs runs `patchLayout` on first mount whenever the `layout` prop is non-null
+// (component.js:46-88 → patch.js:57-70), so suppressing it means passing `layout={null}` and owning
+// EVERY layout run — including the Reset-layout re-run and the `preset` application, both driven
+// today by the prop flipping on `usePresetPositions`. A far larger blast radius across two green
+// e2e specs ("Reset layout clears the saved manual positions", "adding an entity keeps saved
+// positions…") for no added correctness: the mount `cose` has already completed by the time a parent
+// effect can run, so re-running it ourselves buys nothing.
+//
+// REJECTED (b) — attach the listeners before the first patch by some other route. No such seam
+// exists: `componentDidMount` constructs the core and calls `updateCytoscape(null, this.props)` in
+// one synchronous block (component.js:46-77). The only pre-patch observation point is the `global`
+// prop's `window[global] = cy` assignment, interceptable only by installing a property setter on
+// `window` — a hack — and `global` is e2e-gated here (`CY_GLOBAL`), so it does not exist in
+// production builds at all.
+//
+// REJECTED (d) — make the `layout` prop identity change once listeners are attached. Twice over:
+// `isDiffAtKey` runs the configured `diff` (default `shallowObjDiff`) over the layout VALUE, not its
+// identity, so a fresh object with the same keys does not re-trigger `patchLayout` (would need a
+// nonce key smuggled into the layout options); and even if it worked it would run the physics
+// simulation TWICE on every first open — the exact cost the D-13 `preset` fast-path exists to avoid.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import CytoscapeComponent from 'react-cytoscapejs';
 import type cytoscape from 'cytoscape';
@@ -51,7 +113,13 @@ import { db } from '@/db/schema';
 import { resolveMediaUrl } from '@/media/mediaManager';
 import { toGraphElements, type GraphPositions } from './graphElements';
 import { graphStyle } from './graphStyle';
-import { clearPositions, loadPositions, partitionCached, savePositions } from './positionCache';
+import {
+  clearPositions,
+  loadPositions,
+  partitionCached,
+  savePositions,
+  shouldPersistInitialLayout,
+} from './positionCache';
 import { computeHopLevels, concentricValue, type Adjacency } from './egoLayout';
 import {
   isPanButton,
@@ -120,6 +188,12 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
   // SHOULD persist. It exists so Plan 04's transient ego overlay can fence its layout off the
   // auto-save (a concentric overlay must never clobber the saved base positions — D-12/D-13).
   const suspendSaveRef = useRef(false);
+  // F5X-DEF-1: "our `layoutstop` listener is LIVE and has received at least one layout event for
+  // this core" — NOT "a save happened". It is set as the FIRST statement of the handler, before the
+  // fence bail, so even a fenced ego `layoutstop` counts as proof the listener exists. Read by the
+  // one-shot recovery gate below: once the handler has heard anything, it owns persistence forever,
+  // which is what keeps the Reset-layout path (a HEARD `cose`) from double-saving.
+  const layoutStopSeenRef = useRef(false);
   // Ego overlay (POL-03) — the base resting positions snapshotted on ENTER of a focus session, so
   // Exit focus can restore the EXACT saved base with no layout and no save (never overwriting the
   // persisted positions — Pitfall 1). Captured once per session (manual OR cose base) and cleared
@@ -400,6 +474,45 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
     cy.nodes().unlock();
   }, [partition, postFocusPlaceTick]);
 
+  // One-shot INITIAL-LAYOUT RECOVERY (F5X-DEF-1 / quick-260903-nyu). The mount `cose` runs to
+  // completion synchronously inside react-cytoscapejs's `patch`, and emits its `layoutstop` before
+  // `registerCy` has attached the listener — so nothing persists the very first layout. See the
+  // LAYOUT PERSISTENCE section of this file's header for the full citation trail and the three
+  // rejected alternatives.
+  //
+  // `useLayoutEffect`, not `useEffect`, for two ordering guarantees. (1) React commits children
+  // before parents, so `CytoscapeComponent.componentDidMount` — patch → the layout → `registerCy` —
+  // has already finished: `cyRef.current` is set and any synchronous `layoutstop` has already been
+  // raised (and, if heard, has already flipped `layoutStopSeenRef`). (2) Layout effects run before
+  // passive effects, so this runs strictly BEFORE the concentric ego-overlay `useEffect` can raise
+  // the fence — the snapshot is unconditionally the pre-focus base. A plain `useEffect` would depend
+  // on hook declaration order, which is fragile.
+  //
+  // The four gate inputs make this idempotent with no extra latch: `layoutStopSeen` goes true as
+  // soon as the resulting `preset` patch raises a HEARD `layoutstop`, and `noneCached` goes false as
+  // soon as the row lands. `elements` and `posCache.probed` are in the deps so a probe that lost the
+  // race to the `useLiveQuery` reads still gets its chance in the commit where it finally resolves.
+  // `savePositions` builds its id→position map synchronously before its single `await`, so the
+  // captured positions are the ones present at THIS instant even though the write resolves later.
+  // Runs the SAME chain as the `layoutstop` handler — recovery and the normal path are one behaviour.
+  useLayoutEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (
+      !shouldPersistInitialLayout({
+        probed: posCache.probed,
+        noneCached: partition.noneCached,
+        layoutStopSeen: layoutStopSeenRef.current,
+        saveSuspended: suspendSaveRef.current,
+      })
+    ) {
+      return;
+    }
+    void savePositions(cy).then(() =>
+      loadPositions().then((positions) => setPosCache({ probed: true, positions })),
+    );
+  }, [posCache.probed, partition, elements]);
+
   // Attach tap + layoutstop handlers ONCE per Cytoscape instance (the cy callback fires on every
   // update). The tap handler reads the latest onSelectNode via a ref so it never goes stale.
   const registerCy = useCallback((cy: cytoscape.Core) => {
@@ -511,16 +624,33 @@ export function GraphView({ egoId = null, onSelectNode }: GraphViewProps) {
         container.removeEventListener('auxclick', suppressAutoscroll);
       };
     }
-    // Persist positions after EVERY layout, not just the first (WR-03). react-cytoscapejs keeps one
-    // `cy` for the component's lifetime, so `cy.one` fired only on the initial `cose` and every later
-    // re-run (a node added → cache invalidated → `cose` again) had no listener — the new node's
-    // position was never saved and `hasCachedPositions` stayed false forever, defeating the D-13
-    // `preset` fast-path for any DB that is ever edited. `cy.on` is registered once (guarded above)
-    // and re-saves idempotently on each `layoutstop`.
-    cy.on('layoutstop', () => {
+    // Persist positions after every layout FROM THE SECOND ONE ONWARD (WR-03, corrected by
+    // quick-260903-nyu). `cy.on` — not `cy.one` — is what covers the later re-runs: with `cy.one`,
+    // a node added → cache invalidated → `cose` again had no listener, the new node's position was
+    // never saved and `hasCachedPositions` stayed false forever, defeating the D-13 `preset`
+    // fast-path for any DB that is ever edited. But `cy.on` does NOT reach the FIRST layout either:
+    // react-cytoscapejs raises that `layoutstop` synchronously inside `patch`, before it calls the
+    // `cy` prop callback that registers this handler (component.js:46-88 → patch.js:57-70), so the
+    // initial event is emitted into a void. The one-shot recovery layout-effect above covers exactly
+    // that first layout; this handler owns every one after it, re-saving idempotently.
+    cy.on('layoutstop', (evt) => {
+      // Record that the listener is LIVE before any bail — the recovery gate reads this to know the
+      // handler now owns persistence (a fenced ego stop still proves the listener exists).
+      layoutStopSeenRef.current = true;
       // Save-guard seam (POL-02): a transient layout (Plan 04's ego concentric overlay) sets
       // suspendSaveRef true so its layoutstop never clobbers the saved base. False in this plan.
       if (suspendSaveRef.current) return;
+      // A `preset` run just re-applied positions that are ALREADY persisted, so saving them back is
+      // a redundant second write of identical bytes — and it is that write which would otherwise
+      // turn the recovery's save → load → setPosCache → `usePresetPositions` flip → `preset` patch
+      // sequence into a second save of the same row. Read the layout name defensively: the emitter
+      // sets `evt.layout` and `Layout` sets `this.options` (cytoscape.cjs.js ~35364 / ~35426), but
+      // `@types/cytoscape` does not model either, so narrow through an inline structural type rather
+      // than `any`. Skip ONLY on an exact 'preset' match — an absent or unrecognised name falls
+      // through to saving, preserving today's behaviour.
+      const layoutName = (evt as unknown as { layout?: { options?: { name?: unknown } } }).layout
+        ?.options?.name;
+      if (layoutName === 'preset') return;
       // Persist the fresh layout, THEN refresh the in-memory cache (IN-02). Without the reload the
       // React `posCache` state stayed stale after a node was added: `hasCachedPositions` kept
       // returning false and the D-13 `preset` fast-path stayed disabled for the rest of the session
