@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 07 (relationships-map-visual-polish) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 07
-Last activity: 2026-09-03 — Completed quick task 260903-d77: Fixed the marquee hit-test to convert the selection band from screen space to world space (user-reported: selection missed objects after pan/zoom)
+Last activity: 2026-09-03 — Completed quick task 260903-f5x: Re-armed 12 vacuous waitForFunction assertions across the e2e suite (2 of 69 tests were passing on nothing); added an ESLint guard
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -128,16 +128,17 @@ Recent decisions affecting current work:
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260703-f9m | Add a favicon (stop /favicon.ico 404 + browser-tab icon) | 2026-07-03 | c0bf714 | [260703-f9m-add-a-favicon-public-favicon-svg-link-re](./quick/260703-f9m-add-a-favicon-public-favicon-svg-link-re/) |
-| 260703-et9 | Add Open-map action to Locations browse list | 2026-07-03 | ce9c4c8 | [260703-et9-add-open-map-action-to-locations-browse-](./quick/260703-et9-add-open-map-action-to-locations-browse-/) |
-| 260820-ceg | Add session-only Relationship lines show/hide toggle to map Layers panel | 2026-08-20 | 48c3a2f | [260820-ceg-add-session-only-relationship-lines-show](./quick/260820-ceg-add-session-only-relationship-lines-show/) |
-| 260820-ibh | Fix flaky connectors e2e by awaiting marker persist before reload | 2026-08-20 | d93f3fc | [260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar](./quick/260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar/) |
-| 260820-idf | Reconfigure deployment from GitHub Pages to Cloudflare Pages (Git integration) | 2026-08-20 | 4d8038f | [260820-idf-reconfigure-deployment-from-github-pages](./quick/260820-idf-reconfigure-deployment-from-github-pages/) |
-| 260821-nac | Middle-click pan, marquee multi-select, and auto-return to Select after a shape draw (map editor) | 2026-08-21 | 00b5027 | [260821-nac-middle-click-pan-marquee-select-auto-ret](./quick/260821-nac-middle-click-pan-marquee-select-auto-ret/) |
-| 260902-nfs | Marquee multi-select: bulk delete + group drag-move + bulk move-to-layer (map), layout-only box select + group drag (graph) | 2026-09-02 | 471770b | [260902-nfs-marquee-multi-select-move-and-delete-on-](./quick/260902-nfs-marquee-multi-select-move-and-delete-on-/) |
-| 260903-d77 | Fix marquee hit-test: convert the selection band from screen space to world space (was only correct at the identity view) | 2026-09-03 | 8ce73c8 | [260903-d77-fix-marquee-hit-test-to-convert-the-band](./quick/260903-d77-fix-marquee-hit-test-to-convert-the-band/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260703-f9m | Add a favicon (stop /favicon.ico 404 + browser-tab icon) | 2026-07-03 | c0bf714 | | [260703-f9m-add-a-favicon-public-favicon-svg-link-re](./quick/260703-f9m-add-a-favicon-public-favicon-svg-link-re/) |
+| 260703-et9 | Add Open-map action to Locations browse list | 2026-07-03 | ce9c4c8 | | [260703-et9-add-open-map-action-to-locations-browse-](./quick/260703-et9-add-open-map-action-to-locations-browse-/) |
+| 260820-ceg | Add session-only Relationship lines show/hide toggle to map Layers panel | 2026-08-20 | 48c3a2f | | [260820-ceg-add-session-only-relationship-lines-show](./quick/260820-ceg-add-session-only-relationship-lines-show/) |
+| 260820-ibh | Fix flaky connectors e2e by awaiting marker persist before reload | 2026-08-20 | d93f3fc | | [260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar](./quick/260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar/) |
+| 260820-idf | Reconfigure deployment from GitHub Pages to Cloudflare Pages (Git integration) | 2026-08-20 | 4d8038f | | [260820-idf-reconfigure-deployment-from-github-pages](./quick/260820-idf-reconfigure-deployment-from-github-pages/) |
+| 260821-nac | Middle-click pan, marquee multi-select, and auto-return to Select after a shape draw (map editor) | 2026-08-21 | 00b5027 | | [260821-nac-middle-click-pan-marquee-select-auto-ret](./quick/260821-nac-middle-click-pan-marquee-select-auto-ret/) |
+| 260902-nfs | Marquee multi-select: bulk delete + group drag-move + bulk move-to-layer (map), layout-only box select + group drag (graph) | 2026-09-02 | 471770b | | [260902-nfs-marquee-multi-select-move-and-delete-on-](./quick/260902-nfs-marquee-multi-select-move-and-delete-on-/) |
+| 260903-d77 | Fix marquee hit-test: convert the selection band from screen space to world space (was only correct at the identity view) | 2026-09-03 | 8ce73c8 | | [260903-d77-fix-marquee-hit-test-to-convert-the-band](./quick/260903-d77-fix-marquee-hit-test-to-convert-the-band/) |
+| 260903-f5x | Re-arm 12 vacuous `waitForFunction` assertions across the e2e suite; triage into fix / log / known | 2026-09-03 | 7e9a9ae | Verified | [260903-f5x-re-arm-vacuous-waitforfunction-assertion](./quick/260903-f5x-re-arm-vacuous-waitforfunction-assertion/) |
 
 ### Roadmap Evolution
 
