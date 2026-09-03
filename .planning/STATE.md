@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 07 (relationships-map-visual-polish) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 07
-Last activity: 2026-08-21 — Completed quick task 260821-nac: Middle-click pan, marquee multi-select, and auto-return to Select after a shape draw (map editor)
+Last activity: 2026-09-02 — Completed quick task 260902-nfs: Marquee multi-select bulk delete, group drag-move and bulk move-to-layer on the map; layout-only box select and group drag on the graph
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -136,6 +136,7 @@ Recent decisions affecting current work:
 | 260820-ibh | Fix flaky connectors e2e by awaiting marker persist before reload | 2026-08-20 | d93f3fc | [260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar](./quick/260820-ibh-fix-flaky-connectors-e2e-by-awaiting-mar/) |
 | 260820-idf | Reconfigure deployment from GitHub Pages to Cloudflare Pages (Git integration) | 2026-08-20 | 4d8038f | [260820-idf-reconfigure-deployment-from-github-pages](./quick/260820-idf-reconfigure-deployment-from-github-pages/) |
 | 260821-nac | Middle-click pan, marquee multi-select, and auto-return to Select after a shape draw (map editor) | 2026-08-21 | 00b5027 | [260821-nac-middle-click-pan-marquee-select-auto-ret](./quick/260821-nac-middle-click-pan-marquee-select-auto-ret/) |
+| 260902-nfs | Marquee multi-select: bulk delete + group drag-move + bulk move-to-layer (map), layout-only box select + group drag (graph) | 2026-09-02 | 471770b | [260902-nfs-marquee-multi-select-move-and-delete-on-](./quick/260902-nfs-marquee-multi-select-move-and-delete-on-/) |
 
 ### Roadmap Evolution
 
