@@ -544,3 +544,61 @@ test('ego focus + concurrent entity-add: exit keeps the base and places the newc
     expect(Math.abs(after[id].y - base[id].y)).toBeLessThan(0.5);
   }
 });
+
+/**
+ * F5X-DEF-1 (quick-260903-nyu) — "the initial cose layout persists a graphPositions row".
+ *
+ * react-cytoscapejs runs the mount layout inside `patch()` and calls the `cy` prop callback — which
+ * attaches our `layoutstop` listener — only AFTERWARDS (component.js:46-88 → patch.js:57-70), and a
+ * `cose` with `animate:false` emits `layoutstop` synchronously inside that run. The first layout's
+ * event therefore had no listener and no row was ever written, silently defeating the D-13 `preset`
+ * fast-path for every graph that has never been hand-arranged. A one-shot recovery in a parent
+ * `useLayoutEffect` now persists it. This spec pins the row's EXISTENCE and completeness on a
+ * first-ever open (no pre-seeded positions, no drag), and pins the viewer-only boundary
+ * (PROJECT.md lines 68 and 101) — the graph writes that meta row and NOTHING else.
+ */
+test('the initial cose layout persists a graphPositions row on a first-ever graph open', async ({
+  page,
+}) => {
+  const { aliceId, bobId, teamId } = await seedGraph(page);
+
+  await page.getByTestId('view-graph').click();
+  // Synchronous scene-graph read — legal under rb-e2e/no-async-wait-predicate.
+  await page.waitForFunction(
+    (id) => {
+      const cy = (window as unknown as { __cyGraph?: { getElementById: (i: string) => { length: number } } })
+        .__cyGraph;
+      return !!cy && cy.getElementById(id).length > 0;
+    },
+    aliceId,
+    { timeout: 15_000 },
+  );
+
+  // The row EXISTS and holds a position for EVERY seeded node — the missed initial `layoutstop` is
+  // recovered. Poll a derived boolean via page.evaluate; never hand an async predicate to
+  // waitForFunction (that wait is vacuous — D77-DEF-1 / the rb-e2e guard).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (ids) => {
+          const row = await window.__rb!.db.meta.get('graphPositions');
+          const value = row?.value as Record<string, { x: number; y: number }> | undefined;
+          if (!value) return false;
+          return ids.every((id) => Object.prototype.hasOwnProperty.call(value, id));
+        }, [aliceId, bobId, teamId]),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+
+  // Viewer-only boundary: the entity tables are untouched across that open (2 people, 1 group,
+  // 2 relationship-links — exactly what seedGraph created, nothing added, nothing rewritten away).
+  const counts = await page.evaluate(async () => {
+    const rbDb = window.__rb!.db;
+    return {
+      people: await rbDb.people.count(),
+      groups: await rbDb.groups.count(),
+      links: await rbDb.relationshipLinks.count(),
+    };
+  });
+  expect(counts).toEqual({ people: 2, groups: 1, links: 2 });
+});
