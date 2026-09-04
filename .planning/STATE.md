@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 07 (relationships-map-visual-polish) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 07
-Last activity: 2026-09-03 — Completed quick task 260903-f5x: Re-armed 12 vacuous waitForFunction assertions across the e2e suite (2 of 69 tests were passing on nothing); added an ESLint guard
+Last activity: 2026-09-04 — Completed quick task 260903-nyu: Fixed F5X-DEF-1 so the initial cose layout persists a graphPositions row (the D-13 preset fast-path now engages on a first-ever graph open)
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -139,6 +139,7 @@ Recent decisions affecting current work:
 | 260902-nfs | Marquee multi-select: bulk delete + group drag-move + bulk move-to-layer (map), layout-only box select + group drag (graph) | 2026-09-02 | 471770b | | [260902-nfs-marquee-multi-select-move-and-delete-on-](./quick/260902-nfs-marquee-multi-select-move-and-delete-on-/) |
 | 260903-d77 | Fix marquee hit-test: convert the selection band from screen space to world space (was only correct at the identity view) | 2026-09-03 | 8ce73c8 | | [260903-d77-fix-marquee-hit-test-to-convert-the-band](./quick/260903-d77-fix-marquee-hit-test-to-convert-the-band/) |
 | 260903-f5x | Re-arm 12 vacuous `waitForFunction` assertions across the e2e suite; triage into fix / log / known | 2026-09-03 | 7e9a9ae | Verified | [260903-f5x-re-arm-vacuous-waitforfunction-assertion](./quick/260903-f5x-re-arm-vacuous-waitforfunction-assertion/) |
+| 260903-nyu | Fix F5X-DEF-1: the initial `cose` layout never persisted a `graphPositions` row (react-cytoscapejs runs the layout before the `cy` callback attaches `layoutstop`) | 2026-09-04 | 69de0a5 | Verified | [260903-nyu-fix-f5x-def-1-initial-cose-layout-never-](./quick/260903-nyu-fix-f5x-def-1-initial-cose-layout-never-/) |
 
 ### Roadmap Evolution
 

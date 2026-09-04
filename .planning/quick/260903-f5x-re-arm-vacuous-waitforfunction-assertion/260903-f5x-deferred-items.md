@@ -9,6 +9,14 @@ follow-up task.
 
 ## F5X-DEF-1 — the initial `cose` layout never persists a `graphPositions` row
 
+> **RESOLVED 2026-09-04 by quick-260903-nyu** (commits `e2b103f` RED, `3f2f85e` GREEN; merged `69de0a5`).
+> Root cause: react-cytoscapejs's `componentDidMount` runs `patch()` — which runs the layout — BEFORE it
+> calls the `cy` prop callback that attaches the `layoutstop` listener, so the synchronous `cose` stop was
+> emitted into a void and the layout memo's identity never changed to trigger another. Fixed with a one-shot
+> recovery in a parent `useLayoutEffect`, gated by the pure `shouldPersistInitialLayout`. `e2e/graph.spec.ts:324`
+> is green again and `e2e/graph.spec.ts:560` now covers a first-ever open directly. Verified 11/11.
+> The paragraph below is retained as the original field report.
+
 **Severity:** medium — it silently defeats the D-13 `preset` fast-path for every graph that has
 never been hand-arranged, so every reopen pays a full physics layout and node positions are not
 stable across sessions.
@@ -53,9 +61,9 @@ row appears — proving the `dragfree` path works and only the `layoutstop` path
 defects) are logged, never fixed, inside this test-integrity sweep. Fixing it means changing
 `src/features/graph/GraphView.tsx`, which this task is forbidden to touch.
 
-**Consequence for the suite.** `e2e/graph.spec.ts:324` is now **legitimately red**. It is no longer
-passing on nothing — it is correctly reporting this defect, and should stay red until F5X-DEF-1 is
-fixed.
+**Consequence for the suite.** `e2e/graph.spec.ts:324` was **legitimately red** at the time of writing —
+no longer passing on nothing, but correctly reporting this defect. It went green when quick-260903-nyu
+fixed the defect on 2026-09-04.
 
 ---
 
